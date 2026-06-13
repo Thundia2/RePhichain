@@ -147,6 +147,10 @@ export async function generateAi(request: AiGenerateRequest): Promise<AiGenerate
 
 /** Payload for each streaming chunk emitted by the Rust backend */
 export interface AiStreamChunk {
+  /** M4: the request that emitted this chunk. The "ai-stream-chunk" event is
+   *  global, so the listener drops chunks whose id isn't the current request's —
+   *  otherwise a superseded stream's late tokens cross-wire into a new one. */
+  requestId: string;
   content: string;
   done: boolean;
   finishReason?: string;
@@ -154,6 +158,9 @@ export interface AiStreamChunk {
   completionTokens?: number;
   error?: string;
 }
+
+// M4: monotonic id source for stream requests (see generateAiStream).
+let _aiStreamSeq = 0;
 
 /**
  * Streaming AI generation — tokens arrive via Tauri events as they generate.
@@ -179,13 +186,19 @@ export async function generateAiStream(
   // Dynamic import to match the project's existing pattern
   const { listen } = await import("@tauri-apps/api/event");
 
+  // M4: tag this request so a superseded stream's late chunks can't cross-wire
+  // into a newer generation (the "ai-stream-chunk" event fires for EVERY
+  // in-flight stream). The listener drops any chunk whose id isn't ours.
+  const requestId = `ai-stream-${++_aiStreamSeq}`;
+
   // Start listening BEFORE invoking — guarantees no chunks are missed
   const unlisten = await listen<AiStreamChunk>("ai-stream-chunk", (event) => {
+    if (event.payload.requestId !== requestId) return;
     onChunk(event.payload);
   });
 
   try {
-    const result = await invoke<AiGenerateResponse>("ai_generate_stream", { request });
+    const result = await invoke<AiGenerateResponse>("ai_generate_stream", { request: { ...request, requestId } });
     return result;
   } finally {
     // Always clean up the listener

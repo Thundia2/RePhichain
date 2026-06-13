@@ -508,13 +508,12 @@ function AiContent() {
 
   const isRemote = settings.aiMode === "remote";
 
-  // Switch mode and apply sensible presets so the user doesn't have to reconfigure everything
+  // D8: switch ONLY the mode. The old code applied presets that overwrote the
+  // user's endpoint/model and CLEARED aiApiKey ("") on every toggle — flipping to
+  // local and back to remote silently wiped a configured API key. The endpoint /
+  // model / key each have their own inputs below; leave them to the user.
   const handleModeChange = (mode: string) => {
-    if (mode === "local") {
-      update({ aiMode: "local" as const, aiEndpoint: "http://localhost:11434", aiModel: "gemma4:27b", aiApiKey: "" });
-    } else {
-      update({ aiMode: "remote" as const, aiEndpoint: "https://generativelanguage.googleapis.com/v1beta/openai", aiModel: "gemma-3-27b-it" });
-    }
+    update({ aiMode: mode as "local" | "remote" });
   };
 
   const handleTestConnection = async () => {

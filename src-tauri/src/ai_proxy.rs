@@ -62,6 +62,11 @@ pub struct AiGenerateRequest {
     pub temperature: Option<f32>,   // Default 0.2 (low for structured output)
     pub max_tokens: Option<u32>,    // Default 4096
     pub api_key: Option<String>,    // Optional API key for remote endpoints (sent as Bearer token)
+    // M4: per-request id echoed back on every stream chunk so the frontend can
+    // drop chunks from a SUPERSEDED stream (start a new generation while an old
+    // one is still draining → the global "ai-stream-chunk" listener would
+    // otherwise cross-wire both). Option so the non-streaming caller can omit it.
+    pub request_id: Option<String>,
 }
 
 /// Response payload sent back to the TypeScript frontend.
@@ -190,6 +195,7 @@ pub async fn ai_generate(request: AiGenerateRequest) -> Result<AiGenerateRespons
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiStreamChunk {
+    pub request_id: String,           // M4: which request emitted this (frontend filters stale)
     pub content: String,              // The new token text (empty on final/error chunks)
     pub done: bool,                   // true on the final chunk
     pub finish_reason: Option<String>,
@@ -212,6 +218,10 @@ pub async fn ai_generate_stream(
     window: tauri::Window,
     request: AiGenerateRequest,
 ) -> Result<AiGenerateResponse, String> {
+    // M4: echoed on every emitted chunk so the frontend can drop chunks from a
+    // superseded stream (defaults to "" if the caller omitted it).
+    let req_id = request.request_id.clone().unwrap_or_default();
+
     // Build the request body — same as non-streaming but with stream: true
     // and WITHOUT response_format (not all providers support it with streaming)
     let body = serde_json::json!({
@@ -238,7 +248,13 @@ pub async fn ai_generate_stream(
     };
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(180)) // Longer timeout for streaming
+        // R3: NO total request timeout (a total cap killed long-but-healthy
+        // generations mid-stream). connect_timeout bounds the handshake;
+        // read_timeout is a per-read IDLE timeout — if the server connects then
+        // goes silent, the next body read errors instead of the old 180s total
+        // cap chopping a stream that was still producing tokens.
+        .connect_timeout(std::time::Duration::from_secs(30))
+        .read_timeout(std::time::Duration::from_secs(60))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -260,7 +276,7 @@ pub async fn ai_generate_stream(
             // Bug audit #11: sanitize URL to strip any ?key=… before echoing.
             let safe_url = sanitize_url_for_display(&url);
             if e.is_timeout() {
-                format!("AI server timed out (180s). URL: {}", safe_url)
+                format!("AI server connection timed out. URL: {}", safe_url)
             } else if e.is_connect() {
                 format!("Cannot connect to AI server at {}. Check that the endpoint URL is correct and the server is reachable.", safe_url)
             } else {
@@ -304,6 +320,7 @@ pub async fn ai_generate_stream(
 
         // Emit a single chunk with the full content
         let _ = window.emit("ai-stream-chunk", AiStreamChunk {
+            request_id: req_id.clone(),
             content: content.clone(),
             done: true,
             finish_reason: Some(finish_reason.clone()),
@@ -317,37 +334,49 @@ pub async fn ai_generate_stream(
 
     // ---- SSE streaming path ----
     let mut stream = response.bytes_stream();
-    let mut line_buffer = String::new();
+    // R6: accumulate raw BYTES and decode COMPLETE lines. The old code ran
+    // from_utf8_lossy on each network chunk, so a multi-byte UTF-8 char split
+    // across a chunk boundary became a � replacement before its continuation
+    // bytes arrived. Splitting on b'\n' first (newlines are ASCII) guarantees
+    // each decoded slice is a whole line, so no char is split mid-decode.
+    let mut byte_buffer: Vec<u8> = Vec::new();
     let mut accumulated_content = String::new();
     let mut last_finish_reason = "unknown".to_string();
     let mut prompt_tokens: Option<u32> = None;
     let mut completion_tokens: Option<u32> = None;
 
-    while let Some(chunk_result) = stream.next().await {
+    'outer: while let Some(chunk_result) = stream.next().await {
         let chunk = match chunk_result {
             Ok(bytes) => bytes,
             Err(e) => {
-                // Emit error chunk and return
+                // R3: a read-timeout (server connected then went silent) surfaces
+                // here as a timeout error; report it distinctly from other errors.
+                let msg = if e.is_timeout() {
+                    "AI stream idle timeout (no data from server)".to_string()
+                } else {
+                    format!("Stream error: {}", e)
+                };
                 let _ = window.emit("ai-stream-chunk", AiStreamChunk {
+                    request_id: req_id.clone(),
                     content: String::new(),
                     done: true,
                     finish_reason: None,
                     prompt_tokens,
                     completion_tokens,
-                    error: Some(format!("Stream error: {}", e)),
+                    error: Some(msg.clone()),
                 });
-                return Err(format!("Stream error: {}", e));
+                return Err(msg);
             }
         };
 
-        // Decode bytes to string (lossy handles partial UTF-8)
-        let text = String::from_utf8_lossy(&chunk);
-        line_buffer.push_str(&text);
+        byte_buffer.extend_from_slice(&chunk);
 
-        // Process complete lines from the buffer
-        while let Some(newline_pos) = line_buffer.find('\n') {
-            let line = line_buffer[..newline_pos].trim().to_string();
-            line_buffer = line_buffer[newline_pos + 1..].to_string();
+        // Process complete lines (the bytes up to each '\n' form a full line, so
+        // from_utf8_lossy can't split a multi-byte char). drain(..=pos) removes
+        // the line + its newline.
+        while let Some(newline_pos) = byte_buffer.iter().position(|&b| b == b'\n') {
+            let line_bytes: Vec<u8> = byte_buffer.drain(..=newline_pos).collect();
+            let line = String::from_utf8_lossy(&line_bytes).trim().to_string();
 
             // Skip empty lines and SSE comments
             if line.is_empty() || line.starts_with(':') {
@@ -361,9 +390,11 @@ pub async fn ai_generate_stream(
 
             let data = line.strip_prefix("data:").unwrap().trim();
 
-            // Check for stream termination
+            // Check for stream termination — break the OUTER loop so we don't sit
+            // on a still-open connection until the read_timeout fires (which would
+            // surface as a spurious idle-timeout error AFTER a complete response).
             if data == "[DONE]" {
-                break;
+                break 'outer;
             }
 
             // Parse the JSON chunk
@@ -380,8 +411,9 @@ pub async fn ai_generate_stream(
             if let Some(token) = chunk_json["choices"][0]["delta"]["content"].as_str() {
                 if !token.is_empty() {
                     accumulated_content.push_str(token);
-                    // Emit the token to the frontend
+                    // Emit the token to the frontend (M4: tagged with req_id).
                     if window.emit("ai-stream-chunk", AiStreamChunk {
+                        request_id: req_id.clone(),
                         content: token.to_string(),
                         done: false,
                         finish_reason: None,
@@ -390,7 +422,7 @@ pub async fn ai_generate_stream(
                         error: None,
                     }).is_err() {
                         // Window closed — stop streaming
-                        break;
+                        break 'outer;
                     }
                 }
             }
@@ -413,6 +445,7 @@ pub async fn ai_generate_stream(
 
     // Emit final done chunk
     let _ = window.emit("ai-stream-chunk", AiStreamChunk {
+        request_id: req_id.clone(),
         content: String::new(),
         done: true,
         finish_reason: Some(last_finish_reason.clone()),

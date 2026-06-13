@@ -35,6 +35,10 @@ const LOOKAHEAD_BEATS = 8;
 const MAX_EVENT_DETAILS_PER_KIND = 6;
 /** Max selected notes/events to show individually */
 const MAX_SELECTED_DETAIL = 8;
+/** A6: max per-note lines in the context-window dump. The events dump is capped
+ *  (MAX_EVENT_DETAILS_PER_KIND) but the note dump used to be unbounded — a dense
+ *  line could emit hundreds of lines and blow the model's context. */
+const MAX_WINDOW_NOTES = 30;
 
 // ---- BPM-scaled context window ----
 
@@ -516,8 +520,13 @@ export function buildAiContext(userMessage?: string): string {
     });
     if (windowNotes.length > 0) {
       sections.push(`  Notes in window (${windowNotes.length}):`);
-      for (const note of windowNotes) {
+      // A6: cap the dump like the events dump above; show the first N + a count.
+      const shownNotes = windowNotes.slice(0, MAX_WINDOW_NOTES);
+      for (const note of shownNotes) {
         sections.push(`    ${formatNote(note)}`);
+      }
+      if (windowNotes.length > shownNotes.length) {
+        sections.push(`    ... +${windowNotes.length - shownNotes.length} more`);
       }
     }
     if (line.notes.length > windowNotes.length) {
