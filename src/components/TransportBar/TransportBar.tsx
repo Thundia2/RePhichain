@@ -4,7 +4,6 @@
 // Sits between the canvas and keyframe bar. Contains:
 //   - Play/Pause + Stop buttons
 //   - Speed presets (0.25x, 0.5x, 0.75x, 1.0x)
-//   - Metronome toggle
 //   - Time display (formatted time + beat)
 //   - Custom styled time scrub slider
 //
@@ -38,7 +37,6 @@ export function TransportBar() {
   const loopStartBeat = useAudioStore((s) => s.loopStartBeat);
   const loopEndBeat = useAudioStore((s) => s.loopEndBeat);
 
-  const [metronome, setMetronome] = useState(false);
   const [displayTime, setDisplayTime] = useState(0);
   const [displayBeat, setDisplayBeat] = useState(0);
 
@@ -149,31 +147,6 @@ export function TransportBar() {
           </Pill>
         ))}
       </div>
-
-      {/* ── Divider ── */}
-      <div style={{ width: 1, height: 16, background: "var(--border-color)", margin: "0 8px" }} />
-
-      {/* ── Metronome ── */}
-      <button
-        onClick={() => setMetronome(!metronome)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          padding: "3px 8px",
-          borderRadius: 6,
-          border: "none",
-          cursor: "pointer",
-          fontSize: 10,
-          fontFamily: "inherit",
-          background: metronome ? "rgba(108, 138, 255, 0.08)" : "transparent",
-          color: metronome ? "var(--accent-primary)" : "var(--text-muted)",
-          transition: "all 0.15s",
-        }}
-      >
-        <span style={{ fontSize: 12 }}>{"\u2669"}</span>
-        <span>Metro</span>
-      </button>
 
       {/* ── Divider ── */}
       <div style={{ width: 1, height: 16, background: "var(--border-color)", margin: "0 8px" }} />

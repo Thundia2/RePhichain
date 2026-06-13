@@ -20,11 +20,9 @@ export function QuickActionBar() {
   const currentTime = useAudioStore((s) => s.currentTime);
   const duration = useAudioStore((s) => s.duration);
   const playbackRate = useAudioStore((s) => s.playbackRate);
-  const metronomeEnabled = useAudioStore((s) => s.metronomeEnabled);
   const togglePlayPause = useAudioStore((s) => s.togglePlayPause);
   const seek = useAudioStore((s) => s.seek);
   const setPlaybackRate = useAudioStore((s) => s.setPlaybackRate);
-  const toggleMetronome = useAudioStore((s) => s.toggleMetronome);
 
   const bpmList = useChartStore((s) => s.chart.bpm_list);
   const lines = useChartStore((s) => s.chart.lines);
@@ -108,20 +106,6 @@ export function QuickActionBar() {
           </Pill>
         ))}
       </div>
-
-      {/* ---- Divider ---- */}
-      <div className="w-px h-4" style={{ backgroundColor: "var(--border-color)" }} />
-
-      {/* ---- Metronome ---- */}
-      <label className="flex items-center gap-1.5 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={metronomeEnabled}
-          onChange={toggleMetronome}
-          className="w-3 h-3"
-        />
-        <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Metronome</span>
-      </label>
 
       {/* ---- Spacer pushes the rest to the right ---- */}
       <div className="flex-1" />

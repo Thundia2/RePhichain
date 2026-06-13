@@ -26,7 +26,6 @@ export interface AudioState {
   currentTime: number; // seconds
   duration: number; // seconds
   playbackRate: number;
-  metronomeEnabled: boolean;
   hitSoundEnabled: boolean;
   musicLoaded: boolean;
   /** URL of the currently-loaded audio source — engine-authoritative mirror of
@@ -48,7 +47,6 @@ export interface AudioState {
   seek: (time: number) => void;
   /** Set playback speed (0.25x to 2x). Persists to audioEngine. */
   setPlaybackRate: (rate: number) => void;
-  toggleMetronome: () => void;
   toggleHitSound: () => void;
 
   // ---- Loop region actions ----
@@ -79,7 +77,6 @@ export const useAudioStore = create<AudioState>()((set, _get) => ({
   currentTime: 0,
   duration: 0,
   playbackRate: 1.0,
-  metronomeEnabled: false,
   hitSoundEnabled: true,
   musicLoaded: false,
   musicUrl: null,
@@ -104,9 +101,6 @@ export const useAudioStore = create<AudioState>()((set, _get) => ({
   setPlaybackRate: (rate) => {
     audioEngine.setRate(rate);
   },
-
-  toggleMetronome: () =>
-    set((state) => ({ metronomeEnabled: !state.metronomeEnabled })),
 
   toggleHitSound: () =>
     set((state) => ({ hitSoundEnabled: !state.hitSoundEnabled })),
