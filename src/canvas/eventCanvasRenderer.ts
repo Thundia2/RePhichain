@@ -217,7 +217,11 @@ export class EventCanvasRenderer {
   ): void {
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate(rotation);
+    // C3: negate to match the game renderer (gameRenderer uses
+    // ctx.rotate(-worldRotation)). Drawing at +rotation here mirrored the line:
+    // a +30° rotation tilted the opposite way from the live preview. The handle
+    // draw/hit-test and the drag's atan2 commit are negated in lockstep.
+    ctx.rotate(-rotation);
     ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
     ctx.strokeStyle = color;
     ctx.lineWidth = LINE_THICKNESS;
@@ -275,9 +279,10 @@ export class EventCanvasRenderer {
     rotation: number,
     halfLen: number,
   ): void {
-    // Position the handle at the right end of the line
-    const handleX = x + Math.cos(rotation) * (halfLen + 15);
-    const handleY = y + Math.sin(rotation) * (halfLen + 15);
+    // Position the handle at the right end of the line. C3: -rotation to match
+    // the negated line draw (the line's +X end is at screen angle -rotation).
+    const handleX = x + Math.cos(-rotation) * (halfLen + 15);
+    const handleY = y + Math.sin(-rotation) * (halfLen + 15);
 
     ctx.fillStyle = "rgba(255, 180, 50, 0.6)";
     ctx.strokeStyle = "#ffb432";
@@ -287,11 +292,11 @@ export class EventCanvasRenderer {
     ctx.fill();
     ctx.stroke();
 
-    // Rotation arrow indicator
+    // Rotation arrow indicator (centered on the handle direction, -rotation)
     ctx.strokeStyle = "rgba(255, 180, 50, 0.4)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(x, y, halfLen + 15, rotation - 0.3, rotation + 0.3);
+    ctx.arc(x, y, halfLen + 15, -rotation - 0.3, -rotation + 0.3);
     ctx.stroke();
   }
 
@@ -391,8 +396,9 @@ export class EventCanvasRenderer {
   ): boolean {
     const scale = canvasWidth / CANVAS_WIDTH;
     const halfLen = LINE_HALF_LENGTH * scale;
-    const handleX = lineScreenX + Math.cos(rotation) * (halfLen + 15);
-    const handleY = lineScreenY + Math.sin(rotation) * (halfLen + 15);
+    // C3: -rotation to match drawRotationHandle / the negated line draw.
+    const handleX = lineScreenX + Math.cos(-rotation) * (halfLen + 15);
+    const handleY = lineScreenY + Math.sin(-rotation) * (halfLen + 15);
     const dx = mouseX - handleX;
     const dy = mouseY - handleY;
     return dx * dx + dy * dy <= (ROTATION_HANDLE_RADIUS + 4) * (ROTATION_HANDLE_RADIUS + 4);
@@ -412,11 +418,13 @@ export class EventCanvasRenderer {
     const scale = canvasWidth / CANVAS_WIDTH;
     const halfLen = LINE_HALF_LENGTH * scale;
 
-    // Transform mouse position to line-local coordinates
+    // Transform mouse position to line-local coordinates. C3: the line is drawn
+    // with rotate(-rotation), so the inverse uses +rotation (was -rotation, which
+    // matched the old +rotation draw).
     const dx = mouseX - lineScreenX;
     const dy = mouseY - lineScreenY;
-    const cos = Math.cos(-rotation);
-    const sin = Math.sin(-rotation);
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
     const localX = dx * cos - dy * sin;
     const localY = dx * sin + dy * cos;
 

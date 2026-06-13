@@ -666,12 +666,16 @@ export function distanceAt(
 
     const timeSpan = seg.endTime - seg.startTime;
     if (timeSpan <= 0) {
+      // C4: only adopt this seg's trailing speed if it reaches/extends the
+      // frontier — a zero-span seg buried before lastTime is shadowed.
+      if (seg.endTime >= lastTime) lastSpeed = seg.endValue;
       lastTime = Math.max(lastTime, seg.endTime);
-      lastSpeed = seg.endValue;
       continue;
     }
 
-    // Integrate speed over the segment (or partial segment), respecting easing
+    // Integrate speed over the segment (or partial segment), respecting easing.
+    // segStart clamps to lastTime, so an overlapping seg only contributes the
+    // portion beyond the frontier (no double-count).
     const segStart = Math.max(seg.startTime, lastTime);
     const segEnd = Math.min(seg.endTime, time);
     if (segEnd > segStart) {
@@ -680,8 +684,16 @@ export function distanceAt(
       if (time <= seg.endTime) return area;
     }
 
-    lastTime = seg.endTime;
-    lastSpeed = seg.endValue;
+    // C4 (overlapping speed segments): advance the frontier with Math.max, never
+    // assign lastTime = seg.endTime unconditionally. Sorted-by-startTime segments
+    // can still end BEFORE an earlier longer segment; the old code rewound
+    // lastTime to the shorter seg's end and then re-counted [end, frontier] with
+    // the wrong trailing speed — notes teleported. Only adopt endValue when this
+    // seg actually extends the frontier.
+    if (seg.endTime >= lastTime) {
+      lastTime = seg.endTime;
+      lastSpeed = seg.endValue;
+    }
   }
 
   // Remaining time after all segments

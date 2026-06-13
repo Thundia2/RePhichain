@@ -238,9 +238,21 @@ export function tween(
 ): number {
   const left = easingLeft ?? 0.0;
   const right = easingRight ?? 1.0;
-  // Remap t from [0,1] to [left, right] sub-range before applying easing
+  // C8: clip the easing to the [left,right] sub-range AND renormalize the output
+  // so the transition still spans start→end exactly. RPE "partial easing" maps
+  // progress t∈[0,1] onto the curve segment [left,right], then rescales by
+  //   (f(clip) - f(left)) / (f(right) - f(left)).
+  // Without the rescale, t=0 produced f(left) (≠0 unless left=0): a clipped event
+  // jumped to start+(end-start)*f(left) on its first frame instead of start, and
+  // never reached end. For the default left=0/right=1 this is identity
+  // (f(0)=0, f(1)=1) so only genuinely clipped easings change. grep easing_left.
   const clippedT = left + t * (right - left);
-  const easedT = evaluateEasing(easing, clippedT);
+  const eased = evaluateEasing(easing, clippedT);
+  const fLeft = evaluateEasing(easing, left);
+  const denom = evaluateEasing(easing, right) - fLeft;
+  // Degenerate clip (flat segment, e.g. a steps easing where f(left)==f(right)):
+  // fall back to the un-renormalized value to avoid divide-by-zero.
+  const easedT = Math.abs(denom) > 1e-9 ? (eased - fLeft) / denom : eased;
   return start + (end - start) * easedT;
 }
 

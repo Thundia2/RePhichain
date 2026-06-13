@@ -305,16 +305,16 @@ export function GamePreview() {
       // Compute current beat for shader effects
       const currentBeat = bpmList.beatAtFloat(latestTime - effectiveOffset);
 
-      // Draw video background if configured (Canvas 2D mode only —
-      // Pixi mode handles video via texture in a future phase)
+      // Sync the video background each frame (Canvas 2D mode only — Pixi mode
+      // handles video via texture in a future phase). The DRAW now happens inside
+      // GameRenderer.render() right after its clearRect (finding C5): the old
+      // draw() call here ran BEFORE render(), whose clearRect then wiped it, and
+      // passed device-pixel dims into a dpr-scaled context (2× oversize). We pass
+      // the manager into renderOptions below so render() draws it at CSS dims.
       const extraConfig = cs.extraConfig;
-      if (!pixiRenderer && extraConfig.videos && extraConfig.videos.length > 0) {
-        const ctx2d = canvas.getContext("2d");
-        if (ctx2d) {
-          const dpr = window.devicePixelRatio || 1;
-          videoBackgroundRef.current.sync(currentBeat, latestTime - effectiveOffset, isPlaying);
-          videoBackgroundRef.current.draw(ctx2d, rect.width * dpr, rect.height * dpr, currentBeat);
-        }
+      const hasVideoBg = !pixiRenderer && extraConfig.videos != null && extraConfig.videos.length > 0;
+      if (hasVideoBg) {
+        videoBackgroundRef.current.sync(currentBeat, latestTime - effectiveOffset, isPlaying);
       }
 
       // Render options shared by both renderers
@@ -338,6 +338,8 @@ export function GamePreview() {
         pendingLineIndex: getSelectedLineIndex(),
         respack: activeRespack,
         chartFontFamily: cs.chartFontFamily,
+        // C5: GameRenderer.render() draws this right after its clearRect.
+        videoBackground: hasVideoBg ? videoBackgroundRef.current : null,
       };
 
       if (pixiRenderer && pixiRenderer.initialized) {
@@ -399,7 +401,12 @@ export function GamePreview() {
   }, []); // Empty deps — loop reads from stores directly
 
   // ---- Click to select line ----
-  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Q3: bound to the CONTAINER div, not the canvas. In Pixi mode the canvasRef
+  // canvas is never sized (resizeCanvas runs only in the Canvas 2D branch) and
+  // Pixi appends its own canvas on top, so a canvas-bound handler went dead
+  // outside the default 300×150 box. The container always fills the preview and
+  // coords are already derived from its rect.
+  const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
     const activeRenderer = rendererRef.current || pixiRendererRef.current;
@@ -431,11 +438,11 @@ export function GamePreview() {
       ref={containerRef}
       className="w-full h-full relative"
       style={{ backgroundColor: "#000" }}
+      onClick={handleClick}
     >
       <canvas
         ref={canvasRef}
         className="absolute inset-0"
-        onClick={handleClick}
       />
       {/* Canvas 2D overlay for hit effects when using Pixi renderer */}
       <canvas

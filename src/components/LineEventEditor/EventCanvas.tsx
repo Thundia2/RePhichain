@@ -262,11 +262,16 @@ export function EventCanvas({ lineIndex }: EventCanvasProps) {
       drag.currentX = drag.startCanvasX + deltaCanvasX;
       drag.currentY = drag.startCanvasY + deltaCanvasY;
     } else if (drag.type === "rotate") {
-      // Compute angle from line center to mouse
+      // Compute angle from line center to mouse. C3: negate so the committed
+      // rotation matches the renderer's rotate(-rotation) — the line's handle now
+      // sits at screen angle -rotation, so dragging the handle to screen angle θ
+      // must store rotation = -θ (and the game preview then renders it identically
+      // to the event-editor ghost). Existing values are unaffected; only new drags
+      // get the correct sign.
       const centerScreenX = renderer.canvasToScreenX(drag.startCanvasX, canvas.width);
       const centerScreenY = renderer.canvasToScreenY(drag.startCanvasY, canvas.height);
       const angle = Math.atan2(mouseY - centerScreenY, mouseX - centerScreenX);
-      let angleDeg = (angle * 180) / Math.PI;
+      let angleDeg = -(angle * 180) / Math.PI;
 
       // Apply angle snapping if enabled
       const snapDeg = useSettingsStore.getState().rotationSnapDegrees;

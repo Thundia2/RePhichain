@@ -23,7 +23,7 @@
 
 import type { Line, Note, Beat, LineEvent, NoteControlEntry, NoteKind } from "../types/chart";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, beatToFloat } from "../types/chart";
-import { evaluateLineEventsWithLayers, distanceAt, computeWorldTransforms } from "./events";
+import { distanceAt, computeWorldTransforms } from "./events";
 import type { WorldTransform } from "./events";
 import { evaluateEasing } from "./easings";
 import { BpmList } from "../utils/bpmList";
@@ -140,6 +140,11 @@ export interface RenderOptions {
   // Background illustration
   illustrationImage?: HTMLImageElement | null;
 
+  // Background video (Canvas 2D mode). Structural type avoids importing
+  // VideoBackgroundManager (canvas/videoBackground.ts). Drawn inside render()
+  // right after clearRect (finding C5) so render's own clearRect can't wipe it.
+  videoBackground?: { draw(ctx: CanvasRenderingContext2D, w: number, h: number, beat: number): void } | null;
+
   // Selection
   selectedLineIndex?: number | null;
   selectedNoteIndices?: number[];
@@ -226,6 +231,15 @@ export class GameRenderer {
 
     // ---- Clear + Background ----
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+    // C5: video background — drawn HERE (after clearRect, before illustration +
+    // dim) at CSS-pixel dims (canvasWidth/Height already match the dpr-scaled
+    // context). GamePreview used to draw it BEFORE render(), whose clearRect
+    // above then wiped it; it also passed device-pixel dims into the dpr-scaled
+    // ctx (2× oversize on HiDPI). grep videoBackground.
+    if (options.videoBackground) {
+      options.videoBackground.draw(ctx, canvasWidth, canvasHeight, currentBeat);
+    }
 
     // Draw illustration if available
     if (options.illustrationImage) {
@@ -392,6 +406,31 @@ export class GameRenderer {
         const noteBeatF = beatToFloat(note.beat);
         const noteTime = bpmTimeAt(note.beat);
 
+        // C1: spawn the hit effect + sound BEFORE the head-beat cull below.
+        // trySpawnEffect dedupes via processedKeys and self-skips until
+        // noteBeat <= currentBeat, so calling it every frame is idempotent. The
+        // old call site sat AFTER the cull and was unreachable — a note is culled
+        // the first frame it passes the line, so effects/sounds never fired
+        // (finding C1, mirrors PixiLineContainer). The effect anchors at note.x
+        // along the line (no distanceAt), so passed notes still skip the
+        // expensive distance math via the cull just below.
+        // FIX 8: fake notes have no hit effects/sound/scoring.
+        // FIX 10: yOffset shifts the effect along the line's normal.
+        if (!note.fake && options.hitEffectManager && options.isPlaying && options.showHitEffects !== false) {
+          const cos = Math.cos(-worldRotation);
+          const sin = Math.sin(-worldRotation);
+          const hitNoteX = (note.x / CANVAS_WIDTH) * canvasWidth;
+          const noteYOff = (note.y_offset ?? 0) * 2 / CANVAS_HEIGHT * note.speed * distanceScale;
+          const localHitY = (note.above ? -1 : 1) * noteYOff;
+          const hitX = screenX + hitNoteX * cos - localHitY * sin;
+          const hitY = screenY + hitNoteX * sin + localHitY * cos;
+          options.hitEffectManager.trySpawnEffect(
+            `${lineIndex}-${noteIdx}`, noteBeatF, currentBeat,
+            hitX, hitY, currentTime,
+            note.kind, state.color,
+          );
+        }
+
         const holdBeatF = note.hold_beat ? beatToFloat(note.hold_beat) : 0;
         if (noteBeatF + holdBeatF < currentBeat) continue;
 
@@ -429,9 +468,11 @@ export class GameRenderer {
         const isMulti = multiBeats?.has(noteBeatF) ?? false;
         const color = this.getNoteColor(note, isSelected, options);
 
-        // Apply per-note alpha
+        // C2: per-note alpha (note.alpha × alpha_control) is applied INSIDE
+        // drawNote/drawHoldNote now — they multiply it into the note-body base
+        // instead of the bare 0.9 clobbering it. prevAlpha still brackets the
+        // cull/continue paths below so globalAlpha stays consistent across notes.
         const prevAlpha = ctx.globalAlpha;
-        if (noteAlpha < 1) ctx.globalAlpha = noteAlpha;
 
         // Apply pos_control offset to X
         const finalNoteX = noteX + noteXOffset * canvasWidth;
@@ -440,7 +481,7 @@ export class GameRenderer {
           this.drawHoldNote(
             ctx, note, rawY, finalNoteX, scaledNoteW, scaledNoteH, color,
             currentDistance, distanceScale, speedEvents, bpmTimeAt,
-            canvasHeight, isMulti, options.respack, bpmFactor,
+            canvasHeight, isMulti, options.respack, bpmFactor, noteAlpha,
           );
           // Collect hold note head position for hit-testing
           const holdScreenNoteY = note.above ? -Math.max(rawY, 0) : Math.max(rawY, 0);
@@ -461,7 +502,7 @@ export class GameRenderer {
           if (rawY < 0 && line.is_cover !== false) { ctx.globalAlpha = prevAlpha; continue; }
           const screenNoteY = note.above ? -rawY : rawY;
           if (Math.abs(screenNoteY) > canvasHeight * 2) { ctx.globalAlpha = prevAlpha; continue; }
-          this.drawNote(ctx, note, finalNoteX, screenNoteY, scaledNoteW, scaledNoteH, color, isMulti, options.respack);
+          this.drawNote(ctx, note, finalNoteX, screenNoteY, scaledNoteW, scaledNoteH, color, isMulti, options.respack, noteAlpha);
 
           // Collect note position for hit-testing (transform local to absolute)
           const cos = Math.cos(-worldRotation);
@@ -479,23 +520,6 @@ export class GameRenderer {
         }
 
         ctx.globalAlpha = prevAlpha;
-
-        // Hit effect spawning
-        // FIX 8: Fake notes have no hit effects, no sound, no scoring
-        // FIX 10: yOffset affects hit effect position — project yOffset along line's normal
-        if (!note.fake && options.hitEffectManager && options.isPlaying && options.showHitEffects !== false) {
-          const cos = Math.cos(-worldRotation);
-          const sin = Math.sin(-worldRotation);
-          const noteYOff = (note.y_offset ?? 0) * 2 / CANVAS_HEIGHT * note.speed * distanceScale;
-          const localHitY = (note.above ? -1 : 1) * noteYOff;
-          const hitX = screenX + noteX * cos - localHitY * sin;
-          const hitY = screenY + noteX * sin + localHitY * cos;
-          options.hitEffectManager.trySpawnEffect(
-            `${lineIndex}-${noteIdx}`, noteBeatF, currentBeat,
-            hitX, hitY, currentTime,
-            note.kind, state.color,
-          );
-        }
       }
 
       // Curve note track notes (semi-transparent)
@@ -713,8 +737,12 @@ export class GameRenderer {
     color: string,
     isMultiHighlight: boolean,
     respack?: LoadedRespack | null,
+    noteAlpha: number = 1,
   ) {
-    ctx.globalAlpha = 0.9;
+    // C2: 0.9 is the note-body base opacity; multiply the per-note alpha into it
+    // rather than overwriting (was a bare `= 0.9`, which dropped note.alpha and
+    // alpha_control entirely).
+    ctx.globalAlpha = 0.9 * noteAlpha;
 
     if (respack) {
       const texKey = note.kind === "tap" ? "tap" : note.kind as "drag" | "flick";
@@ -809,6 +837,7 @@ export class GameRenderer {
     isMultiHighlight: boolean,
     respack?: LoadedRespack | null,
     bpmFactor: number = 1,
+    noteAlpha: number = 1,
   ) {
     if (!note.hold_beat) return;
 
@@ -849,7 +878,7 @@ export class GameRenderer {
       const tailTexH = noteW * tailAspect;
 
       // Body — FIX 13: holdRepeat tiles the body texture instead of stretching
-      ctx.globalAlpha = 0.9;
+      ctx.globalAlpha = 0.9 * noteAlpha; // C2: respect per-note alpha
       if (respack?.config?.holdRepeat && holdParts.body.naturalWidth > 0) {
         const pattern = ctx.createPattern(holdParts.body, "repeat-y");
         if (pattern) {
@@ -875,23 +904,23 @@ export class GameRenderer {
         ctx.drawImage(holdParts.tail, noteX - noteW / 2, screenTailY - tailTexH / 2, noteW, tailTexH);
       }
     } else {
-      // Fallback: colored rectangles
+      // Fallback: colored rectangles (C2: each base alpha × per-note alpha)
       ctx.fillStyle = color;
-      ctx.globalAlpha = 0.5;
+      ctx.globalAlpha = 0.5 * noteAlpha;
       ctx.fillRect(noteX - noteW / 2, top, noteW, bodyHeight);
 
       if (rawY >= 0) {
-        ctx.globalAlpha = 0.9;
+        ctx.globalAlpha = 0.9 * noteAlpha;
         ctx.fillRect(noteX - noteW / 2, screenHeadY - noteH / 2, noteW, noteH);
       }
 
-      ctx.globalAlpha = 0.7;
+      ctx.globalAlpha = 0.7 * noteAlpha;
       ctx.fillRect(noteX - noteW / 2, screenTailY - noteH / 4, noteW, noteH / 2);
     }
 
     // Multi-highlight outline on head
     if (isMultiHighlight && rawY >= 0 && !holdParts) {
-      ctx.globalAlpha = 0.8;
+      ctx.globalAlpha = 0.8 * noteAlpha;
       ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
       ctx.lineWidth = 2;
       ctx.strokeRect(noteX - noteW / 2 - 1, screenHeadY - noteH / 2 - 1, noteW + 2, noteH + 2);
@@ -915,20 +944,23 @@ export class GameRenderer {
     const lineHalfW = canvasWidth * 1.5;
     const hitThreshold = 8;
 
+    // N2: hit-test against the SAME world transforms the renderer draws with
+    // (computeWorldTransforms resolves father_index parent-child composition).
+    // The old path used each line's raw local state.x/state.y, so a child line
+    // parented to a moved/rotated parent was unselectable where it visually sits.
+    const worldTransforms = computeWorldTransforms(lines, currentBeat, canvasWidth, canvasHeight);
+
     // Iterate in reverse so topmost (last-drawn) line wins
     for (let i = lines.length - 1; i >= 0; i--) {
-      const state = evaluateLineEventsWithLayers(lines[i].events, lines[i].event_layers, currentBeat);
-      if (state.opacity <= 0) continue;
+      const wt = worldTransforms[i];
+      if (wt.localState.opacity <= 0) continue;
 
-      const screenX = canvasWidth / 2 + (state.x / CANVAS_WIDTH) * canvasWidth;
-      const screenY = canvasHeight / 2 - (state.y / CANVAS_HEIGHT) * canvasHeight;
-
-      const dx = clickX - screenX;
-      const dy = clickY - screenY;
-      // The renderer draws lines with ctx.rotate(-state.rotation), so we must
-      // use the same negated angle to transform screen coords back to line-local space.
-      const cos = Math.cos(-state.rotation);
-      const sin = Math.sin(-state.rotation);
+      const dx = clickX - wt.worldX;
+      const dy = clickY - wt.worldY;
+      // The renderer draws lines with ctx.rotate(-worldRotation), so transform
+      // screen coords back to line-local space with the same negated angle.
+      const cos = Math.cos(-wt.worldRotation);
+      const sin = Math.sin(-wt.worldRotation);
       const localX = dx * cos + dy * sin;
       const localY = -dx * sin + dy * cos;
 
