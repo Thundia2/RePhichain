@@ -12,7 +12,8 @@ import { useEditorStore } from "../../stores/editorStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { BpmList } from "../../utils/bpmList";
 import { beatToFloat } from "../../types/chart";
-import type { LineEvent, LineEventKind } from "../../types/chart";
+import type { LineEventKind } from "../../types/chart";
+import { resolveActiveDisplayEvents } from "../../utils/eventRouting";
 import { EVENT_COLORS, KIND_SHORT } from "../../constants/eventConfig";
 
 interface KeyframeStripProps {
@@ -99,21 +100,8 @@ export function KeyframeStrip({ lineIndex }: KeyframeStripProps) {
         "scale_x", "scale_y", "color", "text", "incline",
       ];
 
-      // Determine which events to display based on active layer
-      let displayEvents: LineEvent[];
-      if (activeLayer >= 0 && line.event_layers && line.event_layers[activeLayer]) {
-        // Show events from the selected layer
-        const layer = line.event_layers[activeLayer];
-        displayEvents = [
-          ...layer.move_x_events,
-          ...layer.move_y_events,
-          ...layer.rotate_events,
-          ...layer.alpha_events,
-          ...layer.speed_events,
-        ];
-      } else {
-        displayEvents = line.events;
-      }
+      // Events to display: active layer's, or flat (finding L3 — shared helper).
+      const displayEvents = resolveActiveDisplayEvents(line, activeLayer);
 
       // Filter to kinds that have events (to avoid empty lanes)
       const activeKinds = allKinds.filter((kind) =>

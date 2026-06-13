@@ -101,6 +101,16 @@ export function applyPresetAtPlayhead(
   }
 
   if (newEvents.length > 0) {
-    cs.batchMultiLineMutations([{ lineIndex, newEvents }]);
+    // Route each event flat<->layer (finding L3) so presets applied to a
+    // layered (RPE-imported) line land in the active layer the evaluator reads,
+    // not flat where they'd be invisible + dropped on export. One transaction
+    // (finding L1) keeps the whole preset a single undo entry, matching the old
+    // batchMultiLineMutations behavior. addEventRouted with no layer = auto
+    // (layer 0 on a layered line); extended kinds always route to flat.
+    cs.transaction(() => {
+      for (const ev of newEvents) {
+        cs.addEventRouted(lineIndex, ev);
+      }
+    });
   }
 }

@@ -37,6 +37,7 @@ import { beatToFloat } from "../../types/chart";
 import { snapBeat, floatToBeat } from "../../utils/beat";
 import { snapX } from "../../utils/xSnap";
 import { placeEventAtBeats } from "../../utils/quickEventCreate";
+import { findEventInLine } from "../../utils/eventRouting";
 import { EVENT_TOOL_TO_KIND } from "../../types/editor";
 import type { NoteKind, Beat, LineEventKind } from "../../types/chart";
 
@@ -80,9 +81,10 @@ interface HoldTailDragState {
 // ============================================================
 interface EventPlacementDragState {
   lineIndex: number;
-  /** Index in line.events. Stable across the drag because end_beat
-   *  edits don't re-sort (sort is by start_beat). */
-  eventIndex: number;
+  /** Stable id of the placed event (finding L2/L3). Resolved by id on every
+   *  move so the live end_beat drag survives flat<->layer routing and any
+   *  re-sort, instead of trusting a now-ambiguous array index. */
+  eventId: string;
   /** Click beat — the immutable lower bound of the event. */
   startBeat: number;
   kind: LineEventKind;
@@ -555,16 +557,17 @@ export function UnrolledCanvas({
       const minDuration = 1 / safeDensity;
       const endBeat = startBeat + minDuration;
 
-      const eventIndex = placeEventAtBeats(lineIdx, kind, startBeat, endBeat);
-      if (eventIndex < 0) return;
+      const eventId = placeEventAtBeats(lineIdx, kind, startBeat, endBeat);
+      if (!eventId) return;
 
-      // Select the new event so any keyframe-bar / inspector panels
-      // that key off selection update immediately.
-      setEventSelectionByIndex([eventIndex], lineIdx);
+      // Select the new event by id so any keyframe-bar / inspector panels
+      // that key off selection update immediately. Select by id, not index:
+      // the write may have routed into a layer's kind-array (finding L3).
+      es.setEventSelection([eventId]);
 
       eventPlacementDragRef.current = {
         lineIndex: lineIdx,
-        eventIndex,
+        eventId,
         startBeat,
         kind,
       };
@@ -776,9 +779,9 @@ export function UnrolledCanvas({
       // to skip writes when end_beat hasn't actually changed (cuts
       // history churn during smooth drags).
       const line = cs.chart.lines[drag.lineIndex];
-      const evt = line?.events[drag.eventIndex];
+      const evt = line ? findEventInLine(line, drag.eventId) : null;
       if (evt && Math.abs(beatToFloat(evt.end_beat) - newEnd) > 1e-9) {
-        cs.editEvent(drag.lineIndex, drag.eventIndex, { end_beat: floatToBeat(newEnd) });
+        cs.editEventById(drag.lineIndex, drag.eventId, { end_beat: floatToBeat(newEnd) });
       }
       return;
     }

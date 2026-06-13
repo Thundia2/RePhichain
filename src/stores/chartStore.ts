@@ -26,6 +26,7 @@ import { DEFAULT_EXTRA_CONFIG } from "../types/extra";
 import { ensureEntityIds, ensureLineIds, generateNoteUid, generateLineId, generateEventId } from "../utils/noteUid";
 import { BpmList } from "../utils/bpmList";
 import { nextUndoSeq } from "../utils/undoSequence";
+import { getLayerEvents, routeEventTarget, LAYER_CORE_KINDS } from "../utils/eventRouting";
 
 // ============================================================
 // CONFIGURABLE: Maximum undo history depth
@@ -287,16 +288,30 @@ function regenerateEventIds(line: Line) {
   }
 }
 
-// ---- Helper: get the events array for a given kind within an event layer ----
-function getLayerEvents(layer: EventLayer, kind: LineEventKind): LineEvent[] {
-  switch (kind) {
-    case "x": return layer.move_x_events;
-    case "y": return layer.move_y_events;
-    case "rotation": return layer.rotate_events;
-    case "opacity": return layer.alpha_events;
-    case "speed": return layer.speed_events;
-    default: return [];
+// getLayerEvents (kind -> layer field map) now lives in utils/eventRouting.ts
+// as the single source of truth (finding L3); imported above. It returns null
+// for non-core kinds, so the layer mutations below guard the result.
+
+// ---- Helper: locate an event by stable id anywhere on a line draft ----
+// Returns the draft array holding the event + its index, so id-based routed
+// writes (editEventById / replaceEventById / removeEventsById — finding L3) can
+// splice/mutate in place whether the event lives in flat line.events or in any
+// event layer's kind-array. Mirrors utils/eventRouting.findEventInLine but
+// returns the array reference for mutation. grep `locateEventDraft`.
+function locateEventDraft(line: Line, eventId: string): { arr: LineEvent[]; index: number } | null {
+  const fi = line.events.findIndex((e) => e.id === eventId);
+  if (fi >= 0) return { arr: line.events, index: fi };
+  if (line.event_layers) {
+    for (const layer of line.event_layers) {
+      for (const kind of LAYER_CORE_KINDS) {
+        const arr = getLayerEvents(layer, kind);
+        if (!arr) continue;
+        const i = arr.findIndex((e) => e.id === eventId);
+        if (i >= 0) return { arr, index: i };
+      }
+    }
   }
+  return null;
 }
 
 // ---- Helper: create an empty event layer ----
@@ -414,6 +429,25 @@ export interface ChartState {
   editEvent: (lineIndex: number, eventIndex: number, changes: Partial<LineEvent>) => void;
   /** Atomically replace one event with one or more new events (single undo entry) */
   replaceEvent: (lineIndex: number, oldEventIndex: number, newEvents: LineEvent[]) => void;
+
+  // ---- Kind-aware routed event writes (finding L3) ----
+  // These route to the active event layer's kind-array on a layered chart (else
+  // flat line.events), so editor writes land where evaluateLineEventsWithLayers
+  // READS — fixing the "edit invisible in preview + dropped on RPE export" bug
+  // on imported charts. The flat add/edit/replace/removeEvents above are kept
+  // for non-layered consumers and internal use. grep `addEventRouted`.
+  /** Add an event, routing flat<->layer by kind. `layerIndex` mirrors
+   *  editorStore.eventEditorActiveLayer (-1 = force flat, 0..4 = layer,
+   *  undefined = auto/layer 0). Assigns a UID, sorts, pushes undo. */
+  addEventRouted: (lineIndex: number, event: LineEvent, layerIndex?: number) => void;
+  /** Edit an event located by its stable id (finding L2) — found in flat events
+   *  or any layer, so no flat-vs-layer index ambiguity. Pushes undo. */
+  editEventById: (lineIndex: number, eventId: string, changes: Partial<LineEvent>) => void;
+  /** Replace an event (located by stable id) with one or more new events in the
+   *  array where it lives. Single undo entry. */
+  replaceEventById: (lineIndex: number, eventId: string, newEvents: LineEvent[]) => void;
+  /** Remove events located by stable id (across flat + all layers). Single undo entry. */
+  removeEventsById: (lineIndex: number, eventIds: string[]) => void;
 
   // ---- Event layer mutations (RPE multi-layer events) ----
   /** Add an event to a specific RPE event layer. Creates the layer if needed. Pushes undo. */
@@ -876,6 +910,75 @@ export const useChartStore = create<ChartState>()((set, get) => ({
       }),
     ),
 
+  // ---- Kind-aware routed event writes (finding L3) ----
+
+  // Dispatcher (not itself a producer): reads the current line to decide flat
+  // vs. layer, then delegates to addEvent / addEventToLayer so exactly one
+  // history entry is pushed by the delegate.
+  addEventRouted: (lineIndex, event, layerIndex) => {
+    const line = get().chart.lines[lineIndex];
+    if (!line) return;
+    const target = routeEventTarget(line, event.kind, layerIndex);
+    if (target.kind === "layer") {
+      get().addEventToLayer(lineIndex, target.layerIndex, event.kind, event);
+    } else {
+      get().addEvent(lineIndex, event);
+    }
+  },
+
+  editEventById: (lineIndex, eventId, changes) =>
+    set(
+      produce((state: ChartState) => {
+        const line = state.chart.lines[lineIndex];
+        if (!line) return;
+        const loc = locateEventDraft(line, eventId);
+        if (!loc) return;
+        pushHistory(state);
+        Object.assign(loc.arr[loc.index], changes);
+        sortEvents(loc.arr);
+      }),
+    ),
+
+  replaceEventById: (lineIndex, eventId, newEvents) =>
+    set(
+      produce((state: ChartState) => {
+        const line = state.chart.lines[lineIndex];
+        if (!line) return;
+        const loc = locateEventDraft(line, eventId);
+        if (!loc) return;
+        pushHistory(state);
+        for (const e of newEvents) if (!e.id) e.id = generateEventId();
+        loc.arr.splice(loc.index, 1, ...newEvents);
+        sortEvents(loc.arr);
+      }),
+    ),
+
+  removeEventsById: (lineIndex, eventIds) =>
+    set(
+      produce((state: ChartState) => {
+        const line = state.chart.lines[lineIndex];
+        if (!line || eventIds.length === 0) return;
+        // Group removals by their backing array (flat or a specific layer
+        // kind-array), then splice each in reverse index order so earlier
+        // indices stay valid. A draft array reference is a stable Map key
+        // within this producer.
+        const byArr = new Map<LineEvent[], number[]>();
+        for (const id of eventIds) {
+          const loc = locateEventDraft(line, id);
+          if (!loc) continue;
+          let list = byArr.get(loc.arr);
+          if (!list) { list = []; byArr.set(loc.arr, list); }
+          list.push(loc.index);
+        }
+        if (byArr.size === 0) return;
+        pushHistory(state);
+        for (const [arr, indices] of byArr) {
+          indices.sort((a, b) => b - a);
+          for (const i of indices) arr.splice(i, 1);
+        }
+      }),
+    ),
+
   // ---- Undo/redo ----
 
   undo: () =>
@@ -965,9 +1068,10 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         const line = state.chart.lines[lineIndex];
         if (!line || !line.event_layers) return;
         if (layerIndex < 0 || layerIndex >= line.event_layers.length) return;
+        const events = getLayerEvents(line.event_layers[layerIndex], kind);
+        if (!events) return;
         pushHistory(state);
         if (!event.id) event.id = generateEventId();
-        const events = getLayerEvents(line.event_layers[layerIndex], kind);
         events.push(event);
         sortEvents(events);
       }),
@@ -980,8 +1084,9 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         if (!line || !line.event_layers) return;
         if (layerIndex < 0 || layerIndex >= line.event_layers.length) return;
         if (eventIndices.length === 0) return;
-        pushHistory(state);
         const events = getLayerEvents(line.event_layers[layerIndex], kind);
+        if (!events) return;
+        pushHistory(state);
         const sorted = [...eventIndices].sort((a, b) => b - a);
         for (const idx of sorted) {
           if (idx >= 0 && idx < events.length) {
@@ -998,6 +1103,7 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         if (!line || !line.event_layers) return;
         if (layerIndex < 0 || layerIndex >= line.event_layers.length) return;
         const events = getLayerEvents(line.event_layers[layerIndex], kind);
+        if (!events) return;
         if (eventIndex < 0 || eventIndex >= events.length) return;
         pushHistory(state);
         Object.assign(events[eventIndex], changes);
@@ -1025,9 +1131,10 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         if (!line || !line.event_layers) return;
         if (layerIndex < 0 || layerIndex >= line.event_layers.length) return;
         if (events.length === 0) return;
+        const layerEvents = getLayerEvents(line.event_layers[layerIndex], kind);
+        if (!layerEvents) return;
         pushHistory(state);
         for (const e of events) if (!e.id) e.id = generateEventId();
-        const layerEvents = getLayerEvents(line.event_layers[layerIndex], kind);
         layerEvents.push(...events);
         sortEvents(layerEvents);
       }),

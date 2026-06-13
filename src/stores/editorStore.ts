@@ -406,7 +406,13 @@ export const useEditorStore = create<EditorState>()((set) => ({
   eventEditorShowAllLines: false,
   eventEditorShowNotes: false,
   eventEditorActiveProperty: "x",
-  eventEditorActiveLayer: -1, // -1 = flat events (non-layered)
+  // Default to layer 0, not flat (finding L3): on a layered (RPE-imported) chart
+  // the evaluator reads core kinds from event_layers, so a "flat" default left
+  // the diamond strip empty AND sent edits to flat where they were invisible +
+  // dropped on export. Layer 0 makes display and routed writes agree. On a
+  // non-layered chart routeEventTarget falls back to flat regardless, so this is
+  // inert there. The "Flat" pill still sets -1 to reach flat/extended events.
+  eventEditorActiveLayer: 0,
   eventEditorDragState: null,
 
   // ---- Beat-sync placement ----

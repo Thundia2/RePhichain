@@ -17,8 +17,9 @@
 //   - Hold note speeds are baked: speed *= lineSpeed / 9.0 * 2.0
 // ============================================================
 
-import type { PhichainChart, Line, Note, LineEvent, Beat } from "../types/chart";
+import type { PhichainChart, Line, Note, LineEvent, LineEventKind, Beat } from "../types/chart";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, beatToFloat } from "../types/chart";
+import { collectKindEvents } from "./eventRouting";
 
 // ============================================================
 // Conversion Helpers
@@ -60,30 +61,13 @@ function getEventEndValue(event: LineEvent): number {
 // Flatten Event Layers
 // ============================================================
 
-/** Collect all events of a given kind from both flat events and event layers */
-function collectEvents(line: Line, kind: string): LineEvent[] {
-  const events: LineEvent[] = [];
-
-  if (line.event_layers && line.event_layers.length > 0) {
-    // When layers exist, we can only export layer 0 since official format
-    // doesn't support additive layers. Use layer 0 as the primary.
-    for (const layer of line.event_layers) {
-      let layerEvents: LineEvent[];
-      switch (kind) {
-        case "x": layerEvents = layer.move_x_events; break;
-        case "y": layerEvents = layer.move_y_events; break;
-        case "rotation": layerEvents = layer.rotate_events; break;
-        case "opacity": layerEvents = layer.alpha_events; break;
-        case "speed": layerEvents = layer.speed_events; break;
-        default: layerEvents = [];
-      }
-      events.push(...layerEvents);
-    }
-  } else {
-    events.push(...line.events.filter(e => e.kind === kind));
-  }
-
-  // Sort by start beat
+/** Collect all events of a given kind from both flat events and event layers.
+ *  Delegates the flat-vs-layers (sum-all-layers) decision to the shared
+ *  collectKindEvents (finding L3) so this exporter no longer duplicates the
+ *  kind->layer-field map. Official format has no additive layers, so summed
+ *  layer events are merged and sorted by start beat. */
+function collectEvents(line: Line, kind: LineEventKind): LineEvent[] {
+  const events = collectKindEvents(line, kind);
   events.sort((a, b) => beatToFloat(a.start_beat) - beatToFloat(b.start_beat));
   return events;
 }

@@ -20,6 +20,8 @@
 // ============================================================
 
 import { useChartStore } from "../../stores/chartStore";
+import { useEditorStore } from "../../stores/editorStore";
+import { resolveActiveKindEvents } from "../../utils/eventRouting";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, beatToFloat, floatToBeat } from "../../types/chart";
 import type { LineEvent, LineEventKind, Beat, Note } from "../../types/chart";
 
@@ -178,13 +180,21 @@ export function commitValue(
   const line = cs.chart.lines[lineIndex];
   if (!line) return;
 
-  const activeIdx = findActiveEventIndex(line.events, kind, currentBeat);
+  // Route flat<->layer (finding L3): on a layered chart the evaluator reads core
+  // kinds from event_layers, so we must find the active event in — and write to —
+  // the active layer's kind-array, not flat line.events (where a write would be
+  // invisible in preview and dropped on RPE export). resolveActiveKindEvents
+  // returns the SAME array routeEventTarget/addEventRouted writes to, keyed off
+  // editorStore.eventEditorActiveLayer (-1 = Flat pill, default 0).
+  const activeLayer = useEditorStore.getState().eventEditorActiveLayer;
+  const kindEvents = resolveActiveKindEvents(line, kind, activeLayer);
+  const activeIdx = findActiveEventIndex(kindEvents, kind, currentBeat);
+  const event = activeIdx >= 0 ? kindEvents[activeIdx] : null;
 
-  if (activeIdx >= 0) {
-    const event = line.events[activeIdx];
+  if (event && event.id) {
     if ("constant" in event.value) {
       // Case 1: Update the constant value
-      cs.editEvent(lineIndex, activeIdx, { value: { constant: newValue } });
+      cs.editEventById(lineIndex, event.id, { value: { constant: newValue } });
     } else if ("transition" in event.value) {
       // Case 2: Split the transition event at the current beat
       const splitBeat = floatToBeat(currentBeat);
@@ -208,18 +218,18 @@ export function commitValue(
           value: { constant: newValue },
         },
       ];
-      cs.replaceEvent(lineIndex, activeIdx, newEvents);
+      cs.replaceEventById(lineIndex, event.id, newEvents);
     }
   } else {
-    // Case 3: No active event — create a new constant event
+    // Case 3: No active event — create a new constant event in the routed target
     const snappedBeat = floatToBeat(currentBeat);
     const farBeat: Beat = [1000, 0, 1];
-    cs.addEvent(lineIndex, {
+    cs.addEventRouted(lineIndex, {
       kind,
       start_beat: snappedBeat,
       end_beat: farBeat,
       value: { constant: newValue },
-    });
+    }, activeLayer);
   }
 }
 

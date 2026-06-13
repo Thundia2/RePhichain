@@ -41,7 +41,11 @@ function BatchOpsTab() {
   const duplicateLine = useChartStore((s) => s.duplicateLine);
   const removeLine = useChartStore((s) => s.removeLine);
   const editLine = useChartStore((s) => s.editLine);
-  const addEvent = useChartStore((s) => s.addEvent);
+  // Routed add (finding L3): batch fades land in the active layer on layered
+  // lines so they're visible + exported. transaction (finding L1): one undo
+  // entry per batch instead of one per line.
+  const addEventRouted = useChartStore((s) => s.addEventRouted);
+  const transaction = useChartStore((s) => s.transaction);
   const clearMultiSelectedLines = useEditorStore((s) => s.clearMultiSelectedLines);
 
   const [presetSearch, setPresetSearch] = useState("");
@@ -85,37 +89,43 @@ function BatchOpsTab() {
   }, [multiSelectedLineIndices, editLine]);
 
   const handleBatchFadeIn = useCallback(() => {
-    for (const { index } of selectedLines) {
-      addEvent(index, {
-        kind: "opacity",
-        start_beat: [0, 0, 1],
-        end_beat: [2, 0, 1],
-        value: { transition: { start: 0, end: 255, easing: "ease_out_sine" } },
-      });
-    }
-  }, [selectedLines, addEvent]);
+    transaction(() => {
+      for (const { index } of selectedLines) {
+        addEventRouted(index, {
+          kind: "opacity",
+          start_beat: [0, 0, 1],
+          end_beat: [2, 0, 1],
+          value: { transition: { start: 0, end: 255, easing: "ease_out_sine" } },
+        });
+      }
+    });
+  }, [selectedLines, addEventRouted, transaction]);
 
   const handleBatchFadeOut = useCallback(() => {
-    for (const { index } of selectedLines) {
-      addEvent(index, {
-        kind: "opacity",
-        start_beat: [0, 0, 1],
-        end_beat: [2, 0, 1],
-        value: { transition: { start: 255, end: 0, easing: "ease_in_sine" } },
-      });
-    }
-  }, [selectedLines, addEvent]);
+    transaction(() => {
+      for (const { index } of selectedLines) {
+        addEventRouted(index, {
+          kind: "opacity",
+          start_beat: [0, 0, 1],
+          end_beat: [2, 0, 1],
+          value: { transition: { start: 255, end: 0, easing: "ease_in_sine" } },
+        });
+      }
+    });
+  }, [selectedLines, addEventRouted, transaction]);
 
   const handleSyncSpeed = useCallback(() => {
-    for (const { index } of selectedLines) {
-      addEvent(index, {
-        kind: "speed",
-        start_beat: [0, 0, 1],
-        end_beat: [1000, 0, 1],
-        value: { constant: 1 },
-      });
-    }
-  }, [selectedLines, addEvent]);
+    transaction(() => {
+      for (const { index } of selectedLines) {
+        addEventRouted(index, {
+          kind: "speed",
+          start_beat: [0, 0, 1],
+          end_beat: [1000, 0, 1],
+          value: { constant: 1 },
+        });
+      }
+    });
+  }, [selectedLines, addEventRouted, transaction]);
 
   // Filter presets for batch apply
   const normalizedSearch = presetSearch.toLowerCase().trim();

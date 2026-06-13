@@ -22,7 +22,6 @@ import {
   useSelectedLineIndex,
   useSelectedEventIndices,
   getSelectedLineIndex,
-  getSelectedEventIndices,
   setEventSelectionByIndex,
 } from "../../stores/selection";
 import { useAudioStore } from "../../stores/audioStore";
@@ -33,6 +32,7 @@ import { getCachedBpmList } from "../../stores/chartStore";
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import type { Beat, LineEvent, LineEventKind, EasingType } from "../../types/chart";
 import { EVENT_COLORS, KIND_SHORT, CORE_KINDS, DEFAULT_EVENT_VALUES } from "../../constants/eventConfig";
+import { resolveActiveDisplayEvents } from "../../utils/eventRouting";
 import { EASING_OPTIONS } from "../common/FormFields";
 import { evaluateEasing } from "../../canvas/easings";
 import { KeyframeBarHeader } from "./KeyframeBarHeader";
@@ -179,19 +179,8 @@ export function KeyframeBar() {
       "scale_x", "scale_y", "color", "text", "incline",
     ];
 
-    let displayEvents: LineEvent[];
-    if (layerIdx >= 0 && line.event_layers && line.event_layers[layerIdx]) {
-      const layer = line.event_layers[layerIdx];
-      displayEvents = [
-        ...layer.move_x_events,
-        ...layer.move_y_events,
-        ...layer.rotate_events,
-        ...layer.alpha_events,
-        ...layer.speed_events,
-      ];
-    } else {
-      displayEvents = line.events;
-    }
+    // Active layer's events or flat (finding L3) — shared with the render loop.
+    const displayEvents = resolveActiveDisplayEvents(line, layerIdx);
 
     const activeKinds = allKinds.filter((kind) =>
       displayEvents.some((e) => e.kind === kind),
@@ -431,19 +420,8 @@ export function KeyframeBar() {
         displayEvents = allGroupEventsRaw;
         taggedEvents = allGroupEvents;
       } else {
-        // Normal mode: single line
-        if (layerIdx >= 0 && line.event_layers && line.event_layers[layerIdx]) {
-          const layer = line.event_layers[layerIdx];
-          displayEvents = [
-            ...layer.move_x_events,
-            ...layer.move_y_events,
-            ...layer.rotate_events,
-            ...layer.alpha_events,
-            ...layer.speed_events,
-          ];
-        } else {
-          displayEvents = line.events;
-        }
+        // Normal mode: single line — active layer's events, or flat (finding L3)
+        displayEvents = resolveActiveDisplayEvents(line, layerIdx);
       }
 
       // Find which kinds have events (always show core 5)
@@ -455,8 +433,10 @@ export function KeyframeBar() {
         : [...new Set([...CORE_KINDS, ...activeKinds])];
       const laneHeight = (height - 14) / kinds.length;
 
-      // Selected event indices for highlight
-      const selEvtIndices = new Set(getSelectedEventIndices());
+      // Selected event ids for highlight — id-based (finding L2/L3) so it works
+      // whether displayEvents come from flat line.events or a layer's kind-array
+      // (resolving selection to flat indices is wrong once events live in layers).
+      const selEvtIds = new Set(useEditorStore.getState().selectedEventIds);
 
       for (let ki = 0; ki < kinds.length; ki++) {
         const kind = kinds[ki];
@@ -509,9 +489,8 @@ export function KeyframeBar() {
             // Cull off-screen events
             if (endPx < 0 || startPx > width) continue;
 
-            // Check if this event is selected
-            const globalIdx = displayEvents.indexOf(event);
-            const isSelected = selEvtIndices.has(globalIdx);
+            // Check if this event is selected (by stable id)
+            const isSelected = !!event.id && selEvtIds.has(event.id);
 
             // Span bar
             const isTransition = "transition" in event.value || "color_transition" in event.value;
@@ -660,12 +639,8 @@ export function KeyframeBar() {
 
     const { lineIdx, layerIdx } = data;
 
-    if (layerIdx >= 0) {
-      // Layer-aware add
-      useChartStore.getState().addEventToLayer(lineIdx, layerIdx, kind, newEvent);
-    } else {
-      useChartStore.getState().addEvent(lineIdx, newEvent);
-    }
+    // Route flat<->layer (finding L3): collapses the old layerIdx>=0 branch.
+    useChartStore.getState().addEventRouted(lineIdx, newEvent, layerIdx);
 
     // Seek to the new event's beat
     seekToBeat(beat);
@@ -781,53 +756,27 @@ export function KeyframeBar() {
   // ---- Context menu actions ----
   const handleDeleteEvent = useCallback(() => {
     if (!contextMenu) return;
-    const data = getDisplayData();
-    if (!data) return;
-
     const { hit } = contextMenu;
-    if (!hit) return;
-    const { lineIdx, layerIdx } = data;
+    if (!hit || !hit.event.id) return;
+    const lineIdx = getSelectedLineIndex();
+    if (lineIdx === null) return;
 
-    if (layerIdx >= 0) {
-      // Find the event index within its kind's layer events
-      const line = data.line;
-      if (line.event_layers && line.event_layers[layerIdx]) {
-        const layer = line.event_layers[layerIdx];
-        const kindFieldMap: Partial<Record<LineEventKind, LineEvent[]>> = {
-          x: layer.move_x_events,
-          y: layer.move_y_events,
-          rotation: layer.rotate_events,
-          opacity: layer.alpha_events,
-          speed: layer.speed_events,
-        };
-        const kindEvents = kindFieldMap[hit.kind];
-        if (kindEvents) {
-          const idx = kindEvents.indexOf(hit.event);
-          if (idx >= 0) {
-            useChartStore.getState().removeEventsFromLayer(lineIdx, layerIdx, hit.kind, [idx]);
-          }
-        }
-      }
-    } else {
-      // Flat events — find index in line.events
-      const idx = data.line.events.indexOf(hit.event);
-      if (idx >= 0) {
-        useChartStore.getState().removeEvents(lineIdx, [idx]);
-      }
-    }
+    // Remove by stable id (finding L3): locates the event whether it lives in
+    // flat line.events or any layer's kind-array — no kind->field map or
+    // flat-vs-layer branching needed here anymore.
+    useChartStore.getState().removeEventsById(lineIdx, [hit.event.id]);
 
     useEditorStore.getState().clearSelection();
     setContextMenu(null);
-  }, [contextMenu, getDisplayData]);
+  }, [contextMenu]);
 
   const handleChangeEasing = useCallback((easing: EasingType) => {
     if (!contextMenu) return;
-    const data = getDisplayData();
-    if (!data) return;
-
     const { hit } = contextMenu;
-    if (!hit) return;
-    const { lineIdx, layerIdx } = data;
+    const eventId = hit?.event.id;
+    if (!hit || !eventId) return;
+    const lineIdx = getSelectedLineIndex();
+    if (lineIdx === null) return;
     const event = hit.event;
 
     // Build updated value with new easing
@@ -855,34 +804,11 @@ export function KeyframeBar() {
       return;
     }
 
-    if (layerIdx >= 0) {
-      const line = data.line;
-      if (line.event_layers && line.event_layers[layerIdx]) {
-        const layer = line.event_layers[layerIdx];
-        const kindFieldMap: Partial<Record<LineEventKind, LineEvent[]>> = {
-          x: layer.move_x_events,
-          y: layer.move_y_events,
-          rotation: layer.rotate_events,
-          opacity: layer.alpha_events,
-          speed: layer.speed_events,
-        };
-        const kindEvents = kindFieldMap[hit.kind];
-        if (kindEvents) {
-          const idx = kindEvents.indexOf(hit.event);
-          if (idx >= 0) {
-            useChartStore.getState().editEventInLayer(lineIdx, layerIdx, hit.kind, idx, { value: newValue });
-          }
-        }
-      }
-    } else {
-      const idx = data.line.events.indexOf(hit.event);
-      if (idx >= 0) {
-        useChartStore.getState().editEvent(lineIdx, idx, { value: newValue });
-      }
-    }
+    // Edit by stable id (finding L3) — locates the event flat or in any layer.
+    useChartStore.getState().editEventById(lineIdx, eventId, { value: newValue });
 
     setContextMenu(null);
-  }, [contextMenu, getDisplayData]);
+  }, [contextMenu]);
 
   const handleStripMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDragging.current) return;
@@ -1302,22 +1228,27 @@ export function KeyframeBar() {
                     const midValue = start + (end - start) * evaluateEasing(easing, t);
                     event1 = {
                       ...structuredClone(event),
+                      id: undefined, // fresh ids: both halves replace the original (finding L2)
                       end_beat: floatToBeat(splitBeat),
                       value: { transition: { start, end: midValue, easing } },
                     };
                     event2 = {
                       ...structuredClone(event),
+                      id: undefined,
                       start_beat: floatToBeat(splitBeat),
                       value: { transition: { start: midValue, end, easing } },
                     };
                   } else if ("constant" in event.value) {
-                    event1 = { ...structuredClone(event), end_beat: floatToBeat(splitBeat) };
-                    event2 = { ...structuredClone(event), start_beat: floatToBeat(splitBeat) };
+                    event1 = { ...structuredClone(event), id: undefined, end_beat: floatToBeat(splitBeat) };
+                    event2 = { ...structuredClone(event), id: undefined, start_beat: floatToBeat(splitBeat) };
                   }
 
-                  if (event1 && event2) {
-                    // globalEventIndex maps to the flat events array index when not in layer mode
-                    cs.replaceEvent(lineIdx, contextMenu.hit.globalEventIndex, [event1, event2]);
+                  if (event1 && event2 && contextMenu.hit.event.id) {
+                    // Replace by stable id (finding L3): correct whether the event
+                    // lives flat or in a layer. (Previously used globalEventIndex —
+                    // an index into the layer-concat display array — as if it were
+                    // a flat index, silently corrupting/no-op'ing on layered charts.)
+                    cs.replaceEventById(lineIdx, contextMenu.hit.event.id, [event1, event2]);
                   }
                   setContextMenu(null);
                 }}
@@ -1344,10 +1275,13 @@ export function KeyframeBar() {
                   const duration = beatToFloat(event.end_beat) - beatToFloat(event.start_beat);
                   const newEvent: LineEvent = {
                     ...structuredClone(event),
+                    id: undefined, // fresh id on insert — don't clone the original's (finding L2)
                     start_beat: event.end_beat,
                     end_beat: floatToBeat(beatToFloat(event.end_beat) + duration),
                   };
-                  cs.addEvent(lineIdx, newEvent);
+                  // Route flat<->layer (finding L3) so the duplicate lands in the
+                  // same layer the original is being viewed/edited in.
+                  cs.addEventRouted(lineIdx, newEvent, useEditorStore.getState().eventEditorActiveLayer);
                   setContextMenu(null);
                 }}
                 style={{
