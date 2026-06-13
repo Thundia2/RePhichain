@@ -22,7 +22,6 @@ import {
   useSelectedLineIndex,
   useSelectedEventIndices,
   getSelectedLineIndex,
-  setEventSelectionByIndex,
 } from "../../stores/selection";
 import { useAudioStore } from "../../stores/audioStore";
 import { useGroupStore } from "../../stores/groupStore";
@@ -693,8 +692,10 @@ export function KeyframeBar() {
     // ---- Single click: check diamond hit ----
     const hit = hitTestDiamond(mouseX, mouseY);
     if (hit) {
-      // Select this event
-      setEventSelectionByIndex([hit.globalEventIndex]);
+      // Select this event by stable id (finding L3): globalEventIndex is an index
+      // into the active-layer display array, which mapping through flat line.events
+      // would resolve to the wrong/no event on a layered chart.
+      useEditorStore.getState().setEventSelection(hit.event.id ? [hit.event.id] : []);
 
       // Seek to this event's beat
       const beat = beatToFloat(hit.event.start_beat);
@@ -742,8 +743,8 @@ export function KeyframeBar() {
       return;
     }
 
-    // Select the hit event
-    setEventSelectionByIndex([hit.globalEventIndex]);
+    // Select the hit event by stable id (finding L3)
+    useEditorStore.getState().setEventSelection(hit.event.id ? [hit.event.id] : []);
 
     setContextMenu({
       x: e.clientX,
