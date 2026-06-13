@@ -16,7 +16,7 @@ import { saveActiveChartSession, registerSession, setSkipNextSave, setSkipNextRe
 import { useRecentProjectsStore } from "../../stores/recentProjectsStore";
 import { saveStoredProject } from "../../utils/projectStorage";
 import type { ProjectMeta, PhichainChart } from "../../types/chart";
-import { safeParseNumber } from "../common/FormFields";
+import { safeParseNumber, NumericInput } from "../common/FormFields";
 
 interface Props {
   open: boolean;
@@ -749,10 +749,12 @@ export function NewProjectDialog({ open, onClose }: Props) {
                       You can add BPM changes later in the editor
                     </div>
                   </div>
-                  <input
-                    type="number"
+                  <NumericInput
+                    commitMode="blur"
+                    min={1}
+                    fallback={120}
                     value={initialBpm}
-                    onChange={(e) => setInitialBpm(parseFloat(e.target.value) || 120)}
+                    onChange={setInitialBpm}
                     style={{
                       ...INPUT_STYLE,
                       width: 70,

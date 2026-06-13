@@ -11,7 +11,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import type { EventPreset, EventTemplate } from "../../types/preset";
 import type { LineEventKind, EasingType } from "../../types/chart";
 import { floatToBeat } from "../../types/chart";
-import { EASING_OPTIONS } from "../common/FormFields";
+import { EASING_OPTIONS, NumericInput } from "../common/FormFields";
 
 // ============================================================
 // Types
@@ -225,18 +225,19 @@ function KeyframeEditor({
         <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
           Beat
         </span>
-        <input
+        <NumericInput
           className="flex-1 px-1 py-0.5 rounded text-xs"
           style={{
             backgroundColor: "var(--bg-secondary)",
             color: "var(--text-primary)",
             border: "1px solid var(--border-primary)",
           }}
-          type="number"
+          commitMode="blur"
           step="0.25"
-          min="0"
+          min={0}
+          fallback={0}
           value={keyframe.beatOffset}
-          onChange={(e) => onUpdate({ beatOffset: Math.max(0, parseFloat(e.target.value) || 0) })}
+          onChange={(v) => onUpdate({ beatOffset: v })}
         />
       </label>
 
@@ -250,17 +251,18 @@ function KeyframeEditor({
             $CURRENT
           </span>
         ) : (
-          <input
+          <NumericInput
             className="flex-1 px-1 py-0.5 rounded text-xs"
             style={{
               backgroundColor: "var(--bg-secondary)",
               color: "var(--text-primary)",
               border: "1px solid var(--border-primary)",
             }}
-            type="number"
+            commitMode="blur"
             step="0.1"
+            fallback={0}
             value={keyframe.value}
-            onChange={(e) => onUpdate({ value: parseFloat(e.target.value) || 0 })}
+            onChange={(v) => onUpdate({ value: v })}
           />
         )}
         <label className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
@@ -530,19 +532,21 @@ export function PresetBuilder({ onClose }: { onClose: () => void }) {
             <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
               Duration
             </span>
-            <input
+            <NumericInput
               className="flex-1 px-2 py-1 rounded text-xs"
               style={{
                 backgroundColor: "var(--bg-active)",
                 color: "var(--text-primary)",
                 border: "1px solid var(--border-primary)",
               }}
-              type="number"
+              commitMode="blur"
+              integer
               step="1"
-              min="1"
-              max="32"
+              min={1}
+              max={32}
+              fallback={4}
               value={totalBeats}
-              onChange={(e) => setTotalBeats(Math.max(1, parseInt(e.target.value) || 4))}
+              onChange={setTotalBeats}
             />
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>beats</span>
           </label>

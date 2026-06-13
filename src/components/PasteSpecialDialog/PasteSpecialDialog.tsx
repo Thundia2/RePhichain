@@ -13,6 +13,7 @@ import { getPlayheadBeat } from "../../utils/playhead";
 import { getClipboard } from "../../hooks/useClipboard";
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import type { Note, LineEvent } from "../../types/chart";
+import { NumericInput } from "../common/FormFields";
 
 interface Props {
   open: boolean;
@@ -190,12 +191,13 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <label style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                   Beat scale factor
-                  <input
-                    type="number"
+                  <NumericInput
+                    commitMode="blur"
                     step="0.1"
-                    min="0.1"
+                    min={0.1}
+                    fallback={1}
                     value={beatScale}
-                    onChange={(e) => setBeatScale(Math.max(0.1, parseFloat(e.target.value) || 1))}
+                    onChange={setBeatScale}
                     className="w-full mt-1 px-2 py-1 rounded text-xs"
                     style={inputStyle}
                   />
@@ -203,11 +205,12 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
 
                 <label style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                   X offset
-                  <input
-                    type="number"
+                  <NumericInput
+                    commitMode="blur"
                     step="10"
+                    fallback={0}
                     value={xOffset}
-                    onChange={(e) => setXOffset(parseFloat(e.target.value) || 0)}
+                    onChange={setXOffset}
                     className="w-full mt-1 px-2 py-1 rounded text-xs"
                     style={inputStyle}
                   />
@@ -215,11 +218,12 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
 
                 <label style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                   Beat offset
-                  <input
-                    type="number"
+                  <NumericInput
+                    commitMode="blur"
                     step="0.25"
+                    fallback={0}
                     value={beatOffset}
-                    onChange={(e) => setBeatOffset(parseFloat(e.target.value) || 0)}
+                    onChange={setBeatOffset}
                     className="w-full mt-1 px-2 py-1 rounded text-xs"
                     style={inputStyle}
                   />

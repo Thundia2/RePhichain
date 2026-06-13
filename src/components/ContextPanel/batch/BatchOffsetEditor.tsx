@@ -10,6 +10,7 @@ import { useMultiSelectedLineIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { createStaggeredEvents, generateEvenOffsets } from "../../../utils/batchEventOffset";
 import type { LineEventKind } from "../../../types/chart";
+import { NumericInput } from "../../common/FormFields";
 
 const CHANNEL_OPTIONS: { kind: LineEventKind; label: string; color: string }[] = [
   { kind: "x", label: "X", color: "var(--event-x, #ff6b6b)" },
@@ -138,12 +139,13 @@ export function BatchOffsetEditor() {
             Followers ({followers.length})
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <input
-              type="number"
+            <NumericInput
+              commitMode="blur"
               value={spacing}
-              onChange={(e) => setSpacing(Number(e.target.value) || 0.5)}
+              onChange={setSpacing}
               step={0.25}
               min={0.1}
+              fallback={0.5}
               style={{
                 width: 48,
                 padding: "2px 4px",
@@ -198,13 +200,14 @@ export function BatchOffsetEditor() {
               {chart?.lines[lineIdx]?.name || ""}
             </span>
             <span style={{ fontSize: 9, color: "var(--text-muted)" }}>+</span>
-            <input
-              type="number"
+            <NumericInput
+              commitMode="blur"
               value={offsets[lineIdx] ?? 0}
-              onChange={(e) =>
-                setOffsets((prev) => ({ ...prev, [lineIdx]: Number(e.target.value) || 0 }))
+              onChange={(v) =>
+                setOffsets((prev) => ({ ...prev, [lineIdx]: v }))
               }
               step={0.25}
+              fallback={0}
               style={{
                 width: 52,
                 padding: "2px 4px",

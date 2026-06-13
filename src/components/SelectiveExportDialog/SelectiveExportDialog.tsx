@@ -11,6 +11,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { beatToFloat } from "../../types/chart";
 import type { PhichainChart, Beat, Note, LineEvent } from "../../types/chart";
+import { NumericInput } from "../common/FormFields";
 
 interface SelectiveExportDialogProps {
   open: boolean;
@@ -127,26 +128,28 @@ export function SelectiveExportDialog({ open, onClose }: SelectiveExportDialogPr
         <div className="flex gap-3 mb-3">
           <label className="flex-1">
             <span className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Start Beat</span>
-            <input
+            <NumericInput
               className="w-full px-2 py-1 rounded text-xs"
               style={inputStyle}
-              type="number"
+              commitMode="blur"
               min={0}
               step={1}
+              fallback={0}
               value={startBeat}
-              onChange={(e) => setStartBeat(Math.max(0, parseFloat(e.target.value) || 0))}
+              onChange={setStartBeat}
             />
           </label>
           <label className="flex-1">
             <span className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>End Beat</span>
-            <input
+            <NumericInput
               className="w-full px-2 py-1 rounded text-xs"
               style={inputStyle}
-              type="number"
+              commitMode="blur"
               min={0}
               step={1}
+              fallback={0}
               value={endBeat}
-              onChange={(e) => setEndBeat(Math.max(0, parseFloat(e.target.value) || 0))}
+              onChange={setEndBeat}
             />
           </label>
         </div>

@@ -83,7 +83,8 @@ function NoteSection({ note, lineIndex, noteIndex }: { note: Note; lineIndex: nu
         onChange={(b) => editNote(lineIndex, noteIndex, { beat: b })}
       />
       <Field label="X" value={note.x} onChange={(v) => editNote(lineIndex, noteIndex, { x: parseFloat(v) })} step="1" />
-      <Field label="Speed" value={note.speed} onChange={(v) => editNote(lineIndex, noteIndex, { speed: parseFloat(v) || 1 })} step="0.1" />
+      {/* L8/UC8: no `|| 1` — Field only emits a valid number string, so the fallback only ever blocked a real 0 / negative speed (reverse-approach technique). */}
+      <Field label="Speed" value={note.speed} onChange={(v) => editNote(lineIndex, noteIndex, { speed: parseFloat(v) })} step="0.1" />
       <SelectField
         label="Side"
         value={note.above ? "above" : "below"}
@@ -96,7 +97,8 @@ function NoteSection({ note, lineIndex, noteIndex }: { note: Note; lineIndex: nu
       <div style={{ height: 1, background: "var(--border-color)", margin: "8px 0" }} />
       <SectionHeader color="var(--text-muted)">RPE Properties</SectionHeader>
       <Field label="Size" value={note.size ?? 1} onChange={(v) => { const val = parseFloat(v); editNote(lineIndex, noteIndex, { size: val === 1 ? undefined : val || 1 }); }} step="0.1" />
-      <Field label="Alpha" value={note.alpha ?? 255} onChange={(v) => { const val = parseInt(v); editNote(lineIndex, noteIndex, { alpha: val === 255 ? undefined : Math.max(0, Math.min(255, val || 255)) }); }} step="1" />
+      {/* L8/UC8: no `val || 255` — alpha 0 is a valid invisible-note technique; only clamp to [0,255]. */}
+      <Field label="Alpha" value={note.alpha ?? 255} onChange={(v) => { const val = parseInt(v); editNote(lineIndex, noteIndex, { alpha: val === 255 ? undefined : Math.max(0, Math.min(255, val)) }); }} step="1" />
       <Field label="Vis. Time" value={note.visible_time ?? 999999} onChange={(v) => { const val = parseFloat(v); editNote(lineIndex, noteIndex, { visible_time: val === 999999 ? undefined : isNaN(val) ? 999999 : val }); }} step="0.5" />
       <SelectField
         label="Fake"

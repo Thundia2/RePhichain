@@ -11,7 +11,7 @@ import { useEditorStore } from "../../../stores/editorStore";
 import { useSelectedLineIndex } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import type { NoteControlEntry, EasingType } from "../../../types/chart";
-import { EASING_OPTIONS } from "../../common/FormFields";
+import { EASING_OPTIONS, NumericInput } from "../../common/FormFields";
 import { SectionHeader } from "../shared/SectionHeader";
 
 // ---- Control kind definitions ----
@@ -122,10 +122,11 @@ export function ControlsTab() {
                     </div>
                     {entries.map((entry, i) => (
                       <div key={i} style={{ display: "grid", gridTemplateColumns: "50px 70px 1fr 20px", gap: 3, alignItems: "center" }}>
-                        <input
-                          type="number"
+                        <NumericInput
+                          commitMode="blur"
+                          fallback={0}
                           value={entry.x}
-                          onChange={(e) => updateEntry(kind.field, i, { x: parseFloat(e.target.value) || 0 })}
+                          onChange={(v) => updateEntry(kind.field, i, { x: v })}
                           style={{
                             width: "100%", fontSize: 10, padding: "2px 4px", borderRadius: 3,
                             border: "1px solid var(--border-color)", background: "var(--bg-tertiary)",
@@ -133,10 +134,11 @@ export function ControlsTab() {
                           }}
                           step={10}
                         />
-                        <input
-                          type="number"
+                        <NumericInput
+                          commitMode="blur"
+                          fallback={0}
                           value={entry.value}
-                          onChange={(e) => updateEntry(kind.field, i, { value: parseFloat(e.target.value) || 0 })}
+                          onChange={(v) => updateEntry(kind.field, i, { value: v })}
                           style={{
                             width: "100%", fontSize: 10, padding: "2px 4px", borderRadius: 3,
                             border: "1px solid var(--border-color)", background: "var(--bg-tertiary)",

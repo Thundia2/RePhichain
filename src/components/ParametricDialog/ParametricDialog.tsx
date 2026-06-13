@@ -11,7 +11,7 @@ import { useChartStore } from "../../stores/chartStore";
 import { getSelectedLineIndex } from "../../stores/selection";
 import type { LineEventKind } from "../../types/chart";
 import { generateParametricEvents, type ParametricConfig } from "../../utils/parametricTrajectory";
-import { safeParseNumber } from "../common/FormFields";
+import { safeParseNumber, NumericInput } from "../common/FormFields";
 
 interface ParametricDialogProps {
   open: boolean;
@@ -308,12 +308,14 @@ export function ParametricDialog({ open, onClose }: ParametricDialogProps) {
                   />
                 </CardRow>
                 <CardRow label="Steps" last>
-                  <input
-                    type="number"
-                    min="1"
-                    max="1000"
+                  <NumericInput
+                    commitMode="blur"
+                    integer
+                    min={1}
+                    max={1000}
+                    fallback={1}
                     value={steps}
-                    onChange={(e) => setSteps(parseInt(e.target.value) || 1)}
+                    onChange={setSteps}
                     style={INPUT_STYLE}
                     onFocus={focusInput}
                     onBlur={blurInput}

@@ -6,7 +6,7 @@
 // ============================================================
 
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Beat } from "../../types/chart";
 
 /**
@@ -83,35 +83,139 @@ export function Field({
   );
 }
 
+// ============================================================
+// Numeric commit policy (L8 — FormFields commit policy + parsing)
+//
+// resolveNumericCommit is the pure normalizer behind NumericInput's
+// commit-on-blur/Enter path. Kept React/DOM-free so it is unit-testable under
+// the node test env (no jsdom) — see src/__tests__/numericInput.test.ts.
+//
+// Why it exists: ~10 sites re-implemented `parseFloat(x) || fallback`, which
+// clobbers a legitimately-typed 0 or negative (alpha→255, speed→1, BPM→120,
+// x-offset/value→0, XGrid N). Routing them through NumericInput + this resolver
+// makes the fallback fire ONLY when the field is empty/intermediate at commit
+// time, never on a real 0/negative. grep `commitMode="blur"` for the call sites.
+// ============================================================
+
+export interface NumericCommitOptions {
+  /** Lower clamp applied at commit (also forwarded to the <input min>). */
+  min?: number;
+  /** Upper clamp applied at commit (also forwarded to the <input max>). */
+  max?: number;
+  /** Truncate to an integer at commit. */
+  integer?: boolean;
+  /** Value committed when the field is empty/intermediate at commit time. Omit to revert instead. */
+  fallback?: number;
+  /** When true, a blurred-empty field resolves to "clear" (consumer drops the value, e.g. sets undefined). */
+  optional?: boolean;
+}
+
+export type NumericCommit =
+  | { action: "commit"; value: number }
+  | { action: "clear" }
+  | { action: "revert" };
+
+function clampNumeric(n: number, opts: NumericCommitOptions): number {
+  let v = opts.integer ? Math.trunc(n) : n;
+  if (opts.min !== undefined) v = Math.max(opts.min, v);
+  if (opts.max !== undefined) v = Math.min(opts.max, v);
+  return v;
+}
+
+/**
+ * Resolve what a numeric field should do when it commits (blur / Enter).
+ * Pure — no React, no DOM — so it can be exercised directly in the node test env.
+ *
+ * - A parseable number (INCLUDING 0 and negatives) → clamp + commit it.
+ * - Empty + `optional` → clear (the consumer maps this to undefined).
+ * - Empty/intermediate ("-", ".") + `fallback` → commit the clamped fallback.
+ * - Otherwise → revert to the current external value.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function resolveNumericCommit(raw: string, opts: NumericCommitOptions = {}): NumericCommit {
+  const trimmed = raw.trim();
+  const parsed = safeParseNumber(trimmed);
+  if (parsed !== null) {
+    return { action: "commit", value: clampNumeric(parsed, opts) };
+  }
+  if (trimmed === "" && opts.optional) return { action: "clear" };
+  if (opts.fallback !== undefined) return { action: "commit", value: clampNumeric(opts.fallback, opts) };
+  return { action: "revert" };
+}
+
 /**
  * Standalone numeric input that handles intermediate typing states correctly.
- * Uses local string state so the user can type "-", "0.", "-." etc.
- * without the input being clobbered by React's controlled value.
- * Only commits valid numbers to the parent via onChange.
+ * Uses local string state so the user can type "-", "0.", "-." etc. without the
+ * input being clobbered by React's controlled value, and never coerces a typed
+ * 0/negative to a fallback while typing.
+ *
+ * commitMode:
+ *  - "change" (default — back-compat): commits every valid keystroke via onChange,
+ *    exactly like the original component. min/max/integer/fallback do NOT gate this
+ *    path (they only apply on blur), so existing consumers are unchanged.
+ *  - "blur" (L8): commits on blur/Enter through resolveNumericCommit (clamp +
+ *    integer + fallback), reverts on Escape, and — when `optional` — clears via
+ *    onEmpty when blurred empty. Used by the ~10 routed sites (grep commitMode="blur").
  */
 export function NumericInput({
   value,
   onChange,
+  onEmpty,
+  commitMode = "change",
+  fallback,
+  optional,
+  integer,
   step,
   min,
   max,
   style,
+  className,
   placeholder,
+  disabled,
+  title,
+  onFocus,
+  onBlur,
 }: {
-  value: number;
+  value: number | null | undefined;
   onChange: (v: number) => void;
+  /** Called instead of onChange when `optional` and the field is committed empty. */
+  onEmpty?: () => void;
+  commitMode?: "change" | "blur";
+  fallback?: number;
+  optional?: boolean;
+  integer?: boolean;
   step?: string | number;
   min?: number;
   max?: number;
   style?: React.CSSProperties;
+  className?: string;
   placeholder?: string;
+  disabled?: boolean;
+  title?: string;
+  onFocus?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
 }) {
-  const [localValue, setLocalValue] = useState(String(value));
+  const [localValue, setLocalValue] = useState(value == null ? "" : String(value));
+  // Set on Escape so the blur it triggers reverts instead of committing.
+  const skipCommitRef = useRef(false);
 
-  // Sync external value → local when the prop changes from outside
+  // Sync external value → local when the prop changes from outside.
   useEffect(() => {
-    setLocalValue(String(value));
+    setLocalValue(value == null ? "" : String(value));
   }, [value]);
+
+  const commit = () => {
+    const result = resolveNumericCommit(localValue, { min, max, integer, fallback, optional });
+    if (result.action === "commit") {
+      onChange(result.value);
+      setLocalValue(String(result.value));
+    } else if (result.action === "clear") {
+      onEmpty?.();
+      setLocalValue("");
+    } else {
+      setLocalValue(value == null ? "" : String(value));
+    }
+  };
 
   return (
     <input
@@ -120,15 +224,38 @@ export function NumericInput({
       min={min}
       max={max}
       placeholder={placeholder}
+      disabled={disabled}
+      title={title}
       value={localValue}
       style={style}
+      className={className}
       onChange={(e) => {
         const raw = e.target.value;
-        // Always update local state so intermediate characters ("-", ".", "-.") are preserved
+        // Always preserve intermediate characters ("-", ".", "-.") locally.
         setLocalValue(raw);
-        // Only commit valid numbers to the parent
-        const n = safeParseNumber(raw);
-        if (n !== null) onChange(n);
+        if (commitMode === "change") {
+          // Legacy live-commit: push only valid numbers, never clobber 0/negatives.
+          const n = safeParseNumber(raw);
+          if (n !== null) onChange(n);
+        }
+      }}
+      onFocus={onFocus}
+      onBlur={(e) => {
+        if (commitMode === "blur") {
+          if (skipCommitRef.current) skipCommitRef.current = false;
+          else commit();
+        }
+        onBlur?.(e);
+      }}
+      onKeyDown={(e) => {
+        if (commitMode !== "blur") return;
+        if (e.key === "Enter") {
+          e.currentTarget.blur(); // commit via onBlur
+        } else if (e.key === "Escape") {
+          skipCommitRef.current = true;
+          setLocalValue(value == null ? "" : String(value));
+          e.currentTarget.blur();
+        }
       }}
     />
   );
