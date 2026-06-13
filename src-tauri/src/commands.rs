@@ -97,8 +97,11 @@ pub struct ProjectData {
 ///
 /// This uses the existing `phichain_chart::project::Project::open()`
 /// which handles validation and error reporting.
+// R4: async so Tauri runs the blocking fs IO (read + migrate) on the async
+// runtime instead of the main thread — a large chart no longer freezes the UI
+// while it loads. (No .await in the body; Tauri still moves it off-thread.)
 #[tauri::command]
-pub fn load_project(path: String) -> Result<ProjectData, String> {
+pub async fn load_project(path: String) -> Result<ProjectData, String> {
     let validated = validate_path(&path)?;
     let project_path = ProjectPath(validated.clone());
 
@@ -178,8 +181,10 @@ fn atomic_write(path: &std::path::Path, contents: &str) -> Result<(), String> {
 /// restart. Both files now go through atomic_write (R5) so a crash mid-save can't
 /// corrupt either. create_project's first-time writes are left as-is — a failed
 /// create has no prior copy to protect.
+// R4: async so the blocking writes (atomic_write does fsync + rename) run off
+// the main thread — saving a large chart no longer freezes the UI.
 #[tauri::command]
-pub fn save_project(project_path: String, chart_json: String, meta_json: String) -> Result<(), String> {
+pub async fn save_project(project_path: String, chart_json: String, meta_json: String) -> Result<(), String> {
     let validated = validate_path(&project_path)?;
 
     // Validate chart JSON shape.
@@ -214,8 +219,10 @@ pub fn save_project(project_path: String, chart_json: String, meta_json: String)
 /// - chart.json with a default chart (one line with default events)
 /// - meta.json with the provided metadata
 /// - Copies the music and illustration files into the project folder
+// R4: async so the blocking dir-create + chart/meta writes + music/illustration
+// file copies run off the main thread (copying a large audio file froze the UI).
 #[tauri::command]
-pub fn create_project(
+pub async fn create_project(
     path: String,
     meta_json: String,
     music_source: String,
