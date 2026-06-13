@@ -33,9 +33,14 @@ export function LyricsSyncDialog({ open, onClose }: LyricsSyncDialogProps) {
   const lines = lyrics.split("\n").filter((l) => l.trim().length > 0);
   const keyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
 
-  // Listen for keypress during sync
+  // D2: tie the global keydown lifecycle to BOTH isSyncing AND open. The
+  // dialog component stays mounted while closed (App.tsx renders it
+  // unconditionally, visibility is gated by `if (!open) return null`), so an
+  // effect keyed only on isSyncing would keep this window-level listener
+  // capturing Q/Enter after the dialog is dismissed mid-sync. grep
+  // showLyricsSync in App.tsx for the mount site.
   useEffect(() => {
-    if (!isSyncing) return;
+    if (!isSyncing || !open) return;
 
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Enter" || e.key === "q" || e.key === "Q") {
@@ -61,7 +66,19 @@ export function LyricsSyncDialog({ open, onClose }: LyricsSyncDialogProps) {
     keyHandlerRef.current = handler;
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [isSyncing, lines.length]);
+  }, [isSyncing, open, lines.length]);
+
+  // D2: reset sync state on the close transition so a dialog dismissed mid-sync
+  // (Cancel / backdrop / Apply) drops out of syncing and the keydown effect
+  // above tears its listener down. Resets here instead of inside each close
+  // path because there are several (onClose is called from 3 sites).
+  useEffect(() => {
+    if (open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsSyncing(false);
+    setSyncedBeats([]);
+    setCurrentLyricIndex(0);
+  }, [open]);
 
   const startSync = useCallback(() => {
     if (lines.length === 0) return;

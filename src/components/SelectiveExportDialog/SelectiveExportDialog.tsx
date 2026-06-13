@@ -7,7 +7,7 @@
 //   - Picking an export format
 // ============================================================
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { beatToFloat } from "../../types/chart";
 import type { PhichainChart, Beat, Note, LineEvent } from "../../types/chart";
@@ -45,6 +45,19 @@ export function SelectiveExportDialog({ open, onClose }: SelectiveExportDialogPr
     () => new Set(chart.lines.map((_, i) => i)),
   );
   const [format, setFormat] = useState<"phichain" | "json">("phichain");
+
+  // D6: re-seed the line selection from the CURRENT lines on every open. The
+  // useState initializer above only runs once at first mount (App.tsx keeps
+  // this dialog mounted and gates visibility via `if (!open) return null`), so
+  // without this the set goes stale — it would hold indices for lines deleted
+  // since first mount and miss lines added since. "All lines" matches the
+  // initializer's intent (export defaults to the whole chart). grep
+  // showSelectiveExport in App.tsx for the always-mounted call site.
+  useEffect(() => {
+    if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedLines(new Set(chart.lines.map((_, i) => i)));
+  }, [open, chart.lines]);
 
   const toggleLine = useCallback((idx: number) => {
     setSelectedLines((prev) => {

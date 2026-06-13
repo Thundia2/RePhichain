@@ -5,7 +5,7 @@
 // then apply staggered copies of the leader's latest event.
 // ============================================================
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useMultiSelectedLineIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { createStaggeredEvents, generateEvenOffsets } from "../../../utils/batchEventOffset";
@@ -36,6 +36,20 @@ export function BatchOffsetEditor() {
     () => multiSelectedLineIndices.filter((i) => i !== leaderIndex),
     [multiSelectedLineIndices, leaderIndex],
   );
+
+  // I2: keep the leader derived from the live selection. The useState seed above
+  // only runs at first mount, so the leader would pin to the originally-selected
+  // line[0] and go stale — once the user re-selects a different line set, the old
+  // leader is no longer in multiSelectedLineIndices, making the <select> show an
+  // out-of-list value and every selected line fall into `followers`. Reconcile to
+  // the primary (first-selected) line whenever the current leader drops out of the
+  // selection; a still-selected manual pick is preserved. grep
+  // multiSelectedLineIds in editorStore for the ordered selection source.
+  useEffect(() => {
+    if (leaderIndex !== null && multiSelectedLineIndices.includes(leaderIndex)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLeaderIndex(multiSelectedLineIndices.length > 0 ? multiSelectedLineIndices[0] : null);
+  }, [multiSelectedLineIndices, leaderIndex]);
 
   const handleAutoStagger = () => {
     const evenOffsets = generateEvenOffsets(followers.length, spacing);
