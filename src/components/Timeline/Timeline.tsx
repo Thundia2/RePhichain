@@ -89,8 +89,9 @@ export function Timeline() {
         latest = Math.max(latest, note.hold_beat ? b + beatToFloat(note.hold_beat) : b);
       }
       for (const ev of line.events) {
-        const eb = beatToFloat(ev.end_beat);
-        if (eb < 999) latest = Math.max(latest, eb);
+        // No eb<999 dodge anymore — baselines are gone (finding L4), so an
+        // event's end_beat is real chart length, not a [0,1000] sentinel.
+        latest = Math.max(latest, beatToFloat(ev.end_beat));
       }
     }
     return Math.max(latest + SCROLL_PADDING_BEATS, 16);

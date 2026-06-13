@@ -61,12 +61,26 @@ export interface LineState {
   gif: number;       // GIF playback progress 0.0-1.0 (RPE v150+), default -1 (auto-play)
 }
 
-/** Default line state when no events have been defined yet */
+/**
+ * Default line state when no event affects a given beat.
+ *
+ * These are the real per-kind defaults a baseline-free line falls back to
+ * (finding L4 — we removed the permanent [0,1000] sentinel events that ~8 sites
+ * used to seed). The evaluator already starts from {...DEFAULT_LINE_STATE}; once
+ * the baselines are gone, this fallback is what an event-less kind renders as.
+ *
+ *   opacity: 1  — 255/255, fully VISIBLE. Was 0 (the invisible-by-default
+ *                 landmine): a line with no opacity event used to vanish, which
+ *                 is why every site seeded a baseline. An invisible line now
+ *                 needs an explicit opacity-0 event (the RPE technique).
+ *   speed:   10 — the engine default (matches distanceAt's lastSpeed fallback
+ *                 and the upstream Phigros fall-speed unit). grep DEFAULT_LINE_STATE.
+ */
 export const DEFAULT_LINE_STATE: LineState = {
   x: 0,
   y: 0,
   rotation: 0,
-  opacity: 0,
+  opacity: 1,
   speed: 10,
   scale_x: 1,
   scale_y: 1,
@@ -146,12 +160,18 @@ export function evaluateLineEvents(events: LineEvent[], beat: number): LineState
     const kindEvents = grouped.get(kind);
     if (!kindEvents) continue;
 
-    // Find the best value: prefer "affecting" (during the event) over
-    // "inherited" (after the event), and among inherited values prefer
-    // the one from the latest-ending event.
+    // Pick the winning event exactly as upstream's `max` over EventEvaluationResult
+    // does (phichain-chart event.rs:350-374): Unaffected < Inherited < Affecting,
+    // and among same-rank results —
+    //   Affecting ties break by VALUE   (a.total_cmp(b) → larger value wins)
+    //   Inherited ties break by end_beat (the `from` field → later end wins)
+    // The old code broke BOTH ties by end_beat; for Affecting that was the
+    // baseline-shadow bug (finding L4/A1): a [0,1000] sentinel had the largest
+    // end_beat and shadowed every interior affecting event. bestValue === null
+    // marks "no candidate yet" (evaluateEvent only returns null for Unaffected).
     let bestValue: number | null = null;
     let bestIsAffecting = false;
-    let bestEndBeat = -Infinity;
+    let bestKey = -Infinity;
 
     for (const event of kindEvents) {
       const value = evaluateEvent(event, beat);
@@ -160,16 +180,19 @@ export function evaluateLineEvents(events: LineEvent[], beat: number): LineState
       const startBeat = beatToFloat(event.start_beat);
       const endBeat = beatToFloat(event.end_beat);
       const isAffecting = beat >= startBeat && beat <= endBeat;
+      const key = isAffecting ? value : endBeat;
 
-      // Affecting events always win over inherited ones.
-      // Among same type, latest-ending wins.
-      if (isAffecting && !bestIsAffecting) {
+      if (bestValue === null) {
+        bestValue = value;
+        bestIsAffecting = isAffecting;
+        bestKey = key;
+      } else if (isAffecting && !bestIsAffecting) {
         bestValue = value;
         bestIsAffecting = true;
-        bestEndBeat = endBeat;
-      } else if (isAffecting === bestIsAffecting && endBeat > bestEndBeat) {
+        bestKey = key;
+      } else if (isAffecting === bestIsAffecting && key > bestKey) {
         bestValue = value;
-        bestEndBeat = endBeat;
+        bestKey = key;
       }
     }
 
@@ -213,7 +236,17 @@ export function evaluateLineEvents(events: LineEvent[], beat: number): LineState
   return state;
 }
 
-/** Evaluate pre-filtered color events. Mutates state.color. */
+/**
+ * Evaluate pre-filtered color events. Mutates state.color.
+ *
+ * Ties break by end_beat for BOTH affecting and inherited (unlike the numeric
+ * kinds, whose affecting ties break by value — finding L4). Colors have no
+ * scalar value to compare; upstream `event.rs` reports Unaffected for Color/Text
+ * and renders them off the event directly, so there's no value-ordering to
+ * mirror. end_beat (latest-ending wins) matches the Inherited rule and is the
+ * only sensible order for a non-scalar payload. RPE color events tile, so the
+ * affecting tie is a degenerate case anyway.
+ */
 function evaluateColorEventsFromGrouped(colorEvents: LineEvent[], beat: number, state: LineState): void {
   let bestColor: [number, number, number] | null = null;
   let bestIsAffecting = false;
@@ -257,7 +290,9 @@ function evaluateColorEventsFromGrouped(colorEvents: LineEvent[], beat: number, 
   if (bestColor) state.color = bestColor;
 }
 
-/** Evaluate pre-filtered text events. Mutates state.text. */
+/** Evaluate pre-filtered text events. Mutates state.text.
+ *  Ties break by end_beat (see evaluateColorEventsFromGrouped — non-scalar
+ *  payload, no value-ordering to mirror; finding L4). */
 function evaluateTextEventsFromGrouped(textEvents: LineEvent[], beat: number, state: LineState): void {
   let bestText: string | null = null;
   let bestIsAffecting = false;
@@ -291,9 +326,11 @@ function evaluateTextEventsFromGrouped(textEvents: LineEvent[], beat: number, st
  * Returns the best numeric value at the given beat, or null if no events affect it.
  */
 function evaluateSingleKind(events: LineEvent[], beat: number): number | null {
+  // Same upstream ranking as evaluateLineEvents (event.rs:350-374): Affecting
+  // ties break by VALUE, Inherited ties by end_beat. grep bestKey.
   let bestValue: number | null = null;
   let bestIsAffecting = false;
-  let bestEndBeat = -Infinity;
+  let bestKey = -Infinity;
 
   for (const event of events) {
     const value = evaluateEvent(event, beat);
@@ -302,14 +339,19 @@ function evaluateSingleKind(events: LineEvent[], beat: number): number | null {
     const startBeat = beatToFloat(event.start_beat);
     const endBeat = beatToFloat(event.end_beat);
     const isAffecting = beat >= startBeat && beat <= endBeat;
+    const key = isAffecting ? value : endBeat;
 
-    if (isAffecting && !bestIsAffecting) {
+    if (bestValue === null) {
+      bestValue = value;
+      bestIsAffecting = isAffecting;
+      bestKey = key;
+    } else if (isAffecting && !bestIsAffecting) {
       bestValue = value;
       bestIsAffecting = true;
-      bestEndBeat = endBeat;
-    } else if (isAffecting === bestIsAffecting && endBeat > bestEndBeat) {
+      bestKey = key;
+    } else if (isAffecting === bestIsAffecting && key > bestKey) {
       bestValue = value;
-      bestEndBeat = endBeat;
+      bestKey = key;
     }
   }
 
@@ -332,23 +374,37 @@ export function evaluateLineEventsWithLayers(
     return evaluateLineEvents(events, beat);
   }
 
-  // Sum values from all layers
+  // Sum values from all layers (RPE additive model). Track whether ANY layer
+  // contributed opacity/speed at this beat so a line with no alpha/speed event
+  // at all falls back to the real default instead of 0 — consistent with the
+  // flat path (findings L4 + T4). x/y/rotation default to 0, which already
+  // equals the empty sum, so they need no flag. Real RPE charts carry alpha +
+  // speed in layer 0 spanning the whole chart, so hasOpacity/hasSpeed are
+  // essentially always true and this changes nothing for them; it only rescues
+  // degenerate/empty layered lines.
   let x = 0, y = 0, rotation = 0, opacity = 0, speed = 0;
+  let hasOpacity = false, hasSpeed = false;
 
   for (const layer of eventLayers) {
     x += evaluateSingleKind(layer.move_x_events, beat) ?? 0;
     y += evaluateSingleKind(layer.move_y_events, beat) ?? 0;
     rotation += evaluateSingleKind(layer.rotate_events, beat) ?? 0;
-    opacity += evaluateSingleKind(layer.alpha_events, beat) ?? 0;
-    speed += evaluateSingleKind(layer.speed_events, beat) ?? 0;
+    const a = evaluateSingleKind(layer.alpha_events, beat);
+    if (a !== null) { opacity += a; hasOpacity = true; }
+    const s = evaluateSingleKind(layer.speed_events, beat);
+    if (s !== null) { speed += s; hasSpeed = true; }
   }
 
   const state: LineState = {
     x,
     y,
     rotation: (rotation * Math.PI) / 180,
-    opacity: opacity / 255,
-    speed: speed || 10,
+    // No alpha event anywhere → default-visible (not 0). `speed || 10` was the
+    // T4 bug: a legitimately summed speed of 0 (frozen notes) wrongly became 10;
+    // gate on contribution instead so 0 is preserved and 10 is only the no-event
+    // fallback.
+    opacity: hasOpacity ? opacity / 255 : DEFAULT_LINE_STATE.opacity,
+    speed: hasSpeed ? speed : DEFAULT_LINE_STATE.speed,
     scale_x: 1,
     scale_y: 1,
     color: null,
@@ -396,8 +452,14 @@ export function getFirstAppearanceBeat(events: LineEvent[]): number {
     .sort((a, b) => beatToFloat(a.start_beat) - beatToFloat(b.start_beat));
 
   if (opacityEvents.length === 0) {
-    // No opacity events → default opacity is 0 (from DEFAULT_LINE_STATE)
-    return Infinity;
+    // No opacity events → default opacity is now 1 (visible from the start,
+    // finding L4). The line appears at beat 0, not "never" (was Infinity when
+    // the default was 0). NOTE: scans flat line.events only; imported layered
+    // charts mirror their alpha events into flat, so this still sees them.
+    // The per-event scan below doesn't model the default-visible window before
+    // a first opacity event that starts at beat > 0 — real charts define alpha
+    // from beat 0, so that window doesn't occur in practice.
+    return 0;
   }
 
   for (const event of opacityEvents) {

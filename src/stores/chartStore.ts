@@ -198,22 +198,19 @@ const DEFAULT_META: ProjectMeta = {
 
 // ---- Helper: create a default line with initial events ----
 function createDefaultLine(name?: string, index?: number): Line {
-  const defaultBeat: [number, number, number] = [0, 0, 1];
-  const farBeat: [number, number, number] = [1000, 0, 1];
   const line: Line = {
     name: name ?? `Line ${(index ?? 0) + 1}`,
     notes: [],
-    events: [
-      { kind: "x" as const, start_beat: defaultBeat, end_beat: farBeat, value: { constant: 0 } },
-      { kind: "y" as const, start_beat: defaultBeat, end_beat: farBeat, value: { constant: 0 } },
-      { kind: "rotation" as const, start_beat: defaultBeat, end_beat: farBeat, value: { constant: 0 } },
-      { kind: "opacity" as const, start_beat: defaultBeat, end_beat: farBeat, value: { constant: 255 } },
-      { kind: "speed" as const, start_beat: defaultBeat, end_beat: farBeat, value: { constant: 1 } },
-    ],
+    // No baseline events (finding L4): a line with no events falls back to
+    // DEFAULT_LINE_STATE (visible, speed 10, at the origin). The old [0,1000]
+    // per-kind sentinels shadowed interior events (largest end_beat won the
+    // affecting tie) and ballooned timeline/minimap length. An invisible line
+    // gets an explicit opacity-0 event (LineTemplateMenu) instead.
+    events: [],
     children: [],
     curve_note_tracks: [],
   };
-  // Stable line id + event ids for selection-by-identity (finding L2).
+  // Stable line id for selection-by-identity (finding L2).
   ensureLineIds(line);
   return line;
 }

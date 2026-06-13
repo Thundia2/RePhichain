@@ -486,13 +486,9 @@ export function NewProjectDialog({ open, onClose }: Props) {
           {
             name: "Line 1",
             notes: [],
-            events: [
-              { kind: "x", start_beat: [0, 0, 1], end_beat: [1000, 0, 1], value: { constant: 0 } },
-              { kind: "y", start_beat: [0, 0, 1], end_beat: [1000, 0, 1], value: { constant: 0 } },
-              { kind: "rotation", start_beat: [0, 0, 1], end_beat: [1000, 0, 1], value: { constant: 0 } },
-              { kind: "opacity", start_beat: [0, 0, 1], end_beat: [1000, 0, 1], value: { constant: 255 } },
-              { kind: "speed", start_beat: [0, 0, 1], end_beat: [1000, 0, 1], value: { constant: 1 } },
-            ],
+            // No baseline events (finding L4): defaults render this line visible
+            // at the origin, speed 10. grep DEFAULT_LINE_STATE.
+            events: [],
             children: [],
             curve_note_tracks: [],
           },

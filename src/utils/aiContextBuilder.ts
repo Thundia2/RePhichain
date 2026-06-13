@@ -185,25 +185,18 @@ function extractBeatsFromPrompt(prompt: string, contextWindowBeats: number): { c
 
 // ---- Event value formatting helpers ----
 
-/** Default baseline values for numeric event kinds */
-const DEFAULT_VALUES: Record<string, number> = { x: 0, y: 0, rotation: 0, opacity: 255, speed: 1 };
-
 /**
  * Format a single event into a readable string showing its actual values.
- * E.g., "0→300 ease_out_cubic (0.0-8.0)" or "constant 255 (0.0-999.0)"
+ * E.g., "0→300 ease_out_cubic (0.0-8.0)" or "constant 255 (0.0-2.0)"
  */
-function formatEventDetail(evt: LineEvent, kind: string): string {
+function formatEventDetail(evt: LineEvent): string {
   const sb = beatToFloat(evt.start_beat).toFixed(1);
   const eb = beatToFloat(evt.end_beat).toFixed(1);
 
   if ("constant" in evt.value) {
+    // No baseline special-casing anymore (finding L4): baselines aren't created,
+    // so every constant is real chart content described by its span.
     const val = (evt.value as { constant: number }).constant;
-    // Check if this is a default baseline constant
-    const spanStart = beatToFloat(evt.start_beat);
-    const spanEnd = beatToFloat(evt.end_beat);
-    if (kind in DEFAULT_VALUES && val === DEFAULT_VALUES[kind] && spanStart <= 0 && spanEnd >= 999) {
-      return `constant ${val} (default, safe to override)`;
-    }
     return `constant ${val} (${sb}-${eb})`;
   }
   if ("transition" in evt.value) {
@@ -384,12 +377,12 @@ export function buildAiContext(userMessage?: string): string {
     if (selectedEvents.length <= MAX_SELECTED_DETAIL) {
       sections.push(`Selected events (${selectedEvents.length}):`);
       for (const e of selectedEvents) {
-        sections.push(`  ${e.kind}: ${formatEventDetail(e, e.kind)}`);
+        sections.push(`  ${e.kind}: ${formatEventDetail(e)}`);
       }
     } else {
       sections.push(`Selected events: ${selectedEvents.length} event(s)`);
       for (const e of selectedEvents.slice(0, 5)) {
-        sections.push(`  ${e.kind}: ${formatEventDetail(e, e.kind)}`);
+        sections.push(`  ${e.kind}: ${formatEventDetail(e)}`);
       }
       sections.push(`  ... +${selectedEvents.length - 5} more`);
     }
@@ -502,7 +495,7 @@ export function buildAiContext(userMessage?: string): string {
         // Format each event with actual values, capped to avoid bloat
         const details: string[] = [];
         for (const evt of events) {
-          details.push(formatEventDetail(evt, kind));
+          details.push(formatEventDetail(evt));
         }
         if (details.length <= MAX_EVENT_DETAILS_PER_KIND) {
           sections.push(`    ${kind}: ${details.join(", ")}`);

@@ -35,9 +35,12 @@ export const EXTENDED_EVENT_KINDS: LineEventKind[] = ["scale_x", "scale_y", "col
 
 // ---- Default Values ----
 
-/** Default constant values when creating new events */
+/** Default constant values when creating new events.
+ *  speed is 10 to match DEFAULT_LINE_STATE.speed (finding L4/N5): a default
+ *  line evaluates to speed 10, so a newly-added speed keyframe must start at 10
+ *  too — else the line would discontinuously jump to 1 the moment you add one. */
 export const DEFAULT_EVENT_VALUES: Record<string, number> = {
-  x: 0, y: 0, rotation: 0, opacity: 255, speed: 1,
+  x: 0, y: 0, rotation: 0, opacity: 255, speed: 10,
   scale_x: 1, scale_y: 1, incline: 0, gif: 0,
 };
 

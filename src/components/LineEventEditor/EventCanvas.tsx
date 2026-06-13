@@ -16,7 +16,7 @@ import { evaluateLineEventsWithLayers } from "../../canvas/events";
 import { resolveActiveKindEvents } from "../../utils/eventRouting";
 import { BpmList } from "../../utils/bpmList";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, beatToFloat, floatToBeat } from "../../types/chart";
-import type { LineEvent, LineEventKind, Beat } from "../../types/chart";
+import type { LineEvent, LineEventKind } from "../../types/chart";
 
 interface EventCanvasProps {
   lineIndex: number;
@@ -86,13 +86,15 @@ function commitValue(lineIndex: number, kind: LineEventKind, newValue: number, c
       cs.replaceEventById(lineIndex, event.id, newEvents);
     }
   } else {
-    // No active event — create a new constant event in the routed target
+    // No active event — create a short constant in the routed target. It holds
+    // its value via inheritance for all later beats, so no [1000] far-end is
+    // needed; a far-end would compete as "affecting" across the whole chart and
+    // shadow later events under the value-tiebreak (finding L4).
     const snappedBeat = floatToBeat(currentBeat);
-    const farBeat: Beat = [1000, 0, 1];
     cs.addEventRouted(lineIndex, {
       kind,
       start_beat: snappedBeat,
-      end_beat: farBeat,
+      end_beat: floatToBeat(currentBeat + 1),
       value: { constant: newValue },
     }, activeLayer);
   }

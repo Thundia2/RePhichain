@@ -115,12 +115,18 @@ function BatchOpsTab() {
   }, [selectedLines, addEventRouted, transaction]);
 
   const handleSyncSpeed = useCallback(() => {
+    // Set the base speed to a constant 1 at beat 0. Short span (not [0,1000]):
+    // a constant holds its value via inheritance for all later beats, so this
+    // sets the line's initial speed without planting a baseline that would
+    // shadow real speed automation under the value-tiebreak (finding L4). Lines
+    // with their own speed events keep them (Affecting outranks this Inherited
+    // value past beat 1).
     transaction(() => {
       for (const { index } of selectedLines) {
         addEventRouted(index, {
           kind: "speed",
           start_beat: [0, 0, 1],
-          end_beat: [1000, 0, 1],
+          end_beat: [1, 0, 1],
           value: { constant: 1 },
         });
       }

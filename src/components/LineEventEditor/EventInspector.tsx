@@ -12,8 +12,9 @@ import { evaluateLineEventsWithLayers } from "../../canvas/events";
 import { resolveActiveKindEvents } from "../../utils/eventRouting";
 import { Field, SelectField, BeatField, EASING_OPTIONS } from "../common/FormFields";
 import { beatToFloat, floatToBeat } from "../../types/chart";
-import type { LineEvent, LineEventKind, Beat, EasingType } from "../../types/chart";
+import type { LineEvent, LineEventKind, EasingType } from "../../types/chart";
 import { EVENT_COLORS } from "../../constants/eventColors";
+import { DEFAULT_EVENT_VALUES } from "../../constants/eventConfig";
 
 const KIND_LABELS: Record<LineEventKind, string> = {
   x: "X Position",
@@ -146,12 +147,14 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
           }}
           onClick={() => {
             const snappedBeat = floatToBeat(currentBeat);
-            const farBeat: Beat = [1000, 0, 1];
-            const defaultValue = activeProperty === "opacity" ? 255 : activeProperty === "speed" ? 1 : 0;
+            const defaultValue = DEFAULT_EVENT_VALUES[activeProperty] ?? 0;
+            // Short span, not [1000]: a constant holds via inheritance, so the
+            // far-end baseline is unnecessary and would shadow later events
+            // under the value-tiebreak (finding L4).
             addEventRouted(lineIndex, {
               kind: activeProperty,
               start_beat: snappedBeat,
-              end_beat: farBeat,
+              end_beat: floatToBeat(currentBeat + 1),
               value: { constant: defaultValue },
             }, activeLayer);
           }}
@@ -168,7 +171,7 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
           onClick={() => {
             const startBeat = floatToBeat(currentBeat);
             const endBeat = floatToBeat(currentBeat + 4); // 4 beats long
-            const defaultValue = activeProperty === "opacity" ? 255 : activeProperty === "speed" ? 1 : 0;
+            const defaultValue = DEFAULT_EVENT_VALUES[activeProperty] ?? 0;
             addEventRouted(lineIndex, {
               kind: activeProperty,
               start_beat: startBeat,
