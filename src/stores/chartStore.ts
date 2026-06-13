@@ -180,6 +180,24 @@ export function resolveEventIndices(lineIndex: number, ids: string[]): number[] 
   return out;
 }
 
+// ---- Project-load reset hooks (finding L5 — session-owns-state) ----
+//
+// groupStore and bookmarkStore hold per-project state but live in separate
+// singletons. They can't be statically imported here: both run a top-level
+// `useChartStore.subscribe(...)`, so a static import would form an init cycle
+// and hit `useChartStore`'s TDZ at boot — and the require() lazy-import escape
+// hatch is broken in the Vite ESM browser build (finding S2). Instead each
+// store registers a SYNCHRONOUS reset callback at its module load, and
+// loadFromProjectData invokes them so a freshly loaded/imported project never
+// inherits the previous project's groups/bookmarks. Synchronous matters: the
+// import entry points call loadGroupsJson/loadBookmarksJson right AFTER
+// loadFromProjectData, so a deferred (microtask) clear would wipe the just-
+// loaded data. grep registerProjectLoadReset.
+const _projectLoadResetHandlers: Array<() => void> = [];
+export function registerProjectLoadReset(fn: () => void): void {
+  _projectLoadResetHandlers.push(fn);
+}
+
 // Default empty chart
 const DEFAULT_CHART: PhichainChart = {
   format: 1,
@@ -544,6 +562,10 @@ export const useChartStore = create<ChartState>()((set, get) => ({
       projectPath: data.project_path,
       musicPath: data.music_path,
       illustrationPath: data.illustration_path,
+      // Clear the previous project's illustration image so a chart without one
+      // doesn't inherit it (finding S8); the entry point loads the new one via
+      // loadIllustration() after this returns.
+      illustrationImage: null,
       meta: data.meta,
       chart,
       isDirty: false,
@@ -552,9 +574,22 @@ export const useChartStore = create<ChartState>()((set, get) => ({
       _future: [],
       _pastSeqs: [],
       _futureSeqs: [],
+      // A load can't run mid-gesture, but reset transaction state defensively so
+      // a stale open transaction can never bridge two projects (finding L1/L5).
+      _txnDepth: 0,
+      _txnSnapshot: null,
+      _txnDidPush: false,
       lineTextures: new Map<string, Blob>(),
       chartFontFamily: null,
+      // Reset prpr/Phira extra.json (effects/video) so an import without one
+      // doesn't keep the previous project's effects (finding S8); the .pez entry
+      // point re-applies it via setExtraConfig() after this returns.
+      extraConfig: { ...DEFAULT_EXTRA_CONFIG },
     });
+    // Clear editor-only per-project state (groups + bookmarks) BEFORE the entry
+    // point repopulates them. See registerProjectLoadReset above for why this is
+    // a synchronous registered hook rather than a direct import.
+    for (const reset of _projectLoadResetHandlers) reset();
   },
 
   closeProject: () =>

@@ -27,7 +27,7 @@ import { useRecentProjectsStore } from "../stores/recentProjectsStore";
 import { useToastStore } from "../stores/toastStore";
 import { saveStoredProject } from "./projectStorage";
 import {
-  saveSession,
+  saveActiveChartSession,
   registerSession,
   setSkipNextSave,
   setSkipNextRestore,
@@ -391,16 +391,10 @@ export function triggerImportChart() {
       // ── Load chart into editor ──────────────────────────────
       const cs = useChartStore.getState();
 
-      // Save the old chart's session before replacing it
-      const tabState = useTabStore.getState();
-      const currentTab = tabState.tabs.find((t) => t.id === tabState.activeTabId);
-      if (
-        currentTab &&
-        (currentTab.type === "chart" || currentTab.type === "unified_editor") &&
-        cs.isLoaded
-      ) {
-        saveSession(currentTab.id);
-      }
+      // Save the outgoing chart's session under its real owning tab id before
+      // loadFromProjectData replaces the chart store (finding L5: the old
+      // type-gated check skipped unrolled-editor tabs and mis-routed satellites).
+      saveActiveChartSession();
       setSkipNextSave();
 
       cs.loadFromProjectData({

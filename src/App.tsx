@@ -11,7 +11,13 @@ import "react-mosaic-component/react-mosaic-component.css";
 
 import type { PanelId } from "./types/editor";
 import { useChartStore } from "./stores/chartStore";
-import { useTabStore, chartGroupKey } from "./stores/tabStore";
+import {
+  useTabStore,
+  chartGroupKey,
+  isChartSessionTabId,
+  sessionOwnerTabId,
+  setActiveChartSessionTabId,
+} from "./stores/tabStore";
 import {
   saveSession,
   restoreSession,
@@ -253,57 +259,59 @@ export default function App() {
     const prevTabId = prevTabIdRef.current;
     prevTabIdRef.current = activeTabId;
 
-    // Skip if same tab
-    if (prevTabId === activeTabId) return;
-    if (prevTabId === null) return;
-
-    const prevTab = tabs.find((t) => t.id === prevTabId);
     const newTab = tabs.find((t) => t.id === activeTabId);
 
-    // Skip save/restore entirely when both tabs reference the SAME
-    // chart group (e.g. unified:current ↔ unrolled:current, or
-    // unrolled:current ↔ unrolled-line:0). The chart store already
-    // holds the right state — saving + restoring would clone, write
-    // back, and discard any in-flight edits the user just made in
-    // the previous view. (User-reported bug: an event placed in
-    // unrolled disappeared in unified after switching, then came
-    // back when returning to unrolled — caused by per-tab session
-    // snapshots overwriting cs.chart.)
-    const prevKey = prevTab ? chartGroupKey(prevTab.id) : null;
-    const newKey = newTab ? chartGroupKey(newTab.id) : null;
-    if (prevKey !== null && newKey !== null && prevKey === newKey) {
+    // Same tab (re-render without a tab change): the active-chart pointer is
+    // already correct.
+    if (prevTabId === activeTabId) return;
+    if (prevTabId === null) {
+      // First activation (boot). No outgoing tab to save; just record the
+      // active chart so later satellite tabs resolve their session correctly.
+      if (newTab && isChartSessionTabId(newTab.id)) setActiveChartSessionTabId(newTab.id);
       return;
     }
 
-    // If an entry point already saved the session, skip the automatic save
-    if (shouldSkipSave()) {
-      // Flag consumed — fall through to restore only
-    } else if (prevTab && (prevTab.type === "chart" || prevTab.type === "panel" || prevTab.type === "line_event_editor" || prevTab.type === "unified_editor" || prevTab.type === "unrolled_editor")) {
-      // Save session when leaving a chart-like tab
-      let saveId: string | null = null;
-      if (prevTab.type === "chart" || prevTab.type === "unified_editor" || prevTab.type === "unrolled_editor") {
-        // Chart, unified_editor, and unrolled_editor tabs own their own session
-        saveId = prevTab.id;
-      } else {
-        // Panel/line_event_editor: save under the most recent chart-like tab
-        const chartLikeTabs = tabs.filter(
-          (t) => t.type === "chart" || t.type === "unified_editor" || t.type === "unrolled_editor"
-        );
-        saveId = chartLikeTabs.length > 0 ? chartLikeTabs[chartLikeTabs.length - 1].id : null;
-      }
-      if (saveId && isLoaded) {
-        saveSession(saveId);
-      }
+    const prevTab = tabs.find((t) => t.id === prevTabId);
+
+    // Skip save/restore entirely when both tabs reference the SAME chart group
+    // (e.g. unified:A ↔ unrolled:A, or unified:A ↔ a panel/line-events view of
+    // A). The chart store already holds the right state — saving + restoring
+    // would write a stale snapshot back and discard in-flight edits the user
+    // just made in the previous view. Satellite tabs now resolve to their
+    // owning chart (finding L5, no "current" sentinel), so this fires across
+    // genuinely different charts only.
+    const prevKey = prevTab ? chartGroupKey(prevTab.id) : null;
+    const newKey = newTab ? chartGroupKey(newTab.id) : null;
+    if (prevKey !== null && newKey !== null && prevKey === newKey) {
+      if (newTab && isChartSessionTabId(newTab.id)) setActiveChartSessionTabId(newTab.id);
+      return;
     }
 
-    // Restore session when entering a chart, unified_editor, or unrolled_editor tab
-    if (newTab && (newTab.type === "chart" || newTab.type === "unified_editor" || newTab.type === "unrolled_editor")) {
-      if (!shouldSkipRestore()) {
-        restoreSession(newTab.id).catch((err) => {
-          console.warn("[App] Failed to restore chart session:", err);
-        });
-      }
+    // Save the OUTGOING chart under its session-owning tab id. For satellite
+    // tabs (panel / line-events / per-line unrolled) that's the active chart
+    // session — resolved via the still-current active-chart pointer, since we
+    // only advance it AFTER this save (finding L5/H2/T1: the old code saved
+    // under a positional "last chart-like tab" guess that could overwrite a
+    // different chart's session).
+    if (shouldSkipSave()) {
+      // An entry point already saved the outgoing session.
+    } else if (prevTab && isLoaded) {
+      const saveId = sessionOwnerTabId(prevTab.id);
+      if (saveId) saveSession(saveId);
     }
+
+    // Restore session when entering a real-chart tab. Satellite tabs share the
+    // already-loaded chart (covered by the same-group skip above), so they
+    // don't restore.
+    if (newTab && isChartSessionTabId(newTab.id) && !shouldSkipRestore()) {
+      restoreSession(newTab.id).catch((err) => {
+        console.warn("[App] Failed to restore chart session:", err);
+      });
+    }
+
+    // Advance the active-chart pointer to the incoming chart, AFTER the save
+    // above so satellite saves resolved to the OUTGOING chart.
+    if (newTab && isChartSessionTabId(newTab.id)) setActiveChartSessionTabId(newTab.id);
   }, [activeTabId, tabs, isLoaded]);
 
   // When chart is closed, unload audio, close chart tabs, and clean up sessions.

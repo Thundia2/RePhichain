@@ -12,7 +12,7 @@ import { selectLineByIndex } from "../../stores/selection";
 import { useTabStore } from "../../stores/tabStore";
 import { audioEngine } from "../../audio/audioEngine";
 import { isTauri, pickFile, createProject, loadProject } from "../../utils/ipc";
-import { saveSession, registerSession, setSkipNextSave, setSkipNextRestore, setAudioBlobUrl, setStoredProjectId } from "../../utils/chartSessions";
+import { saveActiveChartSession, registerSession, setSkipNextSave, setSkipNextRestore, setAudioBlobUrl, setStoredProjectId } from "../../utils/chartSessions";
 import { useRecentProjectsStore } from "../../stores/recentProjectsStore";
 import { saveStoredProject } from "../../utils/projectStorage";
 import type { ProjectMeta, PhichainChart } from "../../types/chart";
@@ -400,22 +400,11 @@ export function NewProjectDialog({ open, onClose }: Props) {
     try {
       let musicUrl: string | null = null;
 
-      // Save the current chart's session before loading a new one
-      const chartLikeTabs = useTabStore.getState().tabs.filter(
-        (t) => t.type === "chart" || t.type === "unified_editor"
-      );
-      const currentActiveTab = useTabStore.getState().tabs.find(
-        (t) => t.id === useTabStore.getState().activeTabId,
-      );
-      if (
-        currentActiveTab &&
-        (currentActiveTab.type === "chart" || currentActiveTab.type === "unified_editor") &&
-        useChartStore.getState().isLoaded
-      ) {
-        saveSession(currentActiveTab.id);
-      } else if (chartLikeTabs.length > 0 && useChartStore.getState().isLoaded) {
-        saveSession(chartLikeTabs[chartLikeTabs.length - 1].id);
-      }
+      // Save the outgoing chart's session under its real owning tab id before
+      // loadFromProjectData replaces the chart store (finding L5/H2: the old
+      // positional "last chart-like tab" fallback could overwrite a different
+      // chart's session).
+      saveActiveChartSession();
 
       setSkipNextSave();
 

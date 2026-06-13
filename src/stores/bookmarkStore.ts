@@ -16,7 +16,7 @@ import type { Bookmark } from "../types/bookmark";
 import { BOOKMARK_PRESETS } from "../types/bookmark";
 import type { BookmarkPreset } from "../types/bookmark";
 import type { Beat, NoteKind } from "../types/chart";
-import { useChartStore } from "./chartStore";
+import { useChartStore, registerProjectLoadReset } from "./chartStore";
 import { nextUndoSeq } from "../utils/undoSequence";
 
 // Maximum bookmark undo history depth (matches chartStore)
@@ -281,3 +281,8 @@ useChartStore.subscribe((state) => {
   }
   lastIsLoaded = state.isLoaded;
 });
+
+// Clear bookmarks synchronously when a new project loads (finding L5), so an
+// import doesn't inherit the previous project's bookmarks. Runs BEFORE the entry
+// point's loadBookmarksJson — see registerProjectLoadReset in chartStore.
+registerProjectLoadReset(() => useBookmarkStore.getState().clearBookmarks());

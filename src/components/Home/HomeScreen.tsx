@@ -20,7 +20,7 @@ import { useAudioStore } from "../../stores/audioStore";
 import { audioEngine } from "../../audio/audioEngine";
 import { useToastStore } from "../../stores/toastStore";
 import {
-  saveSession,
+  saveActiveChartSession,
   registerSession,
   setSkipNextSave,
   setSkipNextRestore,
@@ -105,16 +105,10 @@ function Kbd({ children }: { children: React.ReactNode }) {
 
 async function handleOpenRecent(project: RecentProject) {
   try {
-    // Save the current chart's session before replacing it (safety measure)
-    const tabState = useTabStore.getState();
-    const currentTab = tabState.tabs.find((t) => t.id === tabState.activeTabId);
-    if (
-      currentTab &&
-      (currentTab.type === "chart" || currentTab.type === "unified_editor") &&
-      useChartStore.getState().isLoaded
-    ) {
-      saveSession(currentTab.id);
-    }
+    // Save the outgoing chart's session under its real owning tab id before
+    // loadFromProjectData replaces the chart store (finding L5: the old
+    // type-gated check skipped unrolled-editor tabs and mis-routed satellites).
+    saveActiveChartSession();
     setSkipNextSave();
 
     // Tauri project with a folder on disk — reload via IPC

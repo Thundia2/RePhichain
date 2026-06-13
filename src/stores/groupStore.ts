@@ -25,7 +25,7 @@ import {
   computeMemberDelay,
   migrateGroup,
 } from "../types/group";
-import { useChartStore } from "./chartStore";
+import { useChartStore, registerProjectLoadReset } from "./chartStore";
 import { buildNoteUidMap } from "../utils/noteUid";
 
 // ============================================================
@@ -814,3 +814,8 @@ useChartStore.subscribe((state) => {
     });
   }
 });
+
+// Clear groups synchronously when a new project loads (finding L5), so an
+// import doesn't inherit the previous project's groups. Runs BEFORE the entry
+// point's loadGroupsJson — see registerProjectLoadReset in chartStore.
+registerProjectLoadReset(() => useGroupStore.getState().clearGroups());
