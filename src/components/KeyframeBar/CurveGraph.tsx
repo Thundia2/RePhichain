@@ -13,6 +13,7 @@
 import { useRef, useEffect, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
+import { useAudioStore } from "../../stores/audioStore";
 import {
   getSelectedLineIndex,
   getSelectedEventIndices,
@@ -43,6 +44,12 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
     valueMin: -100,
     valueMax: 100,
   });
+  // K7: the beat (X) window is PERSISTENT — only seeded once, then mutated by the
+  // wheel handler (manual zoom) or playback auto-follow. Without this latch the
+  // frame loop recomputed beatStart/beatEnd from the playhead every tick, so a
+  // paused user could never hold a manual view. Per-instance ref → inline and
+  // popout graphs keep independent windows.
+  const viewportSeededRef = useRef(false);
 
   const height = useEditorStore((s) => isPopout ? 400 : s.curveEditorHeight);
   // Subscribe to trigger re-renders when these values change (used in render loop via getState)
@@ -99,25 +106,47 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
       const autoRange = computeAutoRange(events, es.curveEditorVisibleLanes);
       const vr = es.curveEditorValueRange ?? autoRange;
 
-      // Sync beat range with the KeyframeBar viewport
-      // For now, use a sensible default based on the chart
+      // Furthest beat of interest — used to seed the default window and to clamp
+      // the right edge so the view can't scroll past the chart's content.
       let maxBeat = 32;
       for (const e of events) {
         maxBeat = Math.max(maxBeat, beatToFloat(e.end_beat) + 4);
       }
 
-      viewportRef.current = {
-        beatStart: Math.max(0, currentBeat - maxBeat * 0.1),
-        beatEnd: Math.min(maxBeat, currentBeat + maxBeat * 0.9),
-        valueMin: vr.min,
-        valueMax: vr.max,
-      };
-
-      // If playing, auto-scroll to keep playhead visible
+      // K7: mutate the PERSISTENT viewport in place — never reassign it from the
+      // playhead each frame (that was the bug: a paused view kept snapping back).
       const vp = viewportRef.current;
+
+      // Value (Y) axis tracks the stored range (wheel Y-zoom persists it) or auto.
+      vp.valueMin = vr.min;
+      vp.valueMax = vr.max;
+
+      // Seed the beat (X) window ONCE, centered on the playhead. After this the
+      // window is owned by the user (wheel zoom) and the playback follower below.
+      if (!viewportSeededRef.current) {
+        const initWindow = Math.min(maxBeat, 32);
+        vp.beatStart = Math.max(0, currentBeat - initWindow * 0.1);
+        vp.beatEnd = vp.beatStart + initWindow;
+        viewportSeededRef.current = true;
+      }
+
+      // Auto-follow the playhead ONLY while audio is playing — so a paused user can
+      // hold a manual pan/zoom. When playing and the head leaves the window, scroll
+      // the window (keeping its width) to bring it back into view.
+      const isPlaying = useAudioStore.getState().isPlaying;
       const beatWindow = vp.beatEnd - vp.beatStart;
-      if (currentBeat < vp.beatStart || currentBeat > vp.beatEnd) {
-        vp.beatStart = Math.max(0, currentBeat - beatWindow * 0.2);
+      if (isPlaying && (currentBeat < vp.beatStart || currentBeat > vp.beatEnd)) {
+        vp.beatStart = currentBeat - beatWindow * 0.2;
+        vp.beatEnd = vp.beatStart + beatWindow;
+      }
+
+      // Clamp to the valid range, preserving window width: never start below 0, and
+      // never scroll the left edge past the chart end.
+      if (vp.beatStart < 0) {
+        vp.beatStart = 0;
+        vp.beatEnd = beatWindow;
+      } else if (vp.beatStart > maxBeat) {
+        vp.beatStart = Math.max(0, maxBeat - beatWindow);
         vp.beatEnd = vp.beatStart + beatWindow;
       }
 

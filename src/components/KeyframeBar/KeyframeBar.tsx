@@ -92,6 +92,15 @@ interface DiamondHit {
   event: LineEvent;
 }
 
+// K4: per-member tagging for group mode. Lifted to module scope so getDisplayData
+// (shared by render + hit-test) and the render loop agree on the exact same shape —
+// previously only the render loop knew about group mode, so hit-tests used a
+// different (normal-mode) layout and clicks landed on the wrong row.
+type TaggedEvent = { event: LineEvent; color: string; globalIdx: number };
+
+// Per-member diamond colors in group mode (kept in sync with the render loop).
+const GROUP_MEMBER_COLORS = ["#ff6b6b", "#4dabf7", "#69db7c", "#ffd43b", "#da77f2", "#38d9a9", "#ffa94d", "#748ffc"];
+
 interface ContextMenuState {
   x: number;
   y: number;
@@ -130,6 +139,12 @@ export function KeyframeBar() {
   const inspectorOpen = useEditorStore((s) => s.unifiedInspectorOpen);
   const toggleInspector = useEditorStore((s) => s.toggleUnifiedInspector);
   const selectedEventIndices = useSelectedEventIndices();
+  // K2: SUBSCRIBE to these (not getState() in JSX) so the expand/popout toggle
+  // buttons in KeyframeBarHeader actually re-render this host. The toggle actions
+  // (toggleCurveEditorExpanded / setCurveEditorPoppedOut in editorStore) mutate
+  // these fields, but a getState() read in render never reacts to that mutation.
+  const curveEditorExpanded = useEditorStore((s) => s.curveEditorExpanded);
+  const curveEditorPoppedOut = useEditorStore((s) => s.curveEditorPoppedOut);
 
   const hasLayers = useChartStore((s) => {
     if (selectedLineIndex === null) return false;
@@ -165,7 +180,12 @@ export function KeyframeBar() {
     };
   }, [contextMenu]);
 
-  // ---- Compute display data for hit-testing (shared between render & interaction) ----
+  // ---- Compute display data — SINGLE source of truth for both render & hit-test ----
+  // K4: the render loop used to compute the group-mode lane layout (`kinds`,
+  // `displayEvents`, tagged colors) inline while the hit-test called this function,
+  // which only knew normal mode — so the two disagreed and group-mode clicks hit
+  // the wrong row. Now both render and hit-test consume THIS, so the lane math is
+  // computed once and can't drift.
   const getDisplayData = useCallback(() => {
     const cs = useChartStore.getState();
     const es = useEditorStore.getState();
@@ -174,20 +194,54 @@ export function KeyframeBar() {
 
     const line = cs.chart.lines[lineIdx];
     const layerIdx = es.eventEditorActiveLayer;
+    // K5: when the active-layer index points at a layer that no longer exists
+    // (deleted / never present), fall back to -1 (flat) so display AND routed
+    // writes both target flat — otherwise display silently showed flat (via
+    // resolveActiveDisplayEvents) while a new event routed to a clamped layer.
+    const effectiveLayerIdx =
+      layerIdx >= 0 && !(line.event_layers && line.event_layers[layerIdx]) ? -1 : layerIdx;
+
     const allKinds: LineEventKind[] = [
       "x", "y", "rotation", "opacity", "speed",
       "scale_x", "scale_y", "color", "text", "incline",
     ];
 
-    // Active layer's events or flat (finding L3) — shared with the render loop.
-    const displayEvents = resolveActiveDisplayEvents(line, layerIdx);
+    const activeGroup = useGroupStore.getState().getActiveGroup();
+    const isGroupMode = !!activeGroup && activeGroup.type === "line";
+
+    let displayEvents: LineEvent[];
+    let taggedEvents: TaggedEvent[] | null = null;
+
+    if (activeGroup && isGroupMode) {
+      // Group mode: gather events from all member lines, filtered by visibleEventKinds.
+      const visibleKinds = new Set(activeGroup.visibleEventKinds);
+      const raw: LineEvent[] = [];
+      const tagged: TaggedEvent[] = [];
+      for (let mi = 0; mi < activeGroup.lines.length; mi++) {
+        const memberLine = cs.chart.lines[activeGroup.lines[mi].lineIndex];
+        if (!memberLine) continue;
+        const memberColor = GROUP_MEMBER_COLORS[mi % GROUP_MEMBER_COLORS.length];
+        for (const evt of memberLine.events) {
+          if (!visibleKinds.has(evt.kind)) continue;
+          tagged.push({ event: evt, color: memberColor, globalIdx: raw.length });
+          raw.push(evt);
+        }
+      }
+      displayEvents = raw;
+      taggedEvents = tagged;
+    } else {
+      // Normal mode: single line — active layer's events, or flat (finding L3).
+      displayEvents = resolveActiveDisplayEvents(line, effectiveLayerIdx);
+    }
 
     const activeKinds = allKinds.filter((kind) =>
       displayEvents.some((e) => e.kind === kind),
     );
-    const kinds = [...new Set([...CORE_KINDS, ...activeKinds])];
+    const kinds: LineEventKind[] = (activeGroup && isGroupMode)
+      ? [...new Set([...activeGroup.visibleEventKinds, ...activeKinds])]
+      : [...new Set([...CORE_KINDS, ...activeKinds])];
 
-    return { lineIdx, line, displayEvents, kinds, layerIdx };
+    return { lineIdx, line, displayEvents, taggedEvents, kinds, layerIdx: effectiveLayerIdx };
   }, []);
 
   // ---- Diamond hit-testing ----
@@ -299,7 +353,6 @@ export function KeyframeBar() {
       }
 
       const cs = useChartStore.getState();
-      const es = useEditorStore.getState();
 
       const lineIdx = getSelectedLineIndex();
       if (lineIdx === null || lineIdx < 0 || lineIdx >= cs.chart.lines.length) {
@@ -317,7 +370,6 @@ export function KeyframeBar() {
         return;
       }
 
-      const line = cs.chart.lines[lineIdx];
       const { width, height } = canvas;
 
       // ---- Clear ----
@@ -380,56 +432,11 @@ export function KeyframeBar() {
       }
 
       // ---- Event keyframe diamonds (multi-property) ----
-      const layerIdx = es.eventEditorActiveLayer;
-      const allKinds: LineEventKind[] = [
-        "x", "y", "rotation", "opacity", "speed",
-        "scale_x", "scale_y", "color", "text", "incline",
-      ];
-
-      // ---- Group mode: collect events from all member lines ----
-      const gs = useGroupStore.getState();
-      const activeGroup = gs.getActiveGroup();
-
-      // Tagged events: each event paired with its display color
-      type TaggedEvent = { event: LineEvent; color: string; globalIdx: number };
-      let displayEvents: LineEvent[];
-      let taggedEvents: TaggedEvent[] | null = null;
-
-      if (activeGroup && activeGroup.type === "line") {
-        // Group mode: gather events from all member lines, filtered by visibleEventKinds
-        const visibleKinds = new Set(activeGroup.visibleEventKinds);
-        const memberColors = ["#ff6b6b", "#4dabf7", "#69db7c", "#ffd43b", "#da77f2", "#38d9a9", "#ffa94d", "#748ffc"];
-        const allGroupEvents: TaggedEvent[] = [];
-        const allGroupEventsRaw: LineEvent[] = [];
-
-        for (let mi = 0; mi < activeGroup.lines.length; mi++) {
-          const memberRef = activeGroup.lines[mi];
-          const memberLine = cs.chart.lines[memberRef.lineIndex];
-          if (!memberLine) continue;
-          const memberColor = memberColors[mi % memberColors.length];
-
-          for (const evt of memberLine.events) {
-            if (!visibleKinds.has(evt.kind)) continue;
-            const idx = allGroupEventsRaw.length;
-            allGroupEventsRaw.push(evt);
-            allGroupEvents.push({ event: evt, color: memberColor, globalIdx: idx });
-          }
-        }
-
-        displayEvents = allGroupEventsRaw;
-        taggedEvents = allGroupEvents;
-      } else {
-        // Normal mode: single line — active layer's events, or flat (finding L3)
-        displayEvents = resolveActiveDisplayEvents(line, layerIdx);
-      }
-
-      // Find which kinds have events (always show core 5)
-      const activeKinds = allKinds.filter((kind) =>
-        displayEvents.some((e) => e.kind === kind),
-      );
-      const kinds: LineEventKind[] = (activeGroup && activeGroup.type === "line")
-        ? [...new Set([...activeGroup.visibleEventKinds, ...activeKinds])]
-        : [...new Set([...CORE_KINDS, ...activeKinds])];
+      // K4: consume the SAME layout the hit-test uses (getDisplayData) so a click
+      // can never land on a different row than what was drawn. `data` is non-null
+      // here because the lineIdx===null early-return above already fired.
+      const data = getDisplayData()!;
+      const { displayEvents, taggedEvents, kinds } = data;
       const laneHeight = (height - 14) / kinds.length;
 
       // Selected event ids for highlight — id-based (finding L2/L3) so it works
@@ -598,7 +605,7 @@ export function KeyframeBar() {
 
     rafRef.current = requestAnimationFrame(renderFrame);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [selectedLineIndex, viewStart, viewRange, beatToPixel, selectedEventIndices]);
+  }, [selectedLineIndex, viewStart, viewRange, beatToPixel, selectedEventIndices, getDisplayData]);
 
   // ---- Seek to beat helper ----
   const seekToBeat = useCallback((beat: number) => {
@@ -1066,8 +1073,8 @@ export function KeyframeBar() {
       <KeyframeBarHeader />
 
       {/* ---- Curve Graph (expanded, not popped out) ---- */}
-      {useEditorStore.getState().curveEditorExpanded &&
-        !useEditorStore.getState().curveEditorPoppedOut && (
+      {/* K2: read the SUBSCRIBED vars, not getState(), so toggling re-renders here. */}
+      {curveEditorExpanded && !curveEditorPoppedOut && (
         <>
           {/* Resize handle */}
           <CurveEditorResizeHandle />
@@ -1076,7 +1083,7 @@ export function KeyframeBar() {
       )}
 
       {/* ---- Pop-out portal ---- */}
-      {useEditorStore.getState().curveEditorPoppedOut && <PopoutCurveEditor />}
+      {curveEditorPoppedOut && <PopoutCurveEditor />}
 
       {/* ---- Context menu overlay ---- */}
       {contextMenu && (
@@ -1280,8 +1287,10 @@ export function KeyframeBar() {
                     end_beat: floatToBeat(beatToFloat(event.end_beat) + duration),
                   };
                   // Route flat<->layer (finding L3) so the duplicate lands in the
-                  // same layer the original is being viewed/edited in.
-                  cs.addEventRouted(lineIdx, newEvent, useEditorStore.getState().eventEditorActiveLayer);
+                  // same layer the original is being viewed/edited in. K5: use the
+                  // EFFECTIVE layer (getDisplayData falls a missing index back to
+                  // flat) so the duplicate matches what's displayed, not a clamped layer.
+                  cs.addEventRouted(lineIdx, newEvent, getDisplayData()?.layerIdx ?? -1);
                   setContextMenu(null);
                 }}
                 style={{

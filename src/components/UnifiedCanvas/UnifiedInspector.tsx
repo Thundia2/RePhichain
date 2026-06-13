@@ -75,7 +75,14 @@ function NoteSection({ note, lineIndex, noteIndex }: { note: Note; lineIndex: nu
         label="Kind"
         value={note.kind}
         options={NOTE_KIND_OPTIONS}
-        onChange={(v) => editNote(lineIndex, noteIndex, { kind: v as NoteKind })}
+        onChange={(v) => {
+          // P6: switching to "hold" without a hold_beat exports a zero-length hold
+          // (garbage). Seed one beat so the new hold is valid. Mirrors the same
+          // guard in FloatingInspector.tsx (grep `hold_beat = [1, 0, 1]`).
+          const changes: Partial<Note> = { kind: v as NoteKind };
+          if (v === "hold" && !note.hold_beat) changes.hold_beat = [1, 0, 1];
+          editNote(lineIndex, noteIndex, changes);
+        }}
       />
       <BeatField
         label="Beat"
