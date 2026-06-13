@@ -9,6 +9,7 @@
     {
       "identifier": "fs:allow-read-file",
       "allow": [
+        { "path": "$HOME/**" },
         { "path": "$APPDATA/Phichain/**" },
         { "path": "$DOCUMENT/**" },
         { "path": "$DESKTOP/**" },
