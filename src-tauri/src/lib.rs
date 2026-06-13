@@ -41,6 +41,7 @@ pub fn run() {
             // AI proxy — forwards requests to local inference server
             ai_proxy::ai_generate,
             ai_proxy::ai_generate_stream,
+            ai_proxy::ai_cancel_stream,
 
             // ML onset detection — CNN inference via ONNX Runtime
             onset_ml::detect_onsets_ml,

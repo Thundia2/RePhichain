@@ -175,6 +175,7 @@ let _aiStreamSeq = 0;
 export async function generateAiStream(
   request: AiGenerateRequest,
   onChunk: (chunk: AiStreamChunk) => void,
+  signal?: AbortSignal,
 ): Promise<AiGenerateResponse> {
   if (!isTauri()) {
     throw new Error(
@@ -191,9 +192,18 @@ export async function generateAiStream(
   // in-flight stream). The listener drops any chunk whose id isn't ours.
   const requestId = `ai-stream-${++_aiStreamSeq}`;
 
+  // M4 (hard cancel): forward an abort to the Rust side (ai_cancel_stream) so the
+  // upstream request is actually stopped, not just ignored. Fire-and-forget; the
+  // command no-ops if the stream already finished.
+  const onAbort = () => { void invoke("ai_cancel_stream", { requestId }); };
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  }
+
   // Start listening BEFORE invoking — guarantees no chunks are missed
   const unlisten = await listen<AiStreamChunk>("ai-stream-chunk", (event) => {
-    if (event.payload.requestId !== requestId) return;
+    if (event.payload.requestId !== requestId || signal?.aborted) return;
     onChunk(event.payload);
   });
 
@@ -201,8 +211,9 @@ export async function generateAiStream(
     const result = await invoke<AiGenerateResponse>("ai_generate_stream", { request: { ...request, requestId } });
     return result;
   } finally {
-    // Always clean up the listener
+    // Always clean up the listener + the abort hook
     unlisten();
+    signal?.removeEventListener("abort", onAbort);
   }
 }
 

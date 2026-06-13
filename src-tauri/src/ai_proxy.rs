@@ -43,6 +43,43 @@ fn u64_to_u32_sat(v: u64) -> u32 {
     if v > u32::MAX as u64 { u32::MAX } else { v as u32 }
 }
 
+// ============================================================
+// Stream cancellation registry (M4)
+// ============================================================
+
+use std::collections::HashSet;
+use std::sync::{Mutex, OnceLock};
+
+/// Set of request ids the frontend has asked to cancel. ai_generate_stream polls
+/// this each loop iteration and stops when its own id appears; ai_cancel_stream
+/// inserts. A process-global registry avoids threading Tauri managed state through
+/// every call site. grep cancel_registry / ai_cancel_stream.
+fn cancel_registry() -> &'static Mutex<HashSet<String>> {
+    static REGISTRY: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// RAII: removes a request id from the registry when its stream ends, so a
+/// cancelled-then-finished id can't linger. Covers every return path + panic.
+struct CancelGuard(String);
+impl Drop for CancelGuard {
+    fn drop(&mut self) {
+        if let Ok(mut set) = cancel_registry().lock() {
+            set.remove(&self.0);
+        }
+    }
+}
+
+/// M4: ask an in-flight ai_generate_stream to stop. The frontend calls this when
+/// the user hits Stop (so the abandoned upstream request is dropped instead of
+/// draining to completion in the background). A no-op if no stream has that id.
+#[tauri::command]
+pub fn ai_cancel_stream(request_id: String) {
+    if let Ok(mut set) = cancel_registry().lock() {
+        set.insert(request_id);
+    }
+}
+
 /// A single message in the chat conversation.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -221,6 +258,9 @@ pub async fn ai_generate_stream(
     // M4: echoed on every emitted chunk so the frontend can drop chunks from a
     // superseded stream (defaults to "" if the caller omitted it).
     let req_id = request.request_id.clone().unwrap_or_default();
+    // M4: RAII cleanup of this id from the cancel registry on any exit; the loop
+    // below polls cancel_registry() so ai_cancel_stream(req_id) stops the stream.
+    let _cancel_guard = CancelGuard(req_id.clone());
 
     // Build the request body — same as non-streaming but with stream: true
     // and WITHOUT response_format (not all providers support it with streaming)
@@ -346,6 +386,11 @@ pub async fn ai_generate_stream(
     let mut completion_tokens: Option<u32> = None;
 
     'outer: while let Some(chunk_result) = stream.next().await {
+        // M4: stop if the frontend cancelled this request (checked per chunk;
+        // tokens flow frequently while generating, so this is responsive).
+        if cancel_registry().lock().map(|s| s.contains(&req_id)).unwrap_or(false) {
+            break 'outer;
+        }
         let chunk = match chunk_result {
             Ok(bytes) => bytes,
             Err(e) => {
