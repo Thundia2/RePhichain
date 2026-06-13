@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import { useEditorStore } from "../../../stores/editorStore";
+import { useSelectedLineIndex } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import type { NoteControlEntry, EasingType } from "../../../types/chart";
 import { EASING_OPTIONS } from "../../common/FormFields";
@@ -28,7 +29,7 @@ type ControlField = typeof CONTROL_KINDS[number]["field"];
 // ---- Controls Tab ----
 
 export function ControlsTab() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const lines = useChartStore((s) => s.chart.lines);
   const editLine = useChartStore((s) => s.editLine);
   const [expandedKind, setExpandedKind] = useState<ControlField | null>(null);
@@ -200,7 +201,7 @@ export function ControlsTab() {
 
 function TimelineOverlaySection() {
   const lines = useChartStore((s) => s.chart.lines);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const overlayEnabled = useEditorStore((s) => s.timelineOverlayEnabled);
   const overlayLines = useEditorStore((s) => s.timelineOverlayLines);
   const overlayOpacity = useEditorStore((s) => s.timelineOverlayOpacity);

@@ -8,7 +8,7 @@
 import { useState, useRef } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
-import { useEditorStore } from "../../stores/editorStore";
+import { selectLineByIndex } from "../../stores/selection";
 import { useTabStore } from "../../stores/tabStore";
 import { audioEngine } from "../../audio/audioEngine";
 import { isTauri, pickFile, createProject, loadProject } from "../../utils/ipc";
@@ -441,7 +441,7 @@ export function NewProjectDialog({ open, onClose }: Props) {
           await cs.loadIllustration(illustUrl);
         }
 
-        useEditorStore.getState().selectLine(0);
+        selectLineByIndex(0);
 
         useTabStore.getState().openChart(folderPath, finalMeta.name || "Untitled Chart");
         const tabId = useTabStore.getState().getChartTabId(folderPath);
@@ -512,7 +512,7 @@ export function NewProjectDialog({ open, onClose }: Props) {
         await cs.loadIllustration(illustrationUrl);
       }
 
-      useEditorStore.getState().selectLine(0);
+      selectLineByIndex(0);
 
       const chartId = `browser-${Date.now()}`;
       useTabStore.getState().openChart(chartId, finalMeta.name || "Untitled Chart");

@@ -12,7 +12,11 @@
 // ============================================================
 
 import { useChartStore } from "../stores/chartStore";
-import { useEditorStore } from "../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  getSelectedEventIndices,
+} from "../stores/selection";
 import { floatToBeat, beatToFloat } from "../types/chart";
 import type { Note, LineEvent, LineEventValue, EasingType, Line } from "../types/chart";
 import type { AiCommand, AiNote, AiEvent } from "./aiCommandSchema";
@@ -128,7 +132,7 @@ function aiEventToLineEvent(ai: AiEvent): LineEvent {
 
 function resolveLineIndex(ref: number | "selected" | "new"): number | "new" {
   if (ref === "selected") {
-    const idx = useEditorStore.getState().selectedLineIndex;
+    const idx = getSelectedLineIndex();
     if (idx === null) throw new Error("No line is selected. Select a line first.");
     return idx;
   }
@@ -236,7 +240,7 @@ export function executeAiCommands(commands: AiCommand[]): ExecutionResult {
         if (cmd.target === "all") {
           indices = line.notes.map((_, i) => i);
         } else if (cmd.target === "selected") {
-          indices = useEditorStore.getState().selectedNoteIndices;
+          indices = getSelectedNoteIndices();
         } else if ("beat_range" in cmd.target) {
           const [lo, hi] = cmd.target.beat_range;
           indices = line.notes
@@ -360,7 +364,7 @@ export function executeAiCommands(commands: AiCommand[]): ExecutionResult {
         if (cmd.target === "all") {
           indices = line.notes.map((_, i) => i);
         } else if (cmd.target === "selected") {
-          indices = useEditorStore.getState().selectedNoteIndices;
+          indices = getSelectedNoteIndices();
         } else if (typeof cmd.target === "object" && "beat_range" in cmd.target) {
           const [lo, hi] = cmd.target.beat_range;
           indices = line.notes
@@ -394,7 +398,7 @@ export function executeAiCommands(commands: AiCommand[]): ExecutionResult {
         // Determine which event indices to remove
         let indices: number[];
         if (cmd.target === "selected") {
-          indices = useEditorStore.getState().selectedEventIndices;
+          indices = getSelectedEventIndices();
         } else {
           const target = cmd.target as { kind: string; beat_range: [number, number] };
           const [lo, hi] = target.beat_range;

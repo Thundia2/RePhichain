@@ -10,7 +10,11 @@
 
 import { useMemo, useEffect, useRef, useState } from "react";
 import { useChartStore } from "../../stores/chartStore";
-import { useEditorStore } from "../../stores/editorStore";
+import {
+  useSelectedLineIndex,
+  useSelectedNoteIndices,
+  useSelectedEventIndices,
+} from "../../stores/selection";
 import type { Note, LineEvent, NoteKind, EasingType } from "../../types/chart";
 import { Field, SelectField, BeatField, EASING_OPTIONS } from "../common/FormFields";
 import { Card, SectionHeader, ActionButton } from "../common/UIKit";
@@ -717,9 +721,9 @@ function MultiNoteInspector({ count, lineIndex, indices }: { count: number; line
 }
 
 export function Inspector() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectedNoteIndices = useEditorStore((s) => s.selectedNoteIndices);
-  const selectedEventIndices = useEditorStore((s) => s.selectedEventIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const selectedNoteIndices = useSelectedNoteIndices();
+  const selectedEventIndices = useSelectedEventIndices();
   const chart = useChartStore((s) => s.chart);
 
   if (selectedLineIndex === null) {

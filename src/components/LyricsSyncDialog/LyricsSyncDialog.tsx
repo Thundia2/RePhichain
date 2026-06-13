@@ -8,7 +8,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
-import { useEditorStore } from "../../stores/editorStore";
+import { useSelectedLineIndex } from "../../stores/selection";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { audioEngine } from "../../audio/audioEngine";
 import { BpmList } from "../../utils/bpmList";
@@ -28,7 +28,7 @@ export function LyricsSyncDialog({ open, onClose }: LyricsSyncDialogProps) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [currentLyricIndex, setCurrentLyricIndex] = useState(0);
   const defaultDuration = useSettingsStore((s) => s.defaultTextDurationBeats);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
 
   const lines = lyrics.split("\n").filter((l) => l.trim().length > 0);
   const keyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);

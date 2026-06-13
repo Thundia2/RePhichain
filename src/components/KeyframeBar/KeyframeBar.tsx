@@ -18,6 +18,13 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  useSelectedLineIndex,
+  useSelectedEventIndices,
+  getSelectedLineIndex,
+  getSelectedEventIndices,
+  setEventSelectionByIndex,
+} from "../../stores/selection";
 import { useAudioStore } from "../../stores/audioStore";
 import { useGroupStore } from "../../stores/groupStore";
 import { useBookmarkStore } from "../../stores/bookmarkStore";
@@ -117,12 +124,12 @@ export function KeyframeBar() {
   const lastClickY = useRef(0);
 
   // ---- Store subscriptions ----
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const activeLayer = useEditorStore((s) => s.eventEditorActiveLayer);
   const setActiveLayer = useEditorStore((s) => s.setEventEditorActiveLayer);
   const inspectorOpen = useEditorStore((s) => s.unifiedInspectorOpen);
   const toggleInspector = useEditorStore((s) => s.toggleUnifiedInspector);
-  const selectedEventIndices = useEditorStore((s) => s.selectedEventIndices);
+  const selectedEventIndices = useSelectedEventIndices();
 
   const hasLayers = useChartStore((s) => {
     if (selectedLineIndex === null) return false;
@@ -162,7 +169,7 @@ export function KeyframeBar() {
   const getDisplayData = useCallback(() => {
     const cs = useChartStore.getState();
     const es = useEditorStore.getState();
-    const lineIdx = es.selectedLineIndex;
+    const lineIdx = getSelectedLineIndex();
     if (lineIdx === null || lineIdx < 0 || lineIdx >= cs.chart.lines.length) return null;
 
     const line = cs.chart.lines[lineIdx];
@@ -264,8 +271,7 @@ export function KeyframeBar() {
     const canvas = canvasRef.current;
     if (!canvas) return null;
 
-    const es = useEditorStore.getState();
-    const lineIdx = es.selectedLineIndex;
+    const lineIdx = getSelectedLineIndex();
     if (lineIdx === null) return null;
 
     // Bookmarks are rendered as triangles in the top ~12px
@@ -307,7 +313,7 @@ export function KeyframeBar() {
       const es = useEditorStore.getState();
       const { currentTime } = useAudioStore.getState();
 
-      const lineIdx = es.selectedLineIndex;
+      const lineIdx = getSelectedLineIndex();
       if (lineIdx === null || lineIdx < 0 || lineIdx >= cs.chart.lines.length) {
         // No line selected — draw empty strip
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -450,7 +456,7 @@ export function KeyframeBar() {
       const laneHeight = (height - 14) / kinds.length;
 
       // Selected event indices for highlight
-      const selEvtIndices = new Set(es.selectedEventIndices);
+      const selEvtIndices = new Set(getSelectedEventIndices());
 
       for (let ki = 0; ki < kinds.length; ki++) {
         const kind = kinds[ki];
@@ -713,7 +719,7 @@ export function KeyframeBar() {
     const hit = hitTestDiamond(mouseX, mouseY);
     if (hit) {
       // Select this event
-      useEditorStore.getState().setEventSelection([hit.globalEventIndex]);
+      setEventSelectionByIndex([hit.globalEventIndex]);
 
       // Seek to this event's beat
       const beat = beatToFloat(hit.event.start_beat);
@@ -762,7 +768,7 @@ export function KeyframeBar() {
     }
 
     // Select the hit event
-    useEditorStore.getState().setEventSelection([hit.globalEventIndex]);
+    setEventSelectionByIndex([hit.globalEventIndex]);
 
     setContextMenu({
       x: e.clientX,
@@ -1272,8 +1278,8 @@ export function KeyframeBar() {
                   if (!contextMenu?.hit) return;
                   const cs = useChartStore.getState();
                   const as_ = useAudioStore.getState();
-                  const es = useEditorStore.getState();
-                  if (es.selectedLineIndex === null) return;
+                  const lineIdx = getSelectedLineIndex();
+                  if (lineIdx === null) return;
 
                   const bpmList = getCachedBpmList();
                   const splitBeat = bpmList.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
@@ -1311,7 +1317,7 @@ export function KeyframeBar() {
 
                   if (event1 && event2) {
                     // globalEventIndex maps to the flat events array index when not in layer mode
-                    cs.replaceEvent(es.selectedLineIndex, contextMenu.hit.globalEventIndex, [event1, event2]);
+                    cs.replaceEvent(lineIdx, contextMenu.hit.globalEventIndex, [event1, event2]);
                   }
                   setContextMenu(null);
                 }}
@@ -1331,8 +1337,8 @@ export function KeyframeBar() {
                 onClick={() => {
                   if (!contextMenu?.hit) return;
                   const cs = useChartStore.getState();
-                  const es = useEditorStore.getState();
-                  if (es.selectedLineIndex === null) return;
+                  const lineIdx = getSelectedLineIndex();
+                  if (lineIdx === null) return;
 
                   const event = contextMenu.hit.event;
                   const duration = beatToFloat(event.end_beat) - beatToFloat(event.start_beat);
@@ -1341,7 +1347,7 @@ export function KeyframeBar() {
                     start_beat: event.end_beat,
                     end_beat: floatToBeat(beatToFloat(event.end_beat) + duration),
                   };
-                  cs.addEvent(es.selectedLineIndex, newEvent);
+                  cs.addEvent(lineIdx, newEvent);
                   setContextMenu(null);
                 }}
                 style={{

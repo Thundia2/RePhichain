@@ -12,7 +12,7 @@
 
 import type { PluginAPI, PluginDefinition, PluginCommand, PluginEventPreset } from "./pluginAPI";
 import { useChartStore } from "../stores/chartStore";
-import { useEditorStore } from "../stores/editorStore";
+import { getSelectedLineIndex } from "../stores/selection";
 import { useAudioStore } from "../stores/audioStore";
 import { BpmList } from "../utils/bpmList";
 
@@ -37,13 +37,12 @@ class PluginRegistry {
       },
 
       getEditorState: () => {
-        const es = useEditorStore.getState();
         const as = useAudioStore.getState();
         const cs = useChartStore.getState();
         const bl = new BpmList(cs.chart.bpm_list);
         const currentBeat = bl.beatAtFloat(as.currentTime - cs.chart.offset);
         return {
-          selectedLineIndex: es.selectedLineIndex,
+          selectedLineIndex: getSelectedLineIndex(),
           currentBeat,
         };
       },

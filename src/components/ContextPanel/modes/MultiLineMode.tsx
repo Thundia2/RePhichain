@@ -4,6 +4,7 @@
 
 import React, { useState, useCallback } from "react";
 import { useEditorStore } from "../../../stores/editorStore";
+import { useMultiSelectedLineIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { BUILTIN_PRESETS } from "../../../presets/builtinPresets";
 import { applyPresetAtPlayhead } from "../../../utils/applyPreset";
@@ -35,7 +36,7 @@ export function MultiLineMode({ activeTab }: MultiLineModeProps) {
 // ---- Batch Ops sub-tab ----
 
 function BatchOpsTab() {
-  const multiSelectedLineIndices = useEditorStore((s) => s.multiSelectedLineIndices);
+  const multiSelectedLineIndices = useMultiSelectedLineIndices();
   const lines = useChartStore((s) => s.chart.lines);
   const duplicateLine = useChartStore((s) => s.duplicateLine);
   const removeLine = useChartStore((s) => s.removeLine);

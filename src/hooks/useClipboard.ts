@@ -15,6 +15,12 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { useEditorStore } from "../stores/editorStore";
 import { useChartStore } from "../stores/chartStore";
 import { generateNoteUid } from "../utils/noteUid";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  getSelectedEventIndices,
+  getMultiSelectedLineIndices,
+} from "../stores/selection";
 import { useAudioStore } from "../stores/audioStore";
 import { BpmList } from "../utils/bpmList";
 import { beatToFloat, floatToBeat } from "../types/chart";
@@ -43,24 +49,24 @@ function offsetBeat(beat: Beat, delta: number): Beat {
  * Copies selected notes/events from the current line into the in-memory clipboard.
  */
 export function performCopy(): void {
-  const es = useEditorStore.getState();
   const cs = useChartStore.getState();
-  if (es.selectedLineIndex === null) return;
-  const line = cs.chart.lines[es.selectedLineIndex];
+  const lineIndex = getSelectedLineIndex();
+  if (lineIndex === null) return;
+  const line = cs.chart.lines[lineIndex];
   if (!line) return;
 
   const copiedNotes: Note[] = [];
   const copiedEvents: LineEvent[] = [];
   let baseBeat = Infinity;
 
-  for (const idx of es.selectedNoteIndices) {
+  for (const idx of getSelectedNoteIndices()) {
     const note = line.notes[idx];
     if (note) {
       copiedNotes.push(structuredClone(note));
       baseBeat = Math.min(baseBeat, beatToFloat(note.beat));
     }
   }
-  for (const idx of es.selectedEventIndices) {
+  for (const idx of getSelectedEventIndices()) {
     const event = line.events[idx];
     if (event) {
       copiedEvents.push(structuredClone(event));
@@ -78,18 +84,21 @@ export function performCopy(): void {
 export function performCut(): void {
   const es = useEditorStore.getState();
   const cs = useChartStore.getState();
-  if (es.selectedLineIndex === null) return;
+  const lineIndex = getSelectedLineIndex();
+  if (lineIndex === null) return;
 
   // Copy first
   performCopy();
   if (!clipboard) return;
 
-  // Then delete selected
-  if (es.selectedNoteIndices.length > 0) {
-    cs.removeNotes(es.selectedLineIndex, es.selectedNoteIndices);
+  // Then delete selected (note + event selection are mutually exclusive)
+  const noteIndices = getSelectedNoteIndices();
+  const eventIndices = getSelectedEventIndices();
+  if (noteIndices.length > 0) {
+    cs.removeNotes(lineIndex, noteIndices);
   }
-  if (es.selectedEventIndices.length > 0) {
-    cs.removeEvents(es.selectedLineIndex, es.selectedEventIndices);
+  if (eventIndices.length > 0) {
+    cs.removeEvents(lineIndex, eventIndices);
   }
   es.clearSelection();
 }
@@ -101,8 +110,8 @@ export function performPaste(): void {
   if (!clipboard) return;
   const es = useEditorStore.getState();
   const cs = useChartStore.getState();
-  if (es.selectedLineIndex === null) return;
-  const lineIndex = es.selectedLineIndex;
+  const lineIndex = getSelectedLineIndex();
+  if (lineIndex === null) return;
 
   const { currentTime } = useAudioStore.getState();
   const bpmList = new BpmList(cs.chart.bpm_list);
@@ -136,19 +145,10 @@ export function performPaste(): void {
     }
   });
 
-  // Reselect the pasted notes by uid against FRESH post-mutation state
-  // (finding H5 — the old code read the stale pre-paste cs snapshot and matched
-  // by beat, which selected nothing or also grabbed pre-existing co-beat notes).
+  // Reselect the pasted notes directly by uid (selection is identity-based —
+  // findings L2/H5; no index resolution or stale-snapshot beat matching needed).
   if (pastedUids.size > 0) {
-    const line = useChartStore.getState().chart.lines[lineIndex];
-    if (line) {
-      const newSelection: number[] = [];
-      for (let i = 0; i < line.notes.length; i++) {
-        const uid = line.notes[i].uid;
-        if (uid && pastedUids.has(uid)) newSelection.push(i);
-      }
-      es.setNoteSelection(newSelection);
-    }
+    es.setNoteSelection([...pastedUids]);
   }
 }
 
@@ -165,13 +165,14 @@ export function useClipboard() {
   // ---- Cross-Line Paste (Ctrl+Shift+V) — paste to all multi-selected lines ----
   useHotkeys("ctrl+shift+v, meta+shift+v", () => {
     if (!clipboard) return;
-    const es = useEditorStore.getState();
     const cs = useChartStore.getState();
 
     // Determine target lines: multi-selected lines, or fall back to current line
-    const targetLines = es.multiSelectedLineIndices.length > 0
-      ? es.multiSelectedLineIndices
-      : es.selectedLineIndex !== null ? [es.selectedLineIndex] : [];
+    const multiLineIndices = getMultiSelectedLineIndices();
+    const selectedLineIndex = getSelectedLineIndex();
+    const targetLines = multiLineIndices.length > 0
+      ? multiLineIndices
+      : selectedLineIndex !== null ? [selectedLineIndex] : [];
     if (targetLines.length === 0) return;
 
     // Compute beat offset from the current playback position

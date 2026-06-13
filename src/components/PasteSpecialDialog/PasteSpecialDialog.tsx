@@ -7,7 +7,7 @@
 // ============================================================
 
 import { useState } from "react";
-import { useEditorStore } from "../../stores/editorStore";
+import { getSelectedLineIndex } from "../../stores/selection";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { BpmList } from "../../utils/bpmList";
@@ -34,9 +34,9 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
 
   const handleApply = () => {
     if (!clipboard) return;
-    const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null) return;
+    const selectedLineIndex = getSelectedLineIndex();
+    if (selectedLineIndex === null) return;
 
     // Compute paste offset: paste at the current playback position
     const { currentTime } = useAudioStore.getState();
@@ -66,7 +66,7 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
         pasted.hold_beat = floatToBeat(Math.max(0, holdF * beatScale));
       }
 
-      cs.addNote(es.selectedLineIndex!, pasted);
+      cs.addNote(selectedLineIndex!, pasted);
     }
 
     // Paste events with transforms
@@ -86,7 +86,7 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
         end_beat: floatToBeat(Math.max(0, finalStart + finalDuration)),
       };
 
-      cs.addEvent(es.selectedLineIndex!, pasted);
+      cs.addEvent(selectedLineIndex!, pasted);
     }
 
     onClose();

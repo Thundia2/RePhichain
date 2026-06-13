@@ -8,7 +8,7 @@
 
 import { useMemo } from "react";
 import { useChartStore } from "../../stores/chartStore";
-import { useEditorStore } from "../../stores/editorStore";
+import { useSelectedLineIndex, selectLineByIndex } from "../../stores/selection";
 import { useTabStore } from "../../stores/tabStore";
 import { SectionHeader, ActionButton, EmptyState } from "../common/UIKit";
 
@@ -66,8 +66,7 @@ export function TexturePanel() {
   const removeLineTexture = useChartStore((s) => s.removeLineTexture);
   const editLine = useChartStore((s) => s.editLine);
   const addLine = useChartStore((s) => s.addLine);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectLine = useEditorStore((s) => s.selectLine);
+  const selectedLineIndex = useSelectedLineIndex();
   const openLineEventEditor = useTabStore((s) => s.openLineEventEditor);
 
   // Find all lines with textures
@@ -102,7 +101,7 @@ export function TexturePanel() {
     // Create a new line, then prompt to assign a texture
     const newIndex = lines.length;
     addLine({ name: `Texture Line ${newIndex + 1}` });
-    selectLine(newIndex);
+    selectLineByIndex(newIndex);
     // Prompt file pick immediately
     const input = document.createElement("input");
     input.type = "file";
@@ -193,7 +192,7 @@ export function TexturePanel() {
                           background: isSelected ? "rgba(108, 138, 255, 0.06)" : "transparent",
                           cursor: "pointer",
                         }}
-                        onClick={() => selectLine(idx)}
+                        onClick={() => selectLineByIndex(idx)}
                       >
                         {line.texture && <TextureThumb textureName={line.texture} />}
                         <div style={{ flex: 1, minWidth: 0 }}>

@@ -25,6 +25,15 @@ import { useRef, useEffect, useCallback, useState } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  getMultiSelectedLineIndices,
+  setNoteSelectionByIndex,
+  toggleNoteSelectionByIndex,
+  selectLineByIndex,
+  toggleMultiSelectedLineByIndex,
+} from "../../stores/selection";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useRespackStore } from "../../stores/respackStore";
 import { useGroupStore } from "../../stores/groupStore";
@@ -277,6 +286,8 @@ export function UnifiedCanvas() {
       const ss = useSettingsStore.getState();
       const rs = useRespackStore.getState();
       const activeRespack = rs.getActiveRespack();
+      const selLineIdx = getSelectedLineIndex();
+      const multiSel = getMultiSelectedLineIndices();
 
       // Reset hit effects on seek/stop
       if (wasPlayingRef.current && !isPlaying) {
@@ -351,8 +362,8 @@ export function UnifiedCanvas() {
         noteSize: ss.noteSize,
         backgroundDim: ss.backgroundDim,
         illustrationImage: cs.illustrationImage,
-        selectedLineIndex: es.selectedLineIndex,
-        selectedNoteIndices: es.selectedNoteIndices,
+        selectedLineIndex: selLineIdx,
+        selectedNoteIndices: getSelectedNoteIndices(),
         showFcApIndicator: ss.showFcApIndicator,
         isFcValid: es.isFcValid,
         multiHighlight: ss.multiHighlight,
@@ -364,10 +375,10 @@ export function UnifiedCanvas() {
         isPlaying,
         showHitEffects: ss.showHitEffects,
         pendingNote: es.pendingNote,
-        pendingLineIndex: es.selectedLineIndex,
+        pendingLineIndex: selLineIdx,
         respack: activeRespack,
         hiddenLineIndices: hiddenLineIndices.size > 0 ? hiddenLineIndices : null,
-        multiSelectedLineIndices: es.multiSelectedLineIndices.length > 0 ? new Set(es.multiSelectedLineIndices) : null,
+        multiSelectedLineIndices: multiSel.length > 0 ? new Set(multiSel) : null,
         chartFontFamily: cs.chartFontFamily,
         // Group editing mode
         ...(() => {
@@ -447,9 +458,9 @@ export function UnifiedCanvas() {
       // ---- Draw overlays on top of game render (same viewport transform) ----
       if (ctx) {
         // Draw handles on the selected line
-        if (es.selectedLineIndex !== null) {
+        if (selLineIdx !== null) {
           const selectedLineInfo = renderResult.lines.find(
-            (l) => l.lineIndex === es.selectedLineIndex,
+            (l) => l.lineIndex === selLineIdx,
           );
           if (selectedLineInfo) {
             const drag = dragRef.current;
@@ -511,9 +522,9 @@ export function UnifiedCanvas() {
         }
 
         // ---- Pattern ghost note preview ----
-        if (es.activeTool === "place_pattern" && es.patternGhostNotes.length > 0 && es.selectedLineIndex !== null) {
+        if (es.activeTool === "place_pattern" && es.patternGhostNotes.length > 0 && selLineIdx !== null) {
           const patternLineInfo = renderResult.lines.find(
-            (l) => l.lineIndex === es.selectedLineIndex,
+            (l) => l.lineIndex === selLineIdx,
           );
           if (patternLineInfo) {
             drawPatternGhostNotes(ctx, es.patternGhostNotes, patternLineInfo, rect.width);
@@ -521,9 +532,9 @@ export function UnifiedCanvas() {
         }
 
         // ---- X snap grid (with active lane highlight) ----
-        if (es.xSnapEnabled && es.verticalLines > 0 && es.selectedLineIndex !== null) {
+        if (es.xSnapEnabled && es.verticalLines > 0 && selLineIdx !== null) {
           const snapLineInfo = renderResult.lines.find(
-            (l) => l.lineIndex === es.selectedLineIndex,
+            (l) => l.lineIndex === selLineIdx,
           );
           if (snapLineInfo) {
             drawXSnapGrid(
@@ -534,10 +545,10 @@ export function UnifiedCanvas() {
         }
 
         // ---- Beat grid perpendicular lines ----
-        if (ss.showBeatGrid && es.selectedLineIndex !== null) {
-          const beatGridLine = cs.chart.lines[es.selectedLineIndex];
+        if (ss.showBeatGrid && selLineIdx !== null) {
+          const beatGridLine = cs.chart.lines[selLineIdx];
           const beatGridLineInfo = renderResult.lines.find(
-            (l) => l.lineIndex === es.selectedLineIndex,
+            (l) => l.lineIndex === selLineIdx,
           );
           if (beatGridLine && beatGridLineInfo && bpmListRef.current) {
             const bgCurrentBeat = bpmList.beatAtFloat(latestTime - effectiveOffset);
@@ -557,8 +568,8 @@ export function UnifiedCanvas() {
         }
 
         // ---- Line path preview ----
-        if (ss.showLinePath && es.selectedLineIndex !== null) {
-          const line = cs.chart.lines[es.selectedLineIndex];
+        if (ss.showLinePath && selLineIdx !== null) {
+          const line = cs.chart.lines[selLineIdx];
           if (line) {
             const currentBeat = bpmList.beatAtFloat(latestTime - effectiveOffset);
             drawLinePathPreview(
@@ -642,10 +653,10 @@ export function UnifiedCanvas() {
 
   // ---- Helper: Get selected line's render info ----
   const getSelectedLineInfo = useCallback((): RenderedLineInfo | null => {
-    const es = useEditorStore.getState();
     const rr = lastRenderResultRef.current;
-    if (!rr || es.selectedLineIndex === null) return null;
-    return rr.lines.find((l) => l.lineIndex === es.selectedLineIndex) ?? null;
+    const selLineIdx = getSelectedLineIndex();
+    if (!rr || selLineIdx === null) return null;
+    return rr.lines.find((l) => l.lineIndex === selLineIdx) ?? null;
   }, []);
 
   // ---- Mouse Down Handler ----
@@ -759,7 +770,7 @@ export function UnifiedCanvas() {
         if (line && bpmList) {
           const noteAction = tryNoteHit(
             mouseX, mouseY, selectedLineInfo, line,
-            es.selectedNoteIndices, bpmList, rect.width, rect.height,
+            getSelectedNoteIndices(), bpmList, rect.width, rect.height,
             getCurrentBeat(), getCurrentTime(), e.ctrlKey || e.metaKey,
           );
           if (noteAction) {
@@ -785,12 +796,12 @@ export function UnifiedCanvas() {
                 es.setCanvasInteractionMode("dragging_translate");
                 return;
               case "select":
-                es.setNoteSelection([noteAction.noteIndex]);
+                setNoteSelectionByIndex([noteAction.noteIndex]);
                 es.showFloatingInspector(e.clientX, e.clientY, "note");
                 return;
               case "toggle":
-                es.toggleNoteSelection(noteAction.noteIndex);
-                if (es.selectedNoteIndices.length > 1) {
+                toggleNoteSelectionByIndex(noteAction.noteIndex);
+                if (getSelectedNoteIndices().length > 1) {
                   es.showFloatingInspector(e.clientX, e.clientY, "multi_note");
                 }
                 return;
@@ -802,8 +813,8 @@ export function UnifiedCanvas() {
       // Check notes on other lines (stays inline — needs renderer)
       const noteHit = renderer.hitTestNote(mouseX, mouseY, renderResult);
       if (noteHit) {
-        es.selectLine(noteHit.lineIndex);
-        es.setNoteSelection([noteHit.noteIndex]);
+        selectLineByIndex(noteHit.lineIndex);
+        setNoteSelectionByIndex([noteHit.noteIndex], noteHit.lineIndex);
         es.showFloatingInspector(e.clientX, e.clientY, "note");
         return;
       }
@@ -846,9 +857,9 @@ export function UnifiedCanvas() {
 
       if (hitIndex !== null) {
         if (e.ctrlKey || e.metaKey) {
-          es.toggleMultiSelectedLine(hitIndex);
+          toggleMultiSelectedLineByIndex(hitIndex);
         } else {
-          es.selectLine(hitIndex);
+          selectLineByIndex(hitIndex);
         }
         return;
       }
@@ -970,8 +981,9 @@ export function UnifiedCanvas() {
     // ---- Record mode: capture keyframes during playback ----
     {
       const es = useEditorStore.getState();
+      const selLineIdx = getSelectedLineIndex();
       const { isPlaying } = useAudioStore.getState();
-      if (es.recordMode && isPlaying && es.selectedLineIndex !== null && bpmListRef.current) {
+      if (es.recordMode && isPlaying && selLineIdx !== null && bpmListRef.current) {
         const currentBeat = bpmListRef.current.beatAtFloat(
           useAudioStore.getState().currentTime - cs.chart.offset,
         );
@@ -1121,7 +1133,7 @@ export function UnifiedCanvas() {
           }
 
           if (hitNotes.length > 0) {
-            es.setNoteSelection(hitNotes);
+            setNoteSelectionByIndex(hitNotes);
             const targetType = hitNotes.length > 1 ? "multi_note" : "note";
             // Use drag end coordinates since the mouse event is not available in this callback
             es.showFloatingInspector(drag.currentX, drag.currentY, targetType);
@@ -1269,7 +1281,8 @@ export function UnifiedCanvas() {
           const canvasEl = canvasRef.current;
           const es = useEditorStore.getState();
           const cs = useChartStore.getState();
-          if (!canvasEl || es.selectedLineIndex === null) return;
+          const selLineIdx = getSelectedLineIndex();
+          if (!canvasEl || selLineIdx === null) return;
 
           // Compute canvas-space coordinates
           const rect = canvasEl.getBoundingClientRect();
@@ -1293,7 +1306,7 @@ export function UnifiedCanvas() {
             canvasX,
             canvasY,
             beat,
-            lineIndex: es.selectedLineIndex,
+            lineIndex: selLineIdx,
           });
         }}
         style={{ cursor: "default" }}

@@ -9,7 +9,7 @@
 import { useState, useCallback } from "react";
 import { Field, SelectField, safeParseNumber } from "./FormFields";
 import { useChartStore } from "../../stores/chartStore";
-import { useEditorStore } from "../../stores/editorStore";
+import { useSelectedLineIndex, useSelectedNoteIndices } from "../../stores/selection";
 import { distributeX, offsetX } from "../../utils/batchNoteOps";
 import type { NoteKind } from "../../types/chart";
 
@@ -22,8 +22,8 @@ const NOTE_KIND_OPTIONS = [
 ];
 
 export function BatchNoteOps() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectedNoteIndices = useEditorStore((s) => s.selectedNoteIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const selectedNoteIndices = useSelectedNoteIndices();
   const batchEditNotes = useChartStore((s) => s.batchEditNotes);
   const editNotes = useChartStore((s) => s.editNotes);
   const lines = useChartStore((s) => s.chart.lines);

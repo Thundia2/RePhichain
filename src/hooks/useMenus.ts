@@ -18,6 +18,11 @@ import { saveProject } from "../utils/ipc";
 import type { ExtraConfig } from "../types/extra";
 import type { PanelId } from "../types/editor";
 import { useEditorStore } from "../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedEventIndices,
+  getMultiSelectedLineIndices,
+} from "../stores/selection";
 import { useGroupStore } from "../stores/groupStore";
 import { useBookmarkStore } from "../stores/bookmarkStore";
 import { useToastStore } from "../stores/toastStore";
@@ -185,11 +190,12 @@ export function useMenus(
           shortcut: "Ctrl+Shift+G",
           disabled: !isLoaded,
           action: () => {
-            const es = useEditorStore.getState();
             const gs = useGroupStore.getState();
-            const linesToAdd = es.multiSelectedLineIndices.length > 0
-              ? es.multiSelectedLineIndices
-              : es.selectedLineIndex !== null ? [es.selectedLineIndex] : [];
+            const multiLineIndices = getMultiSelectedLineIndices();
+            const selectedLineIndex = getSelectedLineIndex();
+            const linesToAdd = multiLineIndices.length > 0
+              ? multiLineIndices
+              : selectedLineIndex !== null ? [selectedLineIndex] : [];
             if (linesToAdd.length === 0) return;
             const groupId = gs.createLineGroup(`Group ${gs.groups.length + 1}`, [0, 0, 1], [999, 0, 1]);
             for (const li of linesToAdd) gs.addLineToGroup(groupId, li);
@@ -267,18 +273,19 @@ export function useMenus(
           disabled: !isLoaded,
           action: () => {
             // Split all selected events at the current playhead beat
-            const es = useEditorStore.getState();
             const cs = useChartStore.getState();
             const as_ = useAudioStore.getState();
-            if (es.selectedLineIndex === null || es.selectedEventIndices.length === 0) return;
-            const line = cs.chart.lines[es.selectedLineIndex];
+            const lineIndex = getSelectedLineIndex();
+            const eventIndices = getSelectedEventIndices();
+            if (lineIndex === null || eventIndices.length === 0) return;
+            const line = cs.chart.lines[lineIndex];
             if (!line) return;
 
             const bpmList = new BpmList(cs.chart.bpm_list);
             const splitBeat = bpmList.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
 
             // Process in reverse order to preserve indices during replaceEvent calls
-            const sorted = [...es.selectedEventIndices].sort((a, b) => b - a);
+            const sorted = [...eventIndices].sort((a, b) => b - a);
             for (const idx of sorted) {
               const event = line.events[idx];
               if (!event) continue;
@@ -291,12 +298,12 @@ export function useMenus(
               if ("transition" in event.value) {
                 const { start, end, easing } = event.value.transition;
                 const mid = start + (end - start) * evaluateEasing(easing, t);
-                cs.replaceEvent(es.selectedLineIndex!, idx, [
+                cs.replaceEvent(lineIndex, idx, [
                   { ...structuredClone(event), end_beat: floatToBeat(splitBeat), value: { transition: { start, end: mid, easing } } },
                   { ...structuredClone(event), start_beat: floatToBeat(splitBeat), value: { transition: { start: mid, end, easing } } },
                 ]);
               } else if ("constant" in event.value) {
-                cs.replaceEvent(es.selectedLineIndex!, idx, [
+                cs.replaceEvent(lineIndex, idx, [
                   { ...structuredClone(event), end_beat: floatToBeat(splitBeat) },
                   { ...structuredClone(event), start_beat: floatToBeat(splitBeat) },
                 ]);
@@ -309,13 +316,14 @@ export function useMenus(
           disabled: !isLoaded,
           action: () => {
             // Clone selected events and place immediately after their end beat
-            const es = useEditorStore.getState();
             const cs = useChartStore.getState();
-            if (es.selectedLineIndex === null || es.selectedEventIndices.length === 0) return;
-            const line = cs.chart.lines[es.selectedLineIndex];
+            const lineIndex = getSelectedLineIndex();
+            const eventIndices = getSelectedEventIndices();
+            if (lineIndex === null || eventIndices.length === 0) return;
+            const line = cs.chart.lines[lineIndex];
             if (!line) return;
 
-            const newEvents = es.selectedEventIndices.map((idx) => {
+            const newEvents = eventIndices.map((idx) => {
               const event = line.events[idx];
               const duration = beatToFloat(event.end_beat) - beatToFloat(event.start_beat);
               return {
@@ -325,7 +333,7 @@ export function useMenus(
               };
             });
 
-            cs.batchMultiLineMutations([{ lineIndex: es.selectedLineIndex, newEvents }]);
+            cs.batchMultiLineMutations([{ lineIndex, newEvents }]);
           },
         },
       ],

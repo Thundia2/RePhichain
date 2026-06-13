@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { useChartStore } from "../../stores/chartStore";
-import { useEditorStore } from "../../stores/editorStore";
+import { getSelectedLineIndex } from "../../stores/selection";
 import type { LineEventKind } from "../../types/chart";
 import { generateParametricEvents, type ParametricConfig } from "../../utils/parametricTrajectory";
 import { safeParseNumber } from "../common/FormFields";
@@ -113,10 +113,10 @@ export function ParametricDialog({ open, onClose }: ParametricDialogProps) {
   if (!open) return null;
 
   const handleGenerate = () => {
-    const es = useEditorStore.getState();
     const cs = useChartStore.getState();
+    const selectedLineIndex = getSelectedLineIndex();
 
-    if (es.selectedLineIndex === null) {
+    if (selectedLineIndex === null) {
       setError("Please select a line first.");
       return;
     }
@@ -132,7 +132,7 @@ export function ParametricDialog({ open, onClose }: ParametricDialogProps) {
     }
 
     for (const event of events) {
-      cs.addEvent(es.selectedLineIndex, event);
+      cs.addEvent(selectedLineIndex, event);
     }
 
     setError(null);

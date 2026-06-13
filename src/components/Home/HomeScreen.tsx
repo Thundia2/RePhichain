@@ -14,7 +14,7 @@ import { useRecentProjectsStore } from "../../stores/recentProjectsStore";
 import type { RecentProject } from "../../stores/recentProjectsStore";
 import { loadStoredProject } from "../../utils/projectStorage";
 import { useChartStore } from "../../stores/chartStore";
-import { useEditorStore } from "../../stores/editorStore";
+import { selectLineByIndex } from "../../stores/selection";
 import { useTabStore } from "../../stores/tabStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { audioEngine } from "../../audio/audioEngine";
@@ -137,7 +137,7 @@ async function handleOpenRecent(project: RecentProject) {
         await cs.loadIllustration(illustUrl);
       }
 
-      useEditorStore.getState().selectLine(0);
+      selectLineByIndex(0);
       useTabStore.getState().openChart(project.projectPath, project.name || "Untitled");
       setSkipNextRestore();
       registerSession(useTabStore.getState().getChartTabId(project.projectPath));
@@ -186,7 +186,7 @@ async function handleOpenRecent(project: RecentProject) {
       await cs.loadIllustration(illuUrl);
     }
 
-    useEditorStore.getState().selectLine(0);
+    selectLineByIndex(0);
     const chartId = "recent-" + project.id;
     useTabStore.getState().openChart(chartId, project.name || "Untitled");
     setSkipNextRestore();

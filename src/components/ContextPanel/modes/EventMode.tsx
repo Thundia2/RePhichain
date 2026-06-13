@@ -9,6 +9,7 @@
 
 import React, { useMemo } from "react";
 import { useEditorStore } from "../../../stores/editorStore";
+import { useSelectedLineIndex, useSelectedEventIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { useAudioStore } from "../../../stores/audioStore";
 import { useFavoritesStore } from "../../../stores/favoritesStore";
@@ -91,8 +92,8 @@ export function EventMode({ activeTab }: EventModeProps) {
 // ---- Edit sub-tab ----
 
 function EditTab() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectedEventIndices = useEditorStore((s) => s.selectedEventIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const selectedEventIndices = useSelectedEventIndices();
   const eventEditorActiveLayer = useEditorStore((s) => s.eventEditorActiveLayer);
   const lines = useChartStore((s) => s.chart.lines);
   const editEvent = useChartStore((s) => s.editEvent);
@@ -507,8 +508,8 @@ function approximateEasing(name: string, t: number): number {
 // ---- Easing sub-tab ----
 
 function EasingTab() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectedEventIndices = useEditorStore((s) => s.selectedEventIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const selectedEventIndices = useSelectedEventIndices();
   const lines = useChartStore((s) => s.chart.lines);
   const editEvent = useChartStore((s) => s.editEvent);
   const favoriteEasings = useFavoritesStore((s) => s.favoriteEasings);

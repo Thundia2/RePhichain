@@ -6,7 +6,7 @@ import { beatToFloat, floatToBeat } from "./beat";
 import { useChartStore } from "../stores/chartStore";
 import { useAudioStore } from "../stores/audioStore";
 import { useBookmarkStore } from "../stores/bookmarkStore";
-import { useEditorStore } from "../stores/editorStore";
+import { getSelectedLineIndex } from "../stores/selection";
 import type { Bookmark } from "../types/bookmark";
 
 /** Get the current playhead beat as a float, accounting for chart offset */
@@ -25,7 +25,7 @@ function getCurrentBeatFloat(): number {
 export function addMarkerAtCurrentBeat(): void {
   const currentBeat = getCurrentBeatFloat();
   const beat = floatToBeat(currentBeat, 32);
-  const selectedLine = useEditorStore.getState().selectedLineIndex ?? 0;
+  const selectedLine = getSelectedLineIndex() ?? 0;
   useBookmarkStore.getState().addBookmark(beat, 0, true, selectedLine);
 }
 

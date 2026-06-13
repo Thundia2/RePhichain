@@ -11,7 +11,7 @@ import { Field, SelectField } from "../common/FormFields";
 import { safeParseNumber } from "../common/FormFields";
 import { generateNotePattern } from "../../utils/notePatternGenerator";
 import { useChartStore } from "../../stores/chartStore";
-import { useEditorStore } from "../../stores/editorStore";
+import { useSelectedLineIndex } from "../../stores/selection";
 import type { NotePatternConfig, PatternShape } from "../../types/notePattern";
 import type { NoteKind } from "../../types/chart";
 
@@ -76,7 +76,7 @@ function PatternPreview({ config }: { config: NotePatternConfig }) {
 }
 
 export function NotePatternDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const batchAddNotes = useChartStore((s) => s.batchAddNotes);
 
   const [config, setConfig] = useState<NotePatternConfig>({

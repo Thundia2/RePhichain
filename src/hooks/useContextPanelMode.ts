@@ -9,16 +9,23 @@
 // conditionally included based on the aiEnabled setting.
 // ============================================================
 
-import { useEditorStore } from "../stores/editorStore";
 import { useSettingsStore } from "../stores/settingsStore";
+import {
+  useSelectedLineIndex,
+  useSelectedNoteIndices,
+  useSelectedEventIndices,
+  useMultiSelectedLineIndices,
+} from "../stores/selection";
 
 export type ContextPanelMode = "global" | "line" | "note" | "event" | "multi";
 
 export function useContextPanelMode(): ContextPanelMode {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectedNoteIndices = useEditorStore((s) => s.selectedNoteIndices);
-  const selectedEventIndices = useEditorStore((s) => s.selectedEventIndices);
-  const multiSelectedLineIndices = useEditorStore((s) => s.multiSelectedLineIndices);
+  // Resolved (present-entity) selection so a deleted-but-not-cleared id can't
+  // pin the panel to a stale mode (finding L2).
+  const selectedLineIndex = useSelectedLineIndex();
+  const selectedNoteIndices = useSelectedNoteIndices();
+  const selectedEventIndices = useSelectedEventIndices();
+  const multiSelectedLineIndices = useMultiSelectedLineIndices();
 
   if (multiSelectedLineIndices.length > 1) return "multi";
   if (selectedEventIndices.length > 0) return "event";

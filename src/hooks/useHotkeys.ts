@@ -11,6 +11,14 @@ import { useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useEditorStore } from "../stores/editorStore";
 import { useChartStore } from "../stores/chartStore";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  getSelectedEventIndices,
+  getMultiSelectedLineIndices,
+  setNoteSelectionByIndex,
+  selectLineByIndex,
+} from "../stores/selection";
 import { useAudioStore } from "../stores/audioStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useGroupStore } from "../stores/groupStore";
@@ -156,17 +164,21 @@ export function useGlobalHotkeys(callbacks: {
       return;
     }
 
-    if (es.selectedLineIndex === null) return;
+    const lineIndex = getSelectedLineIndex();
+    if (lineIndex === null) return;
+    const noteIndices = getSelectedNoteIndices();
+    const eventIndices = getSelectedEventIndices();
+    const multiLineIndices = getMultiSelectedLineIndices();
 
-    if (es.selectedNoteIndices.length > 0) {
-      cs.removeNotes(es.selectedLineIndex, es.selectedNoteIndices);
+    if (noteIndices.length > 0) {
+      cs.removeNotes(lineIndex, noteIndices);
       es.clearSelection();
-    } else if (es.selectedEventIndices.length > 0) {
-      cs.removeEvents(es.selectedLineIndex, es.selectedEventIndices);
+    } else if (eventIndices.length > 0) {
+      cs.removeEvents(lineIndex, eventIndices);
       es.clearSelection();
-    } else if (es.multiSelectedLineIndices.length > 0) {
+    } else if (multiLineIndices.length > 0) {
       // Delete multi-selected lines (in reverse order to preserve indices)
-      const sorted = [...es.multiSelectedLineIndices].sort((a, b) => b - a);
+      const sorted = [...multiLineIndices].sort((a, b) => b - a);
       for (const idx of sorted) {
         cs.removeLine(idx);
       }
@@ -174,13 +186,13 @@ export function useGlobalHotkeys(callbacks: {
       es.selectLine(null);
     } else if (cs.chart.lines.length > 0) {
       // Delete the currently selected line
-      cs.removeLine(es.selectedLineIndex);
+      cs.removeLine(lineIndex);
       // Select an adjacent line, or deselect if none left
       const remaining = cs.chart.lines.length; // already removed
       if (remaining === 0) {
         es.selectLine(null);
       } else {
-        es.selectLine(Math.min(es.selectedLineIndex, remaining - 1));
+        selectLineByIndex(Math.min(lineIndex, remaining - 1));
       }
     }
   }, { preventDefault: true });
@@ -189,13 +201,12 @@ export function useGlobalHotkeys(callbacks: {
   // Must be registered BEFORE ctrl+a so the modifier check takes priority
   useHotkeys("ctrl+shift+a, meta+shift+a", () => {
     if (!useSettingsStore.getState().aiEnabled) return;
-    const es = useEditorStore.getState();
-    const multiLen = es.multiSelectedLineIndices.length;
+    const multiLen = getMultiSelectedLineIndices().length;
     let mode: string;
     if (multiLen > 1) mode = "multi";
-    else if (es.selectedEventIndices.length > 0) mode = "event";
-    else if (es.selectedNoteIndices.length > 0) mode = "note";
-    else if (es.selectedLineIndex !== null) mode = "line";
+    else if (getSelectedEventIndices().length > 0) mode = "event";
+    else if (getSelectedNoteIndices().length > 0) mode = "note";
+    else if (getSelectedLineIndex() !== null) mode = "line";
     else mode = "global";
     useContextPanelStore.getState().setActiveTab(mode, "ai");
     useContextPanelStore.getState().setCollapsed(false);
@@ -203,12 +214,12 @@ export function useGlobalHotkeys(callbacks: {
 
   // ---- Select all notes on current line ----
   useHotkeys("ctrl+a, meta+a", () => {
-    const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    if (lineIndex === null) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
-    es.setNoteSelection(line.notes.map((_, i) => i));
+    setNoteSelectionByIndex(line.notes.map((_, i) => i));
   }, { preventDefault: true });
 
   // ---- Move selected notes/events with arrow keys ----
@@ -217,23 +228,26 @@ export function useGlobalHotkeys(callbacks: {
   useHotkeys("up", () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null) return;
+    const lineIndex = getSelectedLineIndex();
+    if (lineIndex === null) return;
     const step = minimumBeat(es.density);
+    const noteIndices = getSelectedNoteIndices();
+    const eventIndices = getSelectedEventIndices();
 
-    if (es.selectedNoteIndices.length > 0) {
-      const line = cs.chart.lines[es.selectedLineIndex];
+    if (noteIndices.length > 0) {
+      const line = cs.chart.lines[lineIndex];
       if (!line) return;
-      cs.batchEditNotes(es.selectedLineIndex,
-        es.selectedNoteIndices.map((idx) => ({
+      cs.batchEditNotes(lineIndex,
+        noteIndices.map((idx) => ({
           noteIndex: idx,
           changes: { beat: addBeats(line.notes[idx].beat, step) },
         })),
       );
-    } else if (es.selectedEventIndices.length > 0) {
-      const line = cs.chart.lines[es.selectedLineIndex];
+    } else if (eventIndices.length > 0) {
+      const line = cs.chart.lines[lineIndex];
       if (!line) return;
-      cs.batchEditEvents(es.selectedLineIndex,
-        es.selectedEventIndices.map((idx) => ({
+      cs.batchEditEvents(lineIndex,
+        eventIndices.map((idx) => ({
           eventIndex: idx,
           changes: {
             start_beat: addBeats(line.events[idx].start_beat, step),
@@ -248,23 +262,26 @@ export function useGlobalHotkeys(callbacks: {
   useHotkeys("down", () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null) return;
+    const lineIndex = getSelectedLineIndex();
+    if (lineIndex === null) return;
     const step = minimumBeat(es.density);
+    const noteIndices = getSelectedNoteIndices();
+    const eventIndices = getSelectedEventIndices();
 
-    if (es.selectedNoteIndices.length > 0) {
-      const line = cs.chart.lines[es.selectedLineIndex];
+    if (noteIndices.length > 0) {
+      const line = cs.chart.lines[lineIndex];
       if (!line) return;
-      cs.batchEditNotes(es.selectedLineIndex,
-        es.selectedNoteIndices.map((idx) => ({
+      cs.batchEditNotes(lineIndex,
+        noteIndices.map((idx) => ({
           noteIndex: idx,
           changes: { beat: subtractBeats(line.notes[idx].beat, step) },
         })),
       );
-    } else if (es.selectedEventIndices.length > 0) {
-      const line = cs.chart.lines[es.selectedLineIndex];
+    } else if (eventIndices.length > 0) {
+      const line = cs.chart.lines[lineIndex];
       if (!line) return;
-      cs.batchEditEvents(es.selectedLineIndex,
-        es.selectedEventIndices.map((idx) => ({
+      cs.batchEditEvents(lineIndex,
+        eventIndices.map((idx) => ({
           eventIndex: idx,
           changes: {
             start_beat: subtractBeats(line.events[idx].start_beat, step),
@@ -279,14 +296,16 @@ export function useGlobalHotkeys(callbacks: {
   useHotkeys("right", () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length === 0) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length === 0) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
     const xStep = es.verticalLines >= 2 ? Math.round(CANVAS_WIDTH / (es.verticalLines - 1)) : 0;
     if (xStep === 0) return;
-    cs.batchEditNotes(es.selectedLineIndex,
-      es.selectedNoteIndices.map((idx) => ({
+    cs.batchEditNotes(lineIndex,
+      noteIndices.map((idx) => ({
         noteIndex: idx,
         changes: { x: line.notes[idx].x + xStep },
       })),
@@ -297,14 +316,16 @@ export function useGlobalHotkeys(callbacks: {
   useHotkeys("left", () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length === 0) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length === 0) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
     const xStep = es.verticalLines >= 2 ? Math.round(CANVAS_WIDTH / (es.verticalLines - 1)) : 0;
     if (xStep === 0) return;
-    cs.batchEditNotes(es.selectedLineIndex,
-      es.selectedNoteIndices.map((idx) => ({
+    cs.batchEditNotes(lineIndex,
+      noteIndices.map((idx) => ({
         noteIndex: idx,
         changes: { x: line.notes[idx].x - xStep },
       })),
@@ -396,14 +417,15 @@ export function useGlobalHotkeys(callbacks: {
 
   // ---- Flip selected notes above/below ----
   useHotkeys("f", () => {
-    const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length === 0) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length === 0) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
-    cs.batchEditNotes(es.selectedLineIndex,
-      es.selectedNoteIndices.map((idx) => ({
+    cs.batchEditNotes(lineIndex,
+      noteIndices.map((idx) => ({
         noteIndex: idx,
         changes: { above: !line.notes[idx].above },
       })),
@@ -412,14 +434,15 @@ export function useGlobalHotkeys(callbacks: {
 
   // ---- Mirror selected notes horizontally (negate X) ----
   useHotkeys("m", () => {
-    const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length === 0) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length === 0) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
-    cs.batchEditNotes(es.selectedLineIndex,
-      es.selectedNoteIndices.map((idx) => ({
+    cs.batchEditNotes(lineIndex,
+      noteIndices.map((idx) => ({
         noteIndex: idx,
         changes: { x: -line.notes[idx].x },
       })),
@@ -430,12 +453,14 @@ export function useGlobalHotkeys(callbacks: {
   useHotkeys("ctrl+q, meta+q", () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length === 0) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length === 0) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
-    cs.batchEditNotes(es.selectedLineIndex,
-      es.selectedNoteIndices.map((idx) => ({
+    cs.batchEditNotes(lineIndex,
+      noteIndices.map((idx) => ({
         noteIndex: idx,
         changes: { beat: snapBeat(beatToFloat(line.notes[idx].beat), es.density) },
       })),
@@ -444,14 +469,15 @@ export function useGlobalHotkeys(callbacks: {
 
   // ---- Distribute selected notes evenly in time ----
   useHotkeys("ctrl+d, meta+d", () => {
-    const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length < 3) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length < 3) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
     // Sort selected notes by beat to find the range
-    const sorted = [...es.selectedNoteIndices]
+    const sorted = [...noteIndices]
       .map((idx) => ({ idx, beat: beatToFloat(line.notes[idx].beat) }))
       .sort((a, b) => a.beat - b.beat);
 
@@ -460,7 +486,7 @@ export function useGlobalHotkeys(callbacks: {
     if (lastBeat <= firstBeat) return; // All at same beat — nothing to distribute
     const step = (lastBeat - firstBeat) / (sorted.length - 1);
 
-    cs.batchEditNotes(es.selectedLineIndex,
+    cs.batchEditNotes(lineIndex,
       sorted.map((entry, i) => ({
         noteIndex: entry.idx,
         changes: { beat: floatToBeat(firstBeat + i * step) },
@@ -472,18 +498,20 @@ export function useGlobalHotkeys(callbacks: {
   useHotkeys("ctrl+shift+s, meta+shift+s", () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length < 2) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length < 2) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
     // Sort selected notes by X position (left to right)
-    const sorted = [...es.selectedNoteIndices]
+    const sorted = [...noteIndices]
       .map((idx) => ({ idx, x: line.notes[idx].x, beat: beatToFloat(line.notes[idx].beat) }))
       .sort((a, b) => a.x - b.x);
 
     // Apply incremental beat offset: each note gets +i * (1/density) beats
     const strumStep = 1 / es.density;
-    cs.batchEditNotes(es.selectedLineIndex,
+    cs.batchEditNotes(lineIndex,
       sorted.map((entry, i) => ({
         noteIndex: entry.idx,
         changes: { beat: floatToBeat(entry.beat + i * strumStep) },
@@ -552,19 +580,21 @@ export function useGlobalHotkeys(callbacks: {
 
   // Ctrl+Shift+G: Create group from currently selected lines or notes
   useHotkeys("ctrl+shift+g, meta+shift+g", () => {
-    const es = useEditorStore.getState();
     const cs = useChartStore.getState();
     const gs = useGroupStore.getState();
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    const multiLineIndices = getMultiSelectedLineIndices();
 
     // Collect selected notes (from current line)
     const notesToAdd: Array<{ uid: string; lineIndex: number }> = [];
-    if (es.selectedLineIndex !== null && es.selectedNoteIndices.length > 0) {
-      const line = cs.chart.lines[es.selectedLineIndex];
+    if (lineIndex !== null && noteIndices.length > 0) {
+      const line = cs.chart.lines[lineIndex];
       if (line) {
-        for (const ni of es.selectedNoteIndices) {
+        for (const ni of noteIndices) {
           const note = line.notes[ni];
           if (note?.uid) {
-            notesToAdd.push({ uid: note.uid, lineIndex: es.selectedLineIndex });
+            notesToAdd.push({ uid: note.uid, lineIndex });
           }
         }
       }
@@ -586,9 +616,9 @@ export function useGlobalHotkeys(callbacks: {
     }
 
     // Otherwise, create a Line Group from selected lines
-    const linesToAdd = es.multiSelectedLineIndices.length > 0
-      ? es.multiSelectedLineIndices
-      : es.selectedLineIndex !== null ? [es.selectedLineIndex] : [];
+    const linesToAdd = multiLineIndices.length > 0
+      ? multiLineIndices
+      : lineIndex !== null ? [lineIndex] : [];
 
     if (linesToAdd.length === 0) return;
 
@@ -631,14 +661,14 @@ export function useGlobalHotkeys(callbacks: {
     }
 
     // Elsewhere: existing group edit mode behavior
-    const es = useEditorStore.getState();
     const gs = useGroupStore.getState();
 
     // If already in group mode, ignore
     if (gs.activeGroupId) return;
 
-    if (es.selectedLineIndex === null) return;
-    const lineGroups = gs.getGroupsForLine(es.selectedLineIndex);
+    const lineIndex = getSelectedLineIndex();
+    if (lineIndex === null) return;
+    const lineGroups = gs.getGroupsForLine(lineIndex);
     if (lineGroups.length > 0) {
       gs.enterGroupEditMode(lineGroups[0].id);
     }
@@ -661,7 +691,8 @@ export function useGlobalHotkeys(callbacks: {
     const cs = useChartStore.getState();
 
     if (!es.improvisationMode || !as_.isPlaying) return;
-    if (es.selectedLineIndex === null) return;
+    const lineIndex = getSelectedLineIndex();
+    if (lineIndex === null) return;
 
     const bpmList = new BpmList(cs.chart.bpm_list);
     const bs = useBookmarkStore.getState();
@@ -672,7 +703,7 @@ export function useGlobalHotkeys(callbacks: {
     const currentBeat = bpmList.beatAtFloat(compensatedTime - cs.chart.offset);
     const beat = snapBeat(currentBeat, es.density);
 
-    bs.addBookmark(beat, 0, true, es.selectedLineIndex, preset);
+    bs.addBookmark(beat, 0, true, lineIndex, preset);
   };
 
   // Misc markers (1-3) — only fire in mark mode

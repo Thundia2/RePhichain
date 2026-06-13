@@ -10,7 +10,11 @@ import { useState } from "react";
 import { useGroupStore } from "../../stores/groupStore";
 import { useChartStore } from "../../stores/chartStore";
 import { useToastStore } from "../../stores/toastStore";
-import { useEditorStore } from "../../stores/editorStore";
+import {
+  useSelectedLineIndex,
+  useMultiSelectedLineIndices,
+  useSelectedNoteIndices,
+} from "../../stores/selection";
 import { floatToBeat, beatToFloat } from "../../types/chart";
 import type { LineEventKind, NoteKind } from "../../types/chart";
 import { safeParseNumber } from "../common/FormFields";
@@ -57,9 +61,9 @@ export function GroupManager() {
   const batchChangeNoteSpeed = useGroupStore((s) => s.batchChangeNoteSpeedInGroup);
 
   const chart = useChartStore((s) => s.chart);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const multiSelectedLineIndices = useEditorStore((s) => s.multiSelectedLineIndices);
-  const selectedNoteIndices = useEditorStore((s) => s.selectedNoteIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const multiSelectedLineIndices = useMultiSelectedLineIndices();
+  const selectedNoteIndices = useSelectedNoteIndices();
 
   const [showCreate, setShowCreate] = useState<"line" | "note" | null>(null);
   const [newName, setNewName] = useState("");

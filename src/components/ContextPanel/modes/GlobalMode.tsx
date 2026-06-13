@@ -10,6 +10,7 @@
 
 import React, { useState } from "react";
 import { useEditorStore } from "../../../stores/editorStore";
+import { getSelectedLineIndex, setNoteSelectionByIndex, useSelectedLineIndex } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { useAudioStore } from "../../../stores/audioStore";
 import { useDialogStore } from "../../../stores/dialogStore";
@@ -87,11 +88,10 @@ const EDIT_BUTTONS: ActionButtonDef[] = [
     if (bmRedoSeq > chartRedoSeq && bs.canRedo()) { bs.redo(); } else { cs.redo(); }
   }},
   { icon: "A", label: "Sel All", hotkey: "Ctrl+A", action: () => {
-    const es = useEditorStore.getState();
-    const lineIdx = es.selectedLineIndex;
+    const lineIdx = getSelectedLineIndex();
     if (lineIdx === null) return;
     const notes = useChartStore.getState().chart.lines[lineIdx]?.notes;
-    if (notes) es.setNoteSelection([...Array(notes.length).keys()]);
+    if (notes) setNoteSelectionByIndex([...Array(notes.length).keys()]);
   }},
 ];
 
@@ -705,7 +705,7 @@ function SelectByRangeSection() {
   const [xMin, setXMin] = useState("");
   const [xMax, setXMax] = useState("");
   const [sideFilter, setSideFilter] = useState<"all" | "above" | "below">("all");
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const lines = useChartStore((s) => s.chart.lines);
 
   const handleSelect = () => {
@@ -723,7 +723,7 @@ function SelectByRangeSection() {
     const indices = selectByRange(line.notes, sb, eb, xMinVal, xMaxVal, sideFilter);
 
     // Always apply the selection (empty = deselect), and give feedback
-    useEditorStore.getState().setNoteSelection(indices);
+    setNoteSelectionByIndex(indices);
     if (indices.length === 0) {
       useToastStore.getState().addToast({ message: "No notes matched the range", type: "info" });
     }

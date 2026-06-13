@@ -8,6 +8,11 @@
 import { useMemo } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  useSelectedLineIndex,
+  useSelectedNoteIndices,
+  useSelectedEventIndices,
+} from "../../stores/selection";
 import { useAudioStore } from "../../stores/audioStore";
 import { BpmList } from "../../utils/bpmList";
 import { evaluateLineEventsWithLayers } from "../../canvas/events";
@@ -397,9 +402,9 @@ function MultiBookmarkSection({ ids }: { ids: string[] }) {
 export function UnifiedInspector() {
   const inspectorOpen = useEditorStore((s) => s.unifiedInspectorOpen);
   const toggleInspector = useEditorStore((s) => s.toggleUnifiedInspector);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectedNoteIndices = useEditorStore((s) => s.selectedNoteIndices);
-  const selectedEventIndices = useEditorStore((s) => s.selectedEventIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const selectedNoteIndices = useSelectedNoteIndices();
+  const selectedEventIndices = useSelectedEventIndices();
   const activeLayer = useEditorStore((s) => s.eventEditorActiveLayer);
   const setActiveLayer = useEditorStore((s) => s.setEventEditorActiveLayer);
   const chart = useChartStore((s) => s.chart);

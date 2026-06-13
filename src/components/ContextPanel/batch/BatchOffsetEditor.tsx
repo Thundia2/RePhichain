@@ -6,7 +6,7 @@
 // ============================================================
 
 import { useState, useMemo } from "react";
-import { useEditorStore } from "../../../stores/editorStore";
+import { useMultiSelectedLineIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { createStaggeredEvents, generateEvenOffsets } from "../../../utils/batchEventOffset";
 import type { LineEventKind } from "../../../types/chart";
@@ -20,7 +20,7 @@ const CHANNEL_OPTIONS: { kind: LineEventKind; label: string; color: string }[] =
 ];
 
 export function BatchOffsetEditor() {
-  const multiSelectedLineIndices = useEditorStore((s) => s.multiSelectedLineIndices);
+  const multiSelectedLineIndices = useMultiSelectedLineIndices();
   const chart = useChartStore((s) => s.chart);
   const batchMutate = useChartStore((s) => s.batchMultiLineMutations);
 

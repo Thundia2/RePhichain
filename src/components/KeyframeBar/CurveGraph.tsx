@@ -13,6 +13,12 @@
 import { useRef, useEffect, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedEventIndices,
+  useSelectedEventIndices,
+  setEventSelectionByIndex,
+} from "../../stores/selection";
 import { useAudioStore } from "../../stores/audioStore";
 import { BpmList } from "../../utils/bpmList";
 import { beatToFloat, floatToBeat } from "../../types/chart";
@@ -44,7 +50,7 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
   useEditorStore((s) => s.curveEditorVisibleLanes);
   useEditorStore((s) => s.curveEditorNormalized);
   const hoveredKeyframe = useEditorStore((s) => s.curveEditorHoveredKeyframe);
-  useEditorStore((s) => s.selectedEventIndices);
+  useSelectedEventIndices(); // subscribe so a selection change re-renders; value read via getState in the loop
 
   // Animation loop
   useEffect(() => {
@@ -87,7 +93,7 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
       const bpmList = new BpmList(cs.chart.bpm_list);
       const currentBeat = bpmList.beatAtFloat(Math.max(0, currentTime - cs.chart.offset));
 
-      const lineIndex = es.selectedLineIndex;
+      const lineIndex = getSelectedLineIndex();
       const line = lineIndex !== null ? cs.chart.lines[lineIndex] : null;
       const events = line ? line.events : [];
 
@@ -137,6 +143,13 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
         }
       }
 
+      // Convert the id-based hovered keyframe (editorStore stores eventId so the
+      // hover survives event re-sorts) back to the array index the renderer wants.
+      const hk = es.curveEditorHoveredKeyframe;
+      const hoveredKeyframeForRender = hk
+        ? { eventIndex: events.findIndex((ev) => ev.id === hk.eventId), kind: hk.kind, handle: hk.handle }
+        : null;
+
       renderCurveGraph(ctx, {
         events,
         visibleLanes: es.curveEditorVisibleLanes,
@@ -144,8 +157,8 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
         canvasWidth: w,
         canvasHeight: h,
         currentBeat,
-        selectedEventIndices: es.selectedEventIndices,
-        hoveredKeyframe: es.curveEditorHoveredKeyframe,
+        selectedEventIndices: getSelectedEventIndices(),
+        hoveredKeyframe: hoveredKeyframeForRender,
         normalized: es.curveEditorNormalized,
         overlayLines: overlayData.length > 0 ? overlayData : undefined,
         overlayOpacity: es.timelineOverlayOpacity,
@@ -170,32 +183,36 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
 
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    const lineIndex = es.selectedLineIndex;
+    const lineIndex = getSelectedLineIndex();
     const line = lineIndex !== null ? cs.chart.lines[lineIndex] : null;
     if (!line) return;
 
     const dragState = es.curveEditorDragState;
     if (dragState) {
-      // Dragging a keyframe
+      // Dragging a keyframe. dragState holds the event's stable id (L2); resolve
+      // it to the current array index each move so a value-edit re-sort can't make
+      // us write to the wrong event.
       const vp = viewportRef.current;
       const h = isPopout ? 400 : es.curveEditorHeight;
       const newValue = yToValue(mouseY, vp, h);
 
-      const event = line.events[dragState.eventIndex];
+      const eventIndex = line.events.findIndex((ev) => ev.id === dragState.eventId);
+      if (eventIndex < 0) return;
+      const event = line.events[eventIndex];
       if (!event) return;
 
       if ("constant" in event.value) {
-        cs.editEvent(lineIndex!, dragState.eventIndex, {
+        cs.editEvent(lineIndex!, eventIndex, {
           value: { constant: newValue },
         });
       } else if ("transition" in event.value) {
         const tv = event.value.transition;
         if (dragState.handle === "start") {
-          cs.editEvent(lineIndex!, dragState.eventIndex, {
+          cs.editEvent(lineIndex!, eventIndex, {
             value: { transition: { start: newValue, end: tv.end, easing: tv.easing } },
           });
         } else {
-          cs.editEvent(lineIndex!, dragState.eventIndex, {
+          cs.editEvent(lineIndex!, eventIndex, {
             value: { transition: { start: tv.start, end: newValue, easing: tv.easing } },
           });
         }
@@ -210,7 +227,10 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
       mouseX, mouseY, line.events, es.curveEditorVisibleLanes,
       viewportRef.current, w, h,
     );
-    es.setCurveEditorHoveredKeyframe(hit);
+    const hoverId = hit ? line.events[hit.eventIndex]?.id : undefined;
+    es.setCurveEditorHoveredKeyframe(
+      hit && hoverId ? { eventId: hoverId, kind: hit.kind, handle: hit.handle } : null,
+    );
   }, [isPopout]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -224,7 +244,7 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
 
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    const lineIndex = es.selectedLineIndex;
+    const lineIndex = getSelectedLineIndex();
     const line = lineIndex !== null ? cs.chart.lines[lineIndex] : null;
     if (!line) return;
 
@@ -237,11 +257,14 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
     );
 
     if (hit) {
-      // Select the event
-      es.setEventSelection([hit.eventIndex]);
-
-      // Start drag
       const event = line.events[hit.eventIndex];
+      const eventId = event?.id;
+      if (!event || !eventId) return;
+
+      // Select the event
+      setEventSelectionByIndex([hit.eventIndex]);
+
+      // Start drag — store the event's stable id so the drag survives re-sorts.
       let startValue = 0;
       if ("constant" in event.value) startValue = event.value.constant;
       else if ("transition" in event.value) {
@@ -249,7 +272,7 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
       }
 
       es.setCurveEditorDragState({
-        eventIndex: hit.eventIndex,
+        eventId,
         kind: hit.kind,
         handle: hit.handle,
         startMouseX: mouseX,
@@ -273,7 +296,7 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
 
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    const lineIndex = es.selectedLineIndex;
+    const lineIndex = getSelectedLineIndex();
     if (lineIndex === null) return;
 
     const h = isPopout ? 400 : es.curveEditorHeight;

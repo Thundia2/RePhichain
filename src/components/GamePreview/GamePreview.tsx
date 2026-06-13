@@ -22,6 +22,11 @@ import { useRef, useEffect, useCallback, useMemo } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  selectLineByIndex,
+} from "../../stores/selection";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useRespackStore } from "../../stores/respackStore";
 import { GameRenderer } from "../../canvas/gameRenderer";
@@ -316,8 +321,8 @@ export function GamePreview() {
         noteSize: ss.noteSize,
         backgroundDim: ss.backgroundDim,
         illustrationImage: cs.illustrationImage,
-        selectedLineIndex: es.selectedLineIndex,
-        selectedNoteIndices: es.selectedNoteIndices,
+        selectedLineIndex: getSelectedLineIndex(),
+        selectedNoteIndices: getSelectedNoteIndices(),
         showFcApIndicator: ss.showFcApIndicator,
         isFcValid: es.isFcValid,
         multiHighlight: ss.multiHighlight,
@@ -329,7 +334,7 @@ export function GamePreview() {
         isPlaying,
         showHitEffects: ss.showHitEffects,
         pendingNote: es.pendingNote,
-        pendingLineIndex: es.selectedLineIndex,
+        pendingLineIndex: getSelectedLineIndex(),
         respack: activeRespack,
         chartFontFamily: cs.chartFontFamily,
       };
@@ -416,7 +421,7 @@ export function GamePreview() {
     );
 
     if (hitIndex !== null) {
-      useEditorStore.getState().selectLine(hitIndex);
+      selectLineByIndex(hitIndex);
     }
   }, []);
 

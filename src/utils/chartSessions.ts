@@ -57,9 +57,9 @@ export interface ChartSession {
   _futureSeqs: number[];
 
   // Editor store (subset — UI-relevant state)
-  selectedLineIndex: number | null;
-  selectedNoteIndices: number[];
-  selectedEventIndices: number[];
+  selectedLineId: string | null;
+  selectedNoteUids: string[];
+  selectedEventIds: string[];
   activeTool: EditorTool;
   timelineZoom: number;
   density: number;
@@ -280,9 +280,9 @@ export function saveSession(tabId: string): void {
     _futureSeqs: [...cs._futureSeqs],
 
     // Editor store
-    selectedLineIndex: es.selectedLineIndex,
-    selectedNoteIndices: [...es.selectedNoteIndices],
-    selectedEventIndices: [...es.selectedEventIndices],
+    selectedLineId: es.selectedLineId,
+    selectedNoteUids: [...es.selectedNoteUids],
+    selectedEventIds: [...es.selectedEventIds],
     activeTool: es.activeTool,
     timelineZoom: es.timelineZoom,
     density: es.density,
@@ -352,9 +352,9 @@ export async function restoreSession(tabId: string): Promise<boolean> {
   const m = session.mode;
   const cur = useEditorStore.getState();
   useEditorStore.setState({
-    selectedLineIndex: session.selectedLineIndex,
-    selectedNoteIndices: session.selectedNoteIndices,
-    selectedEventIndices: session.selectedEventIndices,
+    selectedLineId: session.selectedLineId,
+    selectedNoteUids: session.selectedNoteUids,
+    selectedEventIds: session.selectedEventIds,
     activeTool: session.activeTool,
     timelineZoom: session.timelineZoom,
     density: session.density,

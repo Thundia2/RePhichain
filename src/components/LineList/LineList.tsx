@@ -10,6 +10,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
+import { useSelectedLineIndex, selectLineByIndex } from "../../stores/selection";
 import { useAudioStore } from "../../stores/audioStore";
 import { useTabStore } from "../../stores/tabStore";
 import { useGroupStore } from "../../stores/groupStore";
@@ -55,8 +56,7 @@ export function LineList() {
   const addLine = useChartStore((s) => s.addLine);
   const removeLine = useChartStore((s) => s.removeLine);
   const reorderLines = useChartStore((s) => s.reorderLines);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectLine = useEditorStore((s) => s.selectLine);
+  const selectedLineIndex = useSelectedLineIndex();
   const lineSortMode = useEditorStore((s) => s.lineSortMode);
   const setLineSortMode = useEditorStore((s) => s.setLineSortMode);
   const openLineEventEditor = useTabStore((s) => s.openLineEventEditor);
@@ -133,7 +133,7 @@ export function LineList() {
           onClick={() => {
             if (selectedLineIndex !== null) {
               removeLine(selectedLineIndex);
-              selectLine(null);
+              selectLineByIndex(null);
             }
           }}
           disabled={selectedLineIndex === null}
@@ -146,7 +146,7 @@ export function LineList() {
             variant="default"
             onClick={() => {
               reorderLines(selectedLineIndex, selectedLineIndex - 1);
-              selectLine(selectedLineIndex - 1);
+              selectLineByIndex(selectedLineIndex - 1);
             }}
             title="Move up"
           >
@@ -158,7 +158,7 @@ export function LineList() {
             variant="default"
             onClick={() => {
               reorderLines(selectedLineIndex, selectedLineIndex + 1);
-              selectLine(selectedLineIndex + 1);
+              selectLineByIndex(selectedLineIndex + 1);
             }}
             title="Move down"
           >
@@ -282,7 +282,7 @@ export function LineList() {
                       ? "2px solid var(--accent-primary)"
                       : "2px solid transparent",
                   }}
-                  onClick={() => selectLine(idx)}
+                  onClick={() => selectLineByIndex(idx)}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setContextMenu({ x: e.clientX, y: e.clientY, lineIndex: idx });

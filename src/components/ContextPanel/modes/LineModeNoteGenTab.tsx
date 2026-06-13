@@ -8,7 +8,7 @@
 // ============================================================
 
 import { useState, useMemo } from "react";
-import { useEditorStore } from "../../../stores/editorStore";
+import { useSelectedLineIndex } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { generateNotePattern, validateExpression } from "../../../utils/notePatternGenerator";
 import type { NotePatternConfig, PatternShape } from "../../../types/notePattern";
@@ -40,7 +40,7 @@ const NOTE_GEN_KINDS: { value: NoteKind; label: string; color: string }[] = [
 // ---- Note Gen Tab ----
 
 export function NoteGenTab() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const batchAddNotes = useChartStore((s) => s.batchAddNotes);
 
   const [config, setConfig] = useState<NotePatternConfig>({

@@ -18,6 +18,16 @@ import { useRef, useEffect, useCallback, useMemo } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  getSelectedEventIndices,
+  setNoteSelectionByIndex,
+  toggleNoteSelectionByIndex,
+  setEventSelectionByIndex,
+  toggleEventSelectionByIndex,
+  noteUidAt,
+} from "../../stores/selection";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { UnrolledRenderer, effectiveGutterWidth, EVENT_DIAMOND_HIT_RADIUS, EVENT_GUTTER_EXTRA } from "../../canvas/unrolledRenderer";
 import type { UnrolledOverlayLine } from "../../canvas/unrolledRenderer";
@@ -105,7 +115,7 @@ export function UnrolledCanvas({
 
   /** Get the effective line index (overridden or from editorStore) */
   const getLineIndex = useCallback((): number | null => {
-    return isPerLineTab ? overrideLineIndex! : useEditorStore.getState().selectedLineIndex;
+    return isPerLineTab ? overrideLineIndex! : getSelectedLineIndex();
   }, [isPerLineTab, overrideLineIndex]);
 
   /** Get the effective scroll beat (per-tab or global) */
@@ -262,7 +272,7 @@ export function UnrolledCanvas({
         density: es.density,
         verticalLines: es.verticalLines,
         noteSideFilter: es.noteSideFilter,
-        selectedNoteIndices: es.selectedNoteIndices,
+        selectedNoteIndices: getSelectedNoteIndices(),
         scrollBeat: getScrollBeat(),
         canvasWidth: w,
         canvasHeight: h,
@@ -278,7 +288,7 @@ export function UnrolledCanvas({
         // merge that layer's five sub-arrays the same way KeyframeBar
         // does (so this view stays in sync with the active layer pill).
         events: line.events,
-        selectedEventIndices: es.selectedEventIndices,
+        selectedEventIndices: getSelectedEventIndices(),
         noteVisibility: es.unrolledNoteVisibility,
         eventVisibility: es.unrolledEventVisibility,
         showEventSpanTints: ss.unrolledShowEventSpanTints,
@@ -369,7 +379,7 @@ export function UnrolledCanvas({
     const { noteAreaLeft, noteAreaWidth } = UnrolledRenderer.getNoteAreaBounds(w, getGutterWidth());
     const scrollBeat = getScrollBeat();
 
-    for (const idx of es.selectedNoteIndices) {
+    for (const idx of getSelectedNoteIndices()) {
       const note = line.notes[idx];
       if (!note || note.kind !== "hold" || !note.hold_beat) continue;
 
@@ -513,13 +523,13 @@ export function UnrolledCanvas({
       const evtIdx = hitTestEventMarker(x, y);
       if (evtIdx >= 0) {
         if (e.ctrlKey || e.metaKey) {
-          es.toggleEventSelection(evtIdx);
+          toggleEventSelectionByIndex(evtIdx, lineIdx);
         } else {
-          es.setEventSelection([evtIdx]);
+          setEventSelectionByIndex([evtIdx], lineIdx);
         }
         es.showFloatingInspector(
           e.clientX, e.clientY,
-          es.selectedEventIndices.length > 1 ? "multi_event" : "event",
+          getSelectedEventIndices().length > 1 ? "multi_event" : "event",
         );
         return;
       }
@@ -550,7 +560,7 @@ export function UnrolledCanvas({
 
       // Select the new event so any keyframe-bar / inspector panels
       // that key off selection update immediately.
-      es.setEventSelection([eventIndex]);
+      setEventSelectionByIndex([eventIndex], lineIdx);
 
       eventPlacementDragRef.current = {
         lineIndex: lineIdx,
@@ -634,14 +644,15 @@ export function UnrolledCanvas({
       if (hitIdx >= 0) {
         // Ctrl+click toggles multi-select
         if (e.ctrlKey || e.metaKey) {
-          es.toggleNoteSelection(hitIdx);
-        } else if (!es.selectedNoteIndices.includes(hitIdx)) {
-          es.setNoteSelection([hitIdx]);
+          toggleNoteSelectionByIndex(hitIdx, lineIdx);
+        } else if (!getSelectedNoteIndices().includes(hitIdx)) {
+          setNoteSelectionByIndex([hitIdx], lineIdx);
         }
 
         // Start note drag
-        const selected = es.selectedNoteIndices.includes(hitIdx)
-          ? es.selectedNoteIndices
+        const selNotes = getSelectedNoteIndices();
+        const selected = selNotes.includes(hitIdx)
+          ? selNotes
           : [hitIdx];
         noteDragRef.current = {
           noteIndices: selected,
@@ -668,13 +679,13 @@ export function UnrolledCanvas({
       const boundaryIdx = hitTestEventBoundary(x, y);
       if (boundaryIdx >= 0) {
         if (e.ctrlKey || e.metaKey) {
-          es.toggleEventSelection(boundaryIdx);
+          toggleEventSelectionByIndex(boundaryIdx, lineIdx);
         } else {
-          es.setEventSelection([boundaryIdx]);
+          setEventSelectionByIndex([boundaryIdx], lineIdx);
         }
         es.showFloatingInspector(
           e.clientX, e.clientY,
-          es.selectedEventIndices.length > 1 ? "multi_event" : "event",
+          getSelectedEventIndices().length > 1 ? "multi_event" : "event",
         );
         return;
       }
@@ -892,13 +903,13 @@ export function UnrolledCanvas({
       // now select the events, addressing the "drag-select can't pick
       // events" bug the user reported.
       if (selectedNotes.length > 0) {
-        es.setNoteSelection(selectedNotes);
+        setNoteSelectionByIndex(selectedNotes, lineIdx);
         es.showFloatingInspector(
           e.clientX, e.clientY,
           selectedNotes.length > 1 ? "multi_note" : "note",
         );
       } else if (selectedEvents.length > 0) {
-        es.setEventSelection(selectedEvents);
+        setEventSelectionByIndex(selectedEvents, lineIdx);
         es.showFloatingInspector(
           e.clientX, e.clientY,
           selectedEvents.length > 1 ? "multi_event" : "event",
@@ -947,11 +958,13 @@ export function UnrolledCanvas({
     e.preventDefault();
     const { x, y } = getCanvasCoords(e);
     const es = useEditorStore.getState();
+    const lineIdx = getLineIndex();
+    if (lineIdx === null) return;
 
     // Event marker first — gutter zone never overlaps the note area.
     const evtIdx = hitTestEventMarker(x, y);
     if (evtIdx >= 0) {
-      es.setEventSelection([evtIdx]);
+      setEventSelectionByIndex([evtIdx], lineIdx);
       es.showFloatingInspector(e.clientX, e.clientY, "event");
       return;
     }
@@ -963,10 +976,13 @@ export function UnrolledCanvas({
         // Second right-click: complete the track creation
         es.setCurveTrackCreation(null);
       } else {
-        es.setCurveTrackCreation({ fromNoteIndex: hitIdx });
+        // Store the source note's stable uid (L2) so the in-progress track
+        // survives a note re-sort before the second click completes it.
+        const fromUid = noteUidAt(lineIdx, hitIdx);
+        if (fromUid) es.setCurveTrackCreation({ fromNoteUid: fromUid });
       }
     }
-  }, [getCanvasCoords, hitTestNote, hitTestEventMarker]);
+  }, [getCanvasCoords, hitTestNote, hitTestEventMarker, getLineIndex]);
 
   // Subscribe to noteVisibility so the cursor reflects the current
   // gating state without needing a force re-render trick.

@@ -10,6 +10,7 @@
 
 import React from "react";
 import { useEditorStore } from "../../../stores/editorStore";
+import { useSelectedLineIndex, useSelectedNoteIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { useDialogStore } from "../../../stores/dialogStore";
 import { useToastStore } from "../../../stores/toastStore";
@@ -59,8 +60,8 @@ export function NoteMode({ activeTab }: NoteModeProps) {
 // ---- Edit sub-tab ----
 
 function EditTab() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectedNoteIndices = useEditorStore((s) => s.selectedNoteIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const selectedNoteIndices = useSelectedNoteIndices();
   const lines = useChartStore((s) => s.chart.lines);
   const editNotes = useChartStore((s) => s.editNotes);
   const removeNotes = useChartStore((s) => s.removeNotes);
@@ -264,8 +265,8 @@ function EditTab() {
 // ---- Batch sub-tab ----
 
 function BatchTab() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectedNoteIndices = useEditorStore((s) => s.selectedNoteIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const selectedNoteIndices = useSelectedNoteIndices();
   const density = useEditorStore((s) => s.density);
   const lines = useChartStore((s) => s.chart.lines);
 

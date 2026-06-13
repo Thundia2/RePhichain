@@ -8,7 +8,7 @@
 
 import { useState, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
-import { useEditorStore } from "../../stores/editorStore";
+import { selectLineByIndex } from "../../stores/selection";
 import { validateChart, type ValidationIssue, type ValidationSeverity } from "../../utils/chartValidation";
 import { ActionButton, Badge } from "../common/UIKit";
 
@@ -26,7 +26,6 @@ const SEVERITY_ICONS: Record<ValidationSeverity, string> = {
 
 export function ValidationPanel() {
   const chart = useChartStore((s) => s.chart);
-  const selectLine = useEditorStore((s) => s.selectLine);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [hasRun, setHasRun] = useState(false);
 
@@ -94,7 +93,7 @@ export function ValidationPanel() {
             }}
             onClick={() => {
               if (issue.lineIndex !== undefined) {
-                selectLine(issue.lineIndex);
+                selectLineByIndex(issue.lineIndex);
               }
             }}
           >

@@ -14,7 +14,7 @@
 // ============================================================
 
 import { useChartStore, getCachedBpmList } from "../stores/chartStore";
-import { useEditorStore } from "../stores/editorStore";
+import { getSelectedLineIndex, getSelectedNoteIndices, getSelectedEventIndices } from "../stores/selection";
 import { useAudioStore } from "../stores/audioStore";
 import { beatToFloat } from "../types/chart";
 import type { LineEvent, LineEventValue, Note, EventLayer, EasingType } from "../types/chart";
@@ -268,7 +268,9 @@ function formatLinePositionCompact(state: LineState): string {
  */
 export function buildAiContext(userMessage?: string): string {
   const cs = useChartStore.getState();
-  const es = useEditorStore.getState();
+  const selectedLineIndex = getSelectedLineIndex();
+  const selectedNoteIndices = getSelectedNoteIndices();
+  const selectedEventIndices = getSelectedEventIndices();
   const chart = cs.chart;
   const bpmList = getCachedBpmList();
   const audioDuration = useAudioStore.getState().duration;
@@ -305,7 +307,7 @@ export function buildAiContext(userMessage?: string): string {
     const activity = classifyLineActivity(line.events, line.event_layers, contextCenter, line.notes, bpmList);
     lineActivities.push(activity);
     // Cache computed state for active and coming-soon lines (and selected)
-    if (activity !== "inactive" || i === es.selectedLineIndex) {
+    if (activity !== "inactive" || i === selectedLineIndex) {
       lineStateCache.set(i, evaluateLineEventsWithLayers(line.events, line.event_layers, contextCenter));
     }
   }
@@ -346,17 +348,17 @@ export function buildAiContext(userMessage?: string): string {
   }
 
   // ---- Selected line ----
-  if (es.selectedLineIndex !== null && es.selectedLineIndex < chart.lines.length) {
-    sections.push(`Selected line index: ${es.selectedLineIndex}`);
-    sections.push(`Selected line name: "${chart.lines[es.selectedLineIndex].name}"`);
+  if (selectedLineIndex !== null && selectedLineIndex < chart.lines.length) {
+    sections.push(`Selected line index: ${selectedLineIndex}`);
+    sections.push(`Selected line name: "${chart.lines[selectedLineIndex].name}"`);
   } else {
     sections.push(`No line selected.`);
   }
 
   // ---- Selected note details (B4) ----
-  if (es.selectedNoteIndices.length > 0 && es.selectedLineIndex !== null && es.selectedLineIndex < chart.lines.length) {
-    const line = chart.lines[es.selectedLineIndex];
-    const selectedNotes = es.selectedNoteIndices
+  if (selectedNoteIndices.length > 0 && selectedLineIndex !== null && selectedLineIndex < chart.lines.length) {
+    const line = chart.lines[selectedLineIndex];
+    const selectedNotes = selectedNoteIndices
       .filter(i => i < line.notes.length)
       .map(i => line.notes[i]);
     if (selectedNotes.length <= MAX_SELECTED_DETAIL) {
@@ -374,9 +376,9 @@ export function buildAiContext(userMessage?: string): string {
   }
 
   // ---- Selected event details (B4) ----
-  if (es.selectedEventIndices.length > 0 && es.selectedLineIndex !== null && es.selectedLineIndex < chart.lines.length) {
-    const line = chart.lines[es.selectedLineIndex];
-    const selectedEvents = es.selectedEventIndices
+  if (selectedEventIndices.length > 0 && selectedLineIndex !== null && selectedLineIndex < chart.lines.length) {
+    const line = chart.lines[selectedLineIndex];
+    const selectedEvents = selectedEventIndices
       .filter(i => i < line.events.length)
       .map(i => line.events[i]);
     if (selectedEvents.length <= MAX_SELECTED_DETAIL) {
@@ -402,7 +404,7 @@ export function buildAiContext(userMessage?: string): string {
   for (let i = 0; i < chart.lines.length; i++) {
     const line = chart.lines[i];
     const activity = lineActivities[i];
-    const isSelected = i === es.selectedLineIndex;
+    const isSelected = i === selectedLineIndex;
 
     // Show: active lines, coming-soon lines, and the selected line
     // Skip: inactive unselected lines (summarized at end)
@@ -471,14 +473,14 @@ export function buildAiContext(userMessage?: string): string {
   }
 
   // ---- Selected line detail (filtered to context window) ----
-  if (es.selectedLineIndex !== null && es.selectedLineIndex < chart.lines.length) {
-    const line = chart.lines[es.selectedLineIndex];
-    const selectedActivity = lineActivities[es.selectedLineIndex];
-    sections.push(`\n## Selected Line Detail (Line ${es.selectedLineIndex})`);
+  if (selectedLineIndex !== null && selectedLineIndex < chart.lines.length) {
+    const line = chart.lines[selectedLineIndex];
+    const selectedActivity = lineActivities[selectedLineIndex];
+    sections.push(`\n## Selected Line Detail (Line ${selectedLineIndex})`);
     sections.push(`  Activity: ${selectedActivity.toUpperCase()}${selectedActivity === "active" ? " (visible or notes approaching)" : selectedActivity === "coming-soon" ? " (will become visible soon)" : " (invisible, no notes nearby)"}`);
 
     // Computed position at context beat (B2)
-    const cachedState = lineStateCache.get(es.selectedLineIndex);
+    const cachedState = lineStateCache.get(selectedLineIndex);
     if (cachedState) {
       sections.push(`  ${formatLineState(cachedState, contextCenter)}`);
     }

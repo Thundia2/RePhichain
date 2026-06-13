@@ -19,6 +19,12 @@
 import { useMemo, useRef, useEffect, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  useSelectedLineIndex,
+  useMultiSelectedLineIndices,
+  selectLineByIndex,
+  toggleMultiSelectedLineByIndex,
+} from "../../stores/selection";
 import { useAudioStore } from "../../stores/audioStore";
 import { useGroupStore } from "../../stores/groupStore";
 import { useTabStore } from "../../stores/tabStore";
@@ -270,10 +276,8 @@ export function LineStrip() {
   const lines = useChartStore((s) => s.chart.lines);
   const bpmPoints = useChartStore((s) => s.chart.bpm_list);
   const offset = useChartStore((s) => s.chart.offset);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectLine = useEditorStore((s) => s.selectLine);
-  const toggleMultiSelectedLine = useEditorStore((s) => s.toggleMultiSelectedLine);
-  const multiSelectedLineIndices = useEditorStore((s) => s.multiSelectedLineIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const multiSelectedLineIndices = useMultiSelectedLineIndices();
   const addLine = useChartStore((s) => s.addLine);
   const groups = useGroupStore((s) => s.groups);
   const openUnrolledLineEditor = useTabStore((s) => s.openUnrolledLineEditor);
@@ -446,13 +450,13 @@ export function LineStrip() {
             data-line-index={index}
             onClick={(e) => {
               if (e.ctrlKey || e.metaKey) {
-                toggleMultiSelectedLine(index);
+                toggleMultiSelectedLineByIndex(index);
               } else {
-                selectLine(isSelected ? null : index);
+                selectLineByIndex(isSelected ? null : index);
               }
             }}
             onDoubleClick={() => {
-              selectLine(index);
+              selectLineByIndex(index);
               // Compute current beat from audio position and open per-line unrolled editor
               const as_ = useAudioStore.getState();
               const cs = useChartStore.getState();
