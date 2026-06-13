@@ -114,7 +114,33 @@ function createDefaultLine(name?: string, index?: number): Line {
 }
 
 // ---- Helper: push current chart to past, clear future ----
+//
+// Transaction-aware (finding L1 — heals the per-call undo floods). While a
+// transaction is open (_txnDepth > 0), the pre-transaction snapshot captured
+// by beginTransaction() is pushed exactly once — on the first mutation that
+// wants history — and every later mutation in the same gesture is a no-op
+// here. Outside a transaction it behaves as a normal per-call snapshot.
+//
+// Callers that mutate in a loop (slider drags, multi-step dialogs, the group
+// batch ops) wrap the loop in transaction(fn) so the whole gesture is a single
+// Ctrl+Z entry instead of flooding the MAX_HISTORY-deep stack. grep
+// `.transaction(` / `beginTransaction(` for the call sites.
 function pushHistory(state: ChartState) {
+  if (state._txnDepth > 0) {
+    if (!state._txnDidPush && state._txnSnapshot) {
+      state._past.push(state._txnSnapshot);
+      state._pastSeqs.push(nextUndoSeq());
+      if (state._past.length > MAX_HISTORY) {
+        state._past.shift();
+        state._pastSeqs.shift();
+      }
+      state._future = [];
+      state._futureSeqs = [];
+      state._txnDidPush = true;
+    }
+    state.isDirty = true;
+    return;
+  }
   state._past.push(current(state.chart));
   state._pastSeqs.push(nextUndoSeq());
   if (state._past.length > MAX_HISTORY) {
@@ -181,6 +207,14 @@ export interface ChartState {
   /** Parallel sequence arrays — each entry's index matches the corresponding _past/_future entry */
   _pastSeqs: number[];
   _futureSeqs: number[];
+
+  // ---- Transaction batching (finding L1) ----
+  /** Depth of nested open transactions. While >0, pushHistory coalesces into one entry. */
+  _txnDepth: number;
+  /** Pre-transaction chart snapshot captured at the outermost beginTransaction(). */
+  _txnSnapshot: PhichainChart | null;
+  /** Whether the single coalesced history entry has been pushed for the open transaction. */
+  _txnDidPush: boolean;
 
   // ---- Project lifecycle ----
   /** Load a project from disk data. Resets undo history and marks clean. */
@@ -292,6 +326,17 @@ export interface ChartState {
   chartFontFamily: string | null;
   setChartFontFamily: (family: string | null) => void;
 
+  // ---- Transaction batching ----
+  /** Open an undo transaction. All chart mutations until the matching
+   *  endTransaction() collapse into ONE undo entry. Nestable (depth-counted).
+   *  Prefer transaction() unless you need manual control across async work. */
+  beginTransaction: () => void;
+  /** Close the most recently opened transaction. */
+  endTransaction: () => void;
+  /** Run fn() with all its chart mutations coalesced into a single undo entry.
+   *  Use for slider drags, multi-step dialogs, and group batch operations. */
+  transaction: (fn: () => void) => void;
+
   // ---- Undo/redo ----
   /** Revert to previous chart state. Moves current state to _future stack. */
   undo: () => void;
@@ -326,6 +371,9 @@ export const useChartStore = create<ChartState>()((set, get) => ({
   _future: [],
   _pastSeqs: [],
   _futureSeqs: [],
+  _txnDepth: 0,
+  _txnSnapshot: null,
+  _txnDidPush: false,
   illustrationImage: null,
   lineTextures: new Map<string, Blob>(),
   extraConfig: { ...DEFAULT_EXTRA_CONFIG },
@@ -387,7 +435,11 @@ export const useChartStore = create<ChartState>()((set, get) => ({
   setMeta: (changes) =>
     set(
       produce((state: ChartState) => {
-        pushHistory(state);
+        // Meta is intentionally excluded from undo history (finding S6):
+        // undo/redo restore only state.chart, so pushing a snapshot here
+        // created a no-op undo entry that evicted real chart history once
+        // the stack reached MAX_HISTORY. We still mark dirty so the edit saves.
+        state.isDirty = true;
         Object.assign(state.meta, changes);
       }),
     ),
@@ -702,6 +754,43 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         state.isDirty = true;
       }),
     ),
+
+  // ---- Transaction batching (finding L1) ----
+
+  beginTransaction: () =>
+    set(
+      produce((state: ChartState) => {
+        if (state._txnDepth === 0) {
+          // Snapshot the pre-transaction chart once. pushHistory pushes it
+          // lazily on the first mutation inside the transaction, so an empty
+          // transaction (no mutation) creates no undo entry.
+          state._txnSnapshot = current(state.chart);
+          state._txnDidPush = false;
+        }
+        state._txnDepth++;
+      }),
+    ),
+
+  endTransaction: () =>
+    set(
+      produce((state: ChartState) => {
+        if (state._txnDepth === 0) return;
+        state._txnDepth--;
+        if (state._txnDepth === 0) {
+          state._txnSnapshot = null;
+          state._txnDidPush = false;
+        }
+      }),
+    ),
+
+  transaction: (fn) => {
+    get().beginTransaction();
+    try {
+      fn();
+    } finally {
+      get().endTransaction();
+    }
+  },
 
   canUndo: () => get()._past.length > 0,
   canRedo: () => get()._future.length > 0,
