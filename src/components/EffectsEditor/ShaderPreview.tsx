@@ -18,7 +18,7 @@ import {
   BUILTIN_SHADERS as SHADER_SOURCES,
   SHADER_DEFAULTS,
 } from "../../canvas/shaders";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 
 // ---- Constants ----
 const PREVIEW_WIDTH = 200;
@@ -39,10 +39,11 @@ export function ShaderPreview({ effect }: ShaderPreviewProps) {
 
   const illustrationImage = useChartStore((s) => s.illustrationImage);
   const currentTime = useAudioStore((s) => s.currentTime);
-  const bpmListRaw = useChartStore((s) => s.chart.bpm_list);
 
-  const bpmCalc = useMemo(() => new BpmList(bpmListRaw), [bpmListRaw]);
-  const currentBeat = bpmCalc.beatAtFloat(currentTime);
+  // Playhead beat via the central helper (includes chart.offset). The old inline
+  // form `beatAtFloat(currentTime)` dropped the offset, so animated shader uniforms
+  // resolved at the wrong beat whenever offset ≠ 0 (finding T3 / L6).
+  const currentBeat = getPlayheadBeat({ time: currentTime });
 
   // Resolve current uniform values at the current beat
   const uniforms = useMemo(() => {

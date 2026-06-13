@@ -23,6 +23,7 @@ import {
 import { useSettingsStore } from "../../stores/settingsStore";
 import { GameRenderer } from "../../canvas/gameRenderer";
 import { BpmList } from "../../utils/bpmList";
+import { playbackOffsetSeconds } from "../../utils/playhead";
 
 // ============================================================
 // Configurable dimensions for the mini preview
@@ -72,7 +73,7 @@ export function MiniGamePreview() {
       const currentTime = as_.currentTime;
 
       // Audio latency compensation for game preview visuals
-      const effectiveOffset = cs.chart.offset + ss.audioLatencyMs / 1000;
+      const effectiveOffset = playbackOffsetSeconds(true);
 
       renderer.render(
         cs.chart.lines,

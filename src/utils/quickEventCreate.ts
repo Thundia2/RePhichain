@@ -7,12 +7,11 @@ import { beatToFloat, floatToBeat } from "../types/chart";
 import { useChartStore } from "../stores/chartStore";
 import { useEditorStore } from "../stores/editorStore";
 import { useSettingsStore } from "../stores/settingsStore";
-import { useAudioStore } from "../stores/audioStore";
 import { evaluateLineEventsWithLayers } from "../canvas/events";
 import { resolveActiveKindEvents } from "./eventRouting";
 import { generateEventId } from "./noteUid";
 import { DEFAULT_EVENT_VALUES } from "../constants/eventConfig";
-import { BpmList } from "./bpmList";
+import { getPlayheadBeat } from "./playhead";
 
 /**
  * Create a constant event at the given beat/value.
@@ -73,9 +72,7 @@ export function createQuickTransition(
   const duration = durationBeats ?? ss.quickTransitionDuration;
   const easingType = easing ?? (ss.quickTransitionEasing as EasingType);
 
-  const { currentTime } = useAudioStore.getState();
-  const bpmList = new BpmList(cs.chart.bpm_list);
-  const currentBeat = bpmList.beatAtFloat(Math.max(0, currentTime - cs.chart.offset));
+  const currentBeat = getPlayheadBeat({ clampNonNegative: true });
   const state = evaluateLineEventsWithLayers(line.events, line.event_layers, currentBeat);
 
   const currentValueMap: Record<string, number> = {

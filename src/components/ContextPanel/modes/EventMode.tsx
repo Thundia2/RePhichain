@@ -11,10 +11,9 @@ import React, { useMemo } from "react";
 import { useEditorStore } from "../../../stores/editorStore";
 import { useSelectedLineIndex, useSelectedEventIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
-import { useAudioStore } from "../../../stores/audioStore";
 import { useFavoritesStore } from "../../../stores/favoritesStore";
 import { useToastStore } from "../../../stores/toastStore";
-import { BpmList } from "../../../utils/bpmList";
+import { getPlayheadBeat } from "../../../utils/playhead";
 import type { LineEvent, EasingType } from "../../../types/chart";
 import { beatToFloat, floatToBeat } from "../../../types/chart";
 import { EVENT_COLORS } from "../../../constants/eventConfig";
@@ -122,9 +121,7 @@ function EditTab() {
   // ---- Split: split primary event at playhead into two events ----
   const handleSplit = () => {
     const cs = useChartStore.getState();
-    const { currentTime } = useAudioStore.getState();
-    const bpmList = new BpmList(cs.chart.bpm_list);
-    const playheadBeat = bpmList.beatAtFloat(currentTime - cs.chart.offset);
+    const playheadBeat = getPlayheadBeat();
     const startBeat = beatToFloat(event.start_beat);
     const endBeat = beatToFloat(event.end_beat);
     // Playhead must be strictly between start and end

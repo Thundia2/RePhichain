@@ -14,7 +14,7 @@
 // editor tabs (overrideLineIndex, scrollBeatKey, followPlaybackKey).
 // ============================================================
 
-import { useRef, useEffect, useCallback, useMemo } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { useEditorStore } from "../../stores/editorStore";
@@ -32,7 +32,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { UnrolledRenderer, effectiveGutterWidth, EVENT_DIAMOND_HIT_RADIUS, EVENT_GUTTER_EXTRA } from "../../canvas/unrolledRenderer";
 import type { UnrolledOverlayLine } from "../../canvas/unrolledRenderer";
 import { BEAT_GUTTER_WIDTH } from "../../constants/canvasConstants";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { beatToFloat } from "../../types/chart";
 import { snapBeat, floatToBeat } from "../../utils/beat";
 import { snapX } from "../../utils/xSnap";
@@ -145,11 +145,7 @@ export function UnrolledCanvas({
   const eventPlacementDragRef = useRef<EventPlacementDragState | null>(null);
 
   // Store selectors
-  const chart = useChartStore((s) => s.chart);
   const isLoaded = useChartStore((s) => s.isLoaded);
-  const bpmList = useMemo(() => new BpmList(chart.bpm_list), [chart.bpm_list]);
-  const bpmListRef = useRef(bpmList);
-  useEffect(() => { bpmListRef.current = bpmList; }, [bpmList]);
 
   // ---- Canvas sizing ----
   const resizeCanvas = useCallback(() => {
@@ -228,8 +224,7 @@ export function UnrolledCanvas({
       const line = cs.chart.lines[lineIdx];
       if (!line) { rafRef.current = requestAnimationFrame(animate); return; }
 
-      const bl = bpmListRef.current;
-      const currentBeat = bl.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
+      const currentBeat = getPlayheadBeat({ clampNonNegative: true });
       const dpr = window.devicePixelRatio || 1;
       const w = cnv.width / dpr;
       const h = cnv.height / dpr;

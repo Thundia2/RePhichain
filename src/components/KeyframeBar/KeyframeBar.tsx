@@ -28,6 +28,7 @@ import { useGroupStore } from "../../stores/groupStore";
 import { useBookmarkStore } from "../../stores/bookmarkStore";
 import type { Bookmark } from "../../types/bookmark";
 import { getCachedBpmList } from "../../stores/chartStore";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import type { Beat, LineEvent, LineEventKind, EasingType } from "../../types/chart";
 import { EVENT_COLORS, KIND_SHORT, CORE_KINDS, DEFAULT_EVENT_VALUES } from "../../constants/eventConfig";
@@ -299,7 +300,6 @@ export function KeyframeBar() {
 
       const cs = useChartStore.getState();
       const es = useEditorStore.getState();
-      const { currentTime } = useAudioStore.getState();
 
       const lineIdx = getSelectedLineIndex();
       if (lineIdx === null || lineIdx < 0 || lineIdx >= cs.chart.lines.length) {
@@ -571,8 +571,8 @@ export function KeyframeBar() {
       }
 
       // ---- Playhead (current time) ----
-      const bpmList = getCachedBpmList();
-      const curBeat = bpmList.beatAtFloat(currentTime - cs.chart.offset);
+      // rAF render loop → imperative live-clock read, raw playhead beat.
+      const curBeat = getPlayheadBeat();
       const playheadPx = beatToPixel(curBeat, width);
 
       if (playheadPx >= 0 && playheadPx <= width) {
@@ -1204,12 +1204,11 @@ export function KeyframeBar() {
                 onClick={() => {
                   if (!contextMenu?.hit) return;
                   const cs = useChartStore.getState();
-                  const as_ = useAudioStore.getState();
                   const lineIdx = getSelectedLineIndex();
                   if (lineIdx === null) return;
 
-                  const bpmList = getCachedBpmList();
-                  const splitBeat = bpmList.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
+                  // Imperative read in a click handler → raw playhead beat (clamped ≥0).
+                  const splitBeat = getPlayheadBeat({ clampNonNegative: true });
                   const event = contextMenu.hit.event;
                   const startBeat = beatToFloat(event.start_beat);
                   const endBeat = beatToFloat(event.end_beat);

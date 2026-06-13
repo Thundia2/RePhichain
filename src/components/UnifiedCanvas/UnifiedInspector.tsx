@@ -14,7 +14,7 @@ import {
   useSelectedEventIndices,
 } from "../../stores/selection";
 import { useAudioStore } from "../../stores/audioStore";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { evaluateLineEventsWithLayers } from "../../canvas/events";
 import type { Note, LineEvent, NoteKind, EasingType, LineEventKind } from "../../types/chart";
 import { Field, SelectField, BeatField, EASING_OPTIONS } from "../common/FormFields";
@@ -418,11 +418,8 @@ export function UnifiedInspector() {
   const evalValues = useMemo(() => {
     if (!line) return null;
     try {
-      const { currentTime } = useAudioStore.getState();
-      const cs = useChartStore.getState();
-      const bpmList = new BpmList(cs.chart.bpm_list);
-      const time = currentTime - cs.chart.offset;
-      const state = evaluateLineEventsWithLayers(line.events, line.event_layers, bpmList.beatAtFloat(time));
+      const beat = getPlayheadBeat();
+      const state = evaluateLineEventsWithLayers(line.events, line.event_layers, beat);
       return state;
     } catch {
       return null;
@@ -431,10 +428,7 @@ export function UnifiedInspector() {
 
   const currentBeat = useMemo(() => {
     try {
-      const { currentTime } = useAudioStore.getState();
-      const cs = useChartStore.getState();
-      const bpmList = new BpmList(cs.chart.bpm_list);
-      return bpmList.beatAtFloat(currentTime - cs.chart.offset);
+      return getPlayheadBeat();
     } catch {
       return 0;
     }

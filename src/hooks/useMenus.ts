@@ -13,7 +13,6 @@
 
 import { useChartStore } from "../stores/chartStore";
 import { useTabStore } from "../stores/tabStore";
-import { useAudioStore } from "../stores/audioStore";
 import { saveProject } from "../utils/ipc";
 import type { ExtraConfig } from "../types/extra";
 import type { PanelId } from "../types/editor";
@@ -28,7 +27,7 @@ import { useBookmarkStore } from "../stores/bookmarkStore";
 import { useToastStore } from "../stores/toastStore";
 import { showConfirm } from "../components/common/ConfirmDialog";
 import { beatToFloat, floatToBeat } from "../types/chart";
-import { BpmList } from "../utils/bpmList";
+import { getPlayheadBeat } from "../utils/playhead";
 import { evaluateEasing } from "../canvas/easings";
 import { triggerImportChart } from "../utils/importChart";
 
@@ -274,15 +273,13 @@ export function useMenus(
           action: () => {
             // Split all selected events at the current playhead beat
             const cs = useChartStore.getState();
-            const as_ = useAudioStore.getState();
             const lineIndex = getSelectedLineIndex();
             const eventIndices = getSelectedEventIndices();
             if (lineIndex === null || eventIndices.length === 0) return;
             const line = cs.chart.lines[lineIndex];
             if (!line) return;
 
-            const bpmList = new BpmList(cs.chart.bpm_list);
-            const splitBeat = bpmList.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
+            const splitBeat = getPlayheadBeat({ clampNonNegative: true });
 
             // Process in reverse order to preserve indices during replaceEvent calls
             const sorted = [...eventIndices].sort((a, b) => b - a);

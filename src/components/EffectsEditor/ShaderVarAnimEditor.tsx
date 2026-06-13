@@ -13,12 +13,11 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useAudioStore } from "../../stores/audioStore";
-import { useChartStore } from "../../stores/chartStore";
 import type { AnimationEvent, AnimatedVariable } from "../../types/extra";
 import type { Beat } from "../../types/chart";
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import { SHADER_DEFAULTS } from "../../canvas/shaders";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { safeParseNumber } from "../common/FormFields";
 import { ActionButton, INPUT_STYLE, SELECT_STYLE } from "../common/UIKit";
 import { RPE_EASING_MAP } from "../../utils/rpeImport";
@@ -255,10 +254,11 @@ function MiniKeyframeStrip({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const currentTime = useAudioStore((s) => s.currentTime);
-  const bpmListRaw = useChartStore((s) => s.chart.bpm_list);
 
-  const bpmCalc = useMemo(() => new BpmList(bpmListRaw), [bpmListRaw]);
-  const currentBeat = bpmCalc.beatAtFloat(currentTime);
+  // Playhead beat via the central helper (includes chart.offset). The old inline
+  // form dropped the offset, so the "add at current beat" / playhead landed
+  // `offset` beats off from the animation events (finding T3 / L6).
+  const currentBeat = getPlayheadBeat({ time: currentTime });
 
   // Compute beat range from events
   const { minBeat, maxBeat } = useMemo(() => {
@@ -440,9 +440,9 @@ function KeyframeEditor({
   onChange: (events: AnimationEvent[]) => void;
 }) {
   const currentTime = useAudioStore((s) => s.currentTime);
-  const bpmListRaw = useChartStore((s) => s.chart.bpm_list);
-  const bpmCalc = useMemo(() => new BpmList(bpmListRaw), [bpmListRaw]);
-  const currentBeat = bpmCalc.beatAtFloat(currentTime);
+  // Playhead beat via the central helper (includes chart.offset — was dropped
+  // before, finding T3 / L6).
+  const currentBeat = getPlayheadBeat({ time: currentTime });
 
   const addAtCurrentBeat = useCallback(() => {
     // Find what value to use at the current beat

@@ -6,9 +6,8 @@ import type { EventPreset } from "../types/preset";
 import type { LineEvent, LineEventKind } from "../types/chart";
 import { floatToBeat } from "../types/chart";
 import { useChartStore } from "../stores/chartStore";
-import { useAudioStore } from "../stores/audioStore";
 import { evaluateLineEventsWithLayers } from "../canvas/events";
-import { BpmList } from "./bpmList";
+import { getPlayheadBeat } from "./playhead";
 
 function resolveToken(
   token: string | number,
@@ -38,9 +37,7 @@ export function applyPresetAtPlayhead(
   const line = cs.chart.lines[lineIndex];
   if (!line) return;
 
-  const { currentTime } = useAudioStore.getState();
-  const bpmList = new BpmList(cs.chart.bpm_list);
-  const insertBeat = bpmList.beatAtFloat(Math.max(0, currentTime - cs.chart.offset));
+  const insertBeat = getPlayheadBeat({ clampNonNegative: true });
 
   const state = evaluateLineEventsWithLayers(line.events, line.event_layers, insertBeat);
 

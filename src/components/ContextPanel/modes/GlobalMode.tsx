@@ -24,7 +24,7 @@ import { performCopy, performCut, performPaste } from "../../../hooks/useClipboa
 import { useSettingsStore } from "../../../stores/settingsStore";
 import { useToastStore } from "../../../stores/toastStore";
 import { selectByRange } from "../../../utils/batchNoteOps";
-import { BpmList } from "../../../utils/bpmList";
+import { getPlayheadBeat } from "../../../utils/playhead";
 import type { EditorTool } from "../../../types/editor";
 
 // Panel components rendered inline when a panel button is clicked
@@ -731,10 +731,7 @@ function SelectByRangeSection() {
 
   // Quick fill: set start from current playhead position
   const handleFromPlayhead = () => {
-    const { currentTime } = useAudioStore.getState();
-    const cs = useChartStore.getState();
-    const bpmList = new BpmList(cs.chart.bpm_list);
-    const beat = bpmList.beatAtFloat(currentTime - cs.chart.offset);
+    const beat = getPlayheadBeat();
     setStartBeat(beat.toFixed(2));
   };
 

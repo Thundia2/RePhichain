@@ -2,6 +2,7 @@
 // Provides seek-to-prev/next bookmark and add-marker-at-beat functionality
 
 import { BpmList } from "./bpmList";
+import { getPlayheadBeat } from "./playhead";
 import { beatToFloat, floatToBeat } from "./beat";
 import { useChartStore } from "../stores/chartStore";
 import { useAudioStore } from "../stores/audioStore";
@@ -11,11 +12,7 @@ import type { Bookmark } from "../types/bookmark";
 
 /** Get the current playhead beat as a float, accounting for chart offset */
 function getCurrentBeatFloat(): number {
-  const chart = useChartStore.getState().chart;
-  const currentTime = useAudioStore.getState().currentTime;
-  const offset = chart.offset ?? 0;
-  const bpm = new BpmList(chart.bpm_list);
-  return bpm.beatAtFloat(currentTime - offset);
+  return getPlayheadBeat();
 }
 
 /**

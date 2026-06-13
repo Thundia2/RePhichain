@@ -14,9 +14,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAudioStore } from "../../stores/audioStore";
-import { useChartStore } from "../../stores/chartStore";
 import { audioEngine } from "../../audio/audioEngine";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { Pill } from "../common/UIKit";
 
 // ============================================================
@@ -50,11 +49,10 @@ export function TransportBar() {
     let raf = 0;
     function tick() {
       const { currentTime } = useAudioStore.getState();
-      const cs = useChartStore.getState();
       setDisplayTime(currentTime);
       try {
-        const bpmList = new BpmList(cs.chart.bpm_list);
-        setDisplayBeat(bpmList.beatAtFloat(currentTime - cs.chart.offset));
+        // rAF tick reads the live clock imperatively → raw playhead beat.
+        setDisplayBeat(getPlayheadBeat());
       } catch {
         setDisplayBeat(0);
       }
@@ -202,9 +200,7 @@ export function TransportBar() {
         {/* Set loop start */}
         <button
           onClick={() => {
-            const cs = useChartStore.getState();
-            const bpmList = new BpmList(cs.chart.bpm_list);
-            const beat = bpmList.beatAtFloat(useAudioStore.getState().currentTime - cs.chart.offset);
+            const beat = getPlayheadBeat();
             useAudioStore.getState().setLoopStart(beat);
           }}
           style={{
@@ -222,9 +218,7 @@ export function TransportBar() {
         {/* Set loop end */}
         <button
           onClick={() => {
-            const cs = useChartStore.getState();
-            const bpmList = new BpmList(cs.chart.bpm_list);
-            const beat = bpmList.beatAtFloat(useAudioStore.getState().currentTime - cs.chart.offset);
+            const beat = getPlayheadBeat();
             useAudioStore.getState().setLoopEnd(beat);
           }}
           style={{

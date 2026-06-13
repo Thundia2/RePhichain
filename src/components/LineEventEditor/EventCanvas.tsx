@@ -14,7 +14,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { EventCanvasRenderer } from "../../canvas/eventCanvasRenderer";
 import { evaluateLineEventsWithLayers } from "../../canvas/events";
 import { resolveActiveKindEvents } from "../../utils/eventRouting";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, beatToFloat, floatToBeat } from "../../types/chart";
 import type { LineEvent, LineEventKind } from "../../types/chart";
 
@@ -121,12 +121,10 @@ export function EventCanvas({ lineIndex }: EventCanvasProps) {
 
   // Get current beat from editor store or audio
   const getCurrentBeat = useCallback(() => {
-    const { currentTime, isPlaying } = useAudioStore.getState();
+    const { isPlaying } = useAudioStore.getState();
     const es = useEditorStore.getState();
     if (isPlaying) {
-      const cs = useChartStore.getState();
-      const bpmList = new BpmList(cs.chart.bpm_list);
-      return bpmList.beatAtFloat(currentTime - cs.chart.offset);
+      return getPlayheadBeat();
     }
     return es.eventEditorCurrentBeat;
   }, []);

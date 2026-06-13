@@ -9,8 +9,7 @@
 import { useState } from "react";
 import { getSelectedLineIndex } from "../../stores/selection";
 import { useChartStore } from "../../stores/chartStore";
-import { useAudioStore } from "../../stores/audioStore";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { getClipboard } from "../../hooks/useClipboard";
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import type { Note, LineEvent } from "../../types/chart";
@@ -39,9 +38,7 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
     if (selectedLineIndex === null) return;
 
     // Compute paste offset: paste at the current playback position
-    const { currentTime } = useAudioStore.getState();
-    const bpmList = new BpmList(cs.chart.bpm_list);
-    const currentBeat = bpmList.beatAtFloat(currentTime - cs.chart.offset);
+    const currentBeat = getPlayheadBeat();
 
     // The base beat from clipboard is the earliest item's beat
     const baseBeat = clipboard.baseBeat;

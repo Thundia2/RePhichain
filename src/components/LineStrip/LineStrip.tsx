@@ -30,6 +30,7 @@ import { useGroupStore } from "../../stores/groupStore";
 import { useTabStore } from "../../stores/tabStore";
 import { evaluateLineEventsWithLayers } from "../../canvas/events";
 import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { beatToFloat } from "../../utils/beat";
 import type { LineEvent, LineEventValue, EventLayer, Note } from "../../types/chart";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -457,11 +458,8 @@ export function LineStrip() {
             }}
             onDoubleClick={() => {
               selectLineByIndex(index);
-              // Compute current beat from audio position and open per-line unrolled editor
-              const as_ = useAudioStore.getState();
-              const cs = useChartStore.getState();
-              const bl = new BpmList(cs.chart.bpm_list);
-              const currentBeat = bl.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
+              // Imperative read in a click handler → raw playhead beat (clamped to ≥0).
+              const currentBeat = getPlayheadBeat({ clampNonNegative: true });
               openUnrolledLineEditor(index, line.name || `Line ${index + 1}`, currentBeat);
             }}
             style={{

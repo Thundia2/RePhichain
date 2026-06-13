@@ -11,7 +11,7 @@ import { useAudioStore } from "../../stores/audioStore";
 import { useSelectedLineIndex } from "../../stores/selection";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { audioEngine } from "../../audio/audioEngine";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { floatToBeat } from "../../types/chart";
 import type { LineEvent } from "../../types/chart";
 import { ensureTextLine } from "../../utils/textEventHelpers";
@@ -41,10 +41,7 @@ export function LyricsSyncDialog({ open, onClose }: LyricsSyncDialogProps) {
       if (e.key === "Enter" || e.key === "q" || e.key === "Q") {
         e.preventDefault();
 
-        const cs = useChartStore.getState();
-        const { currentTime } = useAudioStore.getState();
-        const bpmList = new BpmList(cs.chart.bpm_list);
-        const beat = bpmList.beatAtFloat(Math.max(0, currentTime - cs.chart.offset));
+        const beat = getPlayheadBeat({ clampNonNegative: true });
 
         setSyncedBeats((prev) => [...prev, beat]);
         setCurrentLyricIndex((prev) => {

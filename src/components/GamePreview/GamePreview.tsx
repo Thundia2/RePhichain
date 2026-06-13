@@ -37,6 +37,7 @@ import { PostProcessPipeline } from "../../canvas/postProcess";
 import { VideoBackgroundManager } from "../../canvas/videoBackground";
 import { HitSoundManager } from "../../audio/hitSoundManager";
 import { BpmList } from "../../utils/bpmList";
+import { playbackOffsetSeconds } from "../../utils/playhead";
 
 export function GamePreview() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -299,7 +300,7 @@ export function GamePreview() {
 
       // Audio latency compensation: shift game preview visuals so notes
       // align with what the user actually hears through their hardware.
-      const effectiveOffset = cs.chart.offset + ss.audioLatencyMs / 1000;
+      const effectiveOffset = playbackOffsetSeconds(true);
 
       // Compute current beat for shader effects
       const currentBeat = bpmList.beatAtFloat(latestTime - effectiveOffset);
@@ -414,7 +415,7 @@ export function GamePreview() {
     if (!bpmList) return;
 
     // Use effectiveOffset so click-to-select matches the latency-shifted visuals
-    const effectiveOffset = cs.chart.offset + useSettingsStore.getState().audioLatencyMs / 1000;
+    const effectiveOffset = playbackOffsetSeconds(true);
     const currentBeat = bpmList.beatAtFloat(currentTime - effectiveOffset);
     const hitIndex = activeRenderer.hitTestLine(
       cs.chart.lines, currentBeat, clickX, clickY, rect.width, rect.height,

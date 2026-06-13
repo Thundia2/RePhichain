@@ -21,8 +21,7 @@ import {
   getSelectedEventIndices,
   getMultiSelectedLineIndices,
 } from "../stores/selection";
-import { useAudioStore } from "../stores/audioStore";
-import { BpmList } from "../utils/bpmList";
+import { getPlayheadBeat } from "../utils/playhead";
 import { beatToFloat, floatToBeat } from "../types/chart";
 import type { Note, LineEvent, Beat } from "../types/chart";
 
@@ -113,9 +112,7 @@ export function performPaste(): void {
   const lineIndex = getSelectedLineIndex();
   if (lineIndex === null) return;
 
-  const { currentTime } = useAudioStore.getState();
-  const bpmList = new BpmList(cs.chart.bpm_list);
-  const currentBeat = bpmList.beatAtFloat(currentTime - cs.chart.offset);
+  const currentBeat = getPlayheadBeat();
   const beatOffset = currentBeat - clipboard.baseBeat;
 
   // Assign fresh uids up front so pasted notes don't collide with their source
@@ -178,9 +175,7 @@ export function useClipboard() {
     if (targetLines.length === 0) return;
 
     // Compute beat offset from the current playback position
-    const { currentTime } = useAudioStore.getState();
-    const bpmList = new BpmList(cs.chart.bpm_list);
-    const currentBeat = bpmList.beatAtFloat(currentTime - cs.chart.offset);
+    const currentBeat = getPlayheadBeat();
     const beatOffset = currentBeat - clipboard.baseBeat;
 
     // Build mutations for all target lines — single undo entry via batchMultiLineMutations

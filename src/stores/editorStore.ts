@@ -17,6 +17,10 @@ import type { EditorTool, NoteSideFilter, LineSortMode, PanelId } from "../types
 import type { Beat, NoteKind, LineEventKind } from "../types/chart";
 import { beatToFloat } from "../types/chart";
 import { snapBeat } from "../utils/beat";
+// Central playhead-beat helper (L6). Static import is safe: playhead → {audio,
+// chart, settings} stores, none of which import editorStore back (no cycle), which
+// is exactly what lets us drop the old broken require() below (finding S2).
+import { getPlayheadBeat } from "../utils/playhead";
 
 export interface DragSelectionRect {
   x1: number; y1: number;
@@ -658,15 +662,11 @@ export const useEditorStore = create<EditorState>()((set) => ({
       // Deactivating — reset
       return { stepRecordActive: false, stepRecordNotesPlaced: 0 };
     }
-    // Activating — set current beat from playhead position.
-    // Import audio/chart stores lazily to avoid circular dependency issues
-    // at module load time. These stores exist at runtime.
-    const { useAudioStore } = require("./audioStore");
-    const { useChartStore, getCachedBpmList } = require("./chartStore");
-    const as_ = useAudioStore.getState();
-    const cs = useChartStore.getState();
-    const bpmList = getCachedBpmList();
-    const currentBeat = bpmList.beatAtFloat(as_.currentTime - cs.chart.offset);
+    // Activating — set the current beat from the playhead position.
+    // (Previously used require() to dodge a load-time cycle; that throws
+    // ReferenceError in the Vite ESM bundle, so step-record was dead — finding S2.
+    // getPlayheadBeat is a static import with no cycle.)
+    const currentBeat = getPlayheadBeat();
     const snapped = beatToFloat(snapBeat(currentBeat, s.density));
     return {
       stepRecordActive: true,

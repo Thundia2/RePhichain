@@ -4,10 +4,10 @@
 
 import { useRef, useEffect, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
-import { useAudioStore } from "../../stores/audioStore";
 import { audioEngine } from "../../audio/audioEngine";
 import { beatToFloat } from "../../types/chart";
 import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 
 export function TimelineMinimap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -23,7 +23,6 @@ export function TimelineMinimap() {
     if (!ctx) return;
 
     let raf: number;
-    const bpmList = new BpmList(bpmPoints);
 
     function draw() {
       if (!canvas || !ctx) return;
@@ -74,9 +73,8 @@ export function TimelineMinimap() {
         }
       }
 
-      // Playhead
-      const { currentTime } = useAudioStore.getState();
-      const currentBeat = bpmList.beatAtFloat(Math.max(0, currentTime - offset));
+      // Playhead — getState() inside the rAF draw tick, so raw (imperative) read.
+      const currentBeat = getPlayheadBeat({ clampNonNegative: true });
       const playheadX = (currentBeat / maxBeat) * width;
       ctx.fillStyle = "rgba(108, 138, 255, 0.9)";
       ctx.fillRect(playheadX - 1, 0, 2, height);

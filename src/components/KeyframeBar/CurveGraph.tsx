@@ -19,8 +19,7 @@ import {
   useSelectedEventIndices,
   setEventSelectionByIndex,
 } from "../../stores/selection";
-import { useAudioStore } from "../../stores/audioStore";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import { renderCurveGraph, type OverlayLine } from "./CurveGraphRenderer";
 import {
@@ -89,9 +88,8 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
       // Get data
       const cs = useChartStore.getState();
       const es = useEditorStore.getState();
-      const { currentTime } = useAudioStore.getState();
-      const bpmList = new BpmList(cs.chart.bpm_list);
-      const currentBeat = bpmList.beatAtFloat(Math.max(0, currentTime - cs.chart.offset));
+      // rAF render loop reads the live clock imperatively → raw playhead beat (clamped ≥0).
+      const currentBeat = getPlayheadBeat({ clampNonNegative: true });
 
       const lineIndex = getSelectedLineIndex();
       const line = lineIndex !== null ? cs.chart.lines[lineIndex] : null;

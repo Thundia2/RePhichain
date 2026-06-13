@@ -15,7 +15,7 @@ import { useAudioStore } from "../../stores/audioStore";
 import { useTabStore } from "../../stores/tabStore";
 import { useGroupStore } from "../../stores/groupStore";
 import { evaluateLineEventsWithLayers, getFirstAppearanceBeat } from "../../canvas/events";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import type { LineSortMode } from "../../types/editor";
 import { ActionButton, SELECT_STYLE } from "../common/UIKit";
 import { LINE_CATEGORY_COLORS, LINE_CATEGORY_LABELS, autoCategorize } from "./lineCategories";
@@ -33,15 +33,15 @@ function useThrottledBeat(): number {
   const offset = useChartStore((s) => s.chart.offset);
 
   useEffect(() => {
-    const bpmList = new BpmList(bpmPoints);
-
     const unsub = useAudioStore.subscribe((state) => {
       const now = performance.now();
       if (now - lastUpdate.current < 100) return;
       lastUpdate.current = now;
 
-      const adjustedTime = Math.max(0, state.currentTime - offset);
-      const currentBeat = bpmList.beatAtFloat(adjustedTime);
+      // Pass the subscription's state.currentTime so the throttled beat tracks the
+      // live clock; raw playhead (clamped ≥0). bpmPoints/offset stay as effect deps
+      // to re-subscribe if the chart's tempo map changes.
+      const currentBeat = getPlayheadBeat({ time: state.currentTime, clampNonNegative: true });
       setBeat(currentBeat);
     });
 

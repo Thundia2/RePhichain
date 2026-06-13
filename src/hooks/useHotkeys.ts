@@ -28,7 +28,7 @@ import { audioEngine } from "../audio/audioEngine";
 import { CANVAS_WIDTH } from "../types/chart";
 import type { BookmarkPreset } from "../types/bookmark";
 import { addBeats, subtractBeats, minimumBeat, snapBeat, beatToFloat, floatToBeat } from "../utils/beat";
-import { BpmList } from "../utils/bpmList";
+import { getPlayheadBeat } from "../utils/playhead";
 import { addMarkerAtCurrentBeat, seekToPrevBookmark, seekToNextBookmark } from "../utils/bookmarkNavigation";
 import type { EditorTool } from "../types/editor";
 import { useToastStore } from "../stores/toastStore";
@@ -343,8 +343,7 @@ export function useGlobalHotkeys(callbacks: {
     const as_ = useAudioStore.getState();
     const cs = useChartStore.getState();
     if (!cs.isLoaded) return;
-    const bpmList = new BpmList(cs.chart.bpm_list);
-    const currentBeat = bpmList.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
+    const currentBeat = getPlayheadBeat({ clampNonNegative: true });
     as_.setLoopStart(currentBeat);
   }, { preventDefault: true });
 
@@ -353,8 +352,7 @@ export function useGlobalHotkeys(callbacks: {
     const as_ = useAudioStore.getState();
     const cs = useChartStore.getState();
     if (!cs.isLoaded) return;
-    const bpmList = new BpmList(cs.chart.bpm_list);
-    const currentBeat = bpmList.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
+    const currentBeat = getPlayheadBeat({ clampNonNegative: true });
     as_.setLoopEnd(currentBeat);
   }, { preventDefault: true });
 
@@ -688,19 +686,19 @@ export function useGlobalHotkeys(callbacks: {
   const improvPlace = (preset: BookmarkPreset) => {
     const es = useEditorStore.getState();
     const as_ = useAudioStore.getState();
-    const cs = useChartStore.getState();
 
     if (!es.improvisationMode || !as_.isPlaying) return;
     const lineIndex = getSelectedLineIndex();
     if (lineIndex === null) return;
 
-    const bpmList = new BpmList(cs.chart.bpm_list);
     const bs = useBookmarkStore.getState();
 
-    // Latency compensation: shift time back so the marker lands
-    // where the sound was, not where the playhead is when your finger hits the key
+    // INPUT-latency compensation: shift the TIME back (bookmarkStore.latencyOffset)
+    // so the marker lands where the sound was, not where the playhead is when your
+    // finger hits the key. This is distinct from render latency (audioLatencyMs) —
+    // we apply it via the helper's `time` override; the offset+bpm policy is shared.
     const compensatedTime = as_.currentTime + (bs.latencyOffset / 1000);
-    const currentBeat = bpmList.beatAtFloat(compensatedTime - cs.chart.offset);
+    const currentBeat = getPlayheadBeat({ time: compensatedTime });
     const beat = snapBeat(currentBeat, es.density);
 
     bs.addBookmark(beat, 0, true, lineIndex, preset);

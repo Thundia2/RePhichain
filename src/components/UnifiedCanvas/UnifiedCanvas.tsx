@@ -45,6 +45,10 @@ import { HitEffectManager } from "../../canvas/hitEffects";
 import { BpmList } from "../../utils/bpmList";
 import { beatToFloat, floatToBeat, CANVAS_WIDTH } from "../../types/chart";
 import { getXSnapPositions } from "../../utils/xSnap";
+// Central playhead-beat policy (L6). latencyCompensated:true → the game-render
+// space (offset + audioLatencyMs); the hit-tests below MUST use it so clicks land
+// on the latency-shifted visuals the renderers draw. grep effectiveOffset.
+import { getPlayheadBeat, playbackOffsetSeconds } from "../../utils/playhead";
 
 // Interaction modules
 import {
@@ -152,13 +156,11 @@ export function UnifiedCanvas() {
   }
   /* eslint-enable react-hooks/refs */
 
-  // ---- Get current beat ----
+  // ---- Get current beat (raw chart beat — editing / placement space) ----
+  // Note: hit-testing the RENDERED visuals does NOT use this — it uses the
+  // latency-compensated beat (see handleMouseDown). grep effectiveOffset.
   const getCurrentBeat = useCallback((): number => {
-    const { currentTime } = useAudioStore.getState();
-    const cs = useChartStore.getState();
-    const bpmList = bpmListRef.current;
-    if (!bpmList) return 0;
-    return bpmList.beatAtFloat(currentTime - cs.chart.offset);
+    return getPlayheadBeat();
   }, []);
 
   // ---- Get current time (offset-adjusted) ----
@@ -354,9 +356,11 @@ export function UnifiedCanvas() {
       const dpr = window.devicePixelRatio || 1;
       const vp = es.canvasViewport;
 
-      // Audio latency compensation for game preview visuals only.
-      // Editor interaction helpers (getCurrentBeat/getCurrentTime) stay on raw chart.offset.
-      const effectiveOffset = cs.chart.offset + ss.audioLatencyMs / 1000;
+      // Audio latency compensation for game preview visuals only (the renderers
+      // shift visuals to match what the user hears). Editor interaction helpers
+      // (getCurrentBeat/getCurrentTime) stay on raw chart.offset; the hit-tests in
+      // handleMouseDown use this same compensated offset. grep playbackOffsetSeconds.
+      const effectiveOffset = playbackOffsetSeconds(true);
 
       const renderOptions = {
         noteSize: ss.noteSize,
@@ -822,9 +826,10 @@ export function UnifiedCanvas() {
       // ---- Bookmark hit-testing ----
       const bsHit = useBookmarkStore.getState();
       if (bsHit.bookmarks.length > 0 && bpmListRef.current) {
-        const curBeatHit = bpmListRef.current.beatAtFloat(
-          useAudioStore.getState().currentTime - cs.chart.offset,
-        );
+        // Latency-compensated: the bookmark diamonds are DRAWN at the compensated
+        // beat (render loop, drawBookmarkOverlay), so hit-test at the same beat or
+        // clicks miss by audioLatencyMs worth of beats (L6 render-vs-hittest skew).
+        const curBeatHit = getPlayheadBeat({ latencyCompensated: true });
         const hitId = tryBookmarkHit(
           mouseX, mouseY, bsHit.bookmarks, bsHit.visibilityRange,
           curBeatHit, renderResult.lines, rect.width,
@@ -849,8 +854,10 @@ export function UnifiedCanvas() {
     // ---- Line hit-testing (falls through from above) ----
     const bpmList = bpmListRef.current;
     if (bpmList) {
-      const { currentTime } = useAudioStore.getState();
-      const currentBeat = bpmList.beatAtFloat(currentTime - cs.chart.offset);
+      // Latency-compensated to match where the renderer DREW the lines (it renders
+      // with effectiveOffset); raw offset here missed moving lines by the latency
+      // during playback / when audioLatencyMs ≠ 0 (L6 render-vs-hittest skew).
+      const currentBeat = getPlayheadBeat({ latencyCompensated: true });
       const hitIndex = renderer.hitTestLine(
         cs.chart.lines, currentBeat, mouseX, mouseY, rect.width, rect.height,
       );
@@ -893,11 +900,9 @@ export function UnifiedCanvas() {
     // Canvas space: X from -675 to +675, Y from -450 to +450
     const canvasX = (mouseX / rect.width - 0.5) * CANVAS_WIDTH;
     const canvasY = (0.5 - mouseY / rect.height) * (CANVAS_WIDTH * (900 / 1350));
-    const cs = useChartStore.getState();
-    const as_ = useAudioStore.getState();
-    const curBeat = bpmListRef.current
-      ? bpmListRef.current.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset))
-      : 0;
+    // Playhead beat for the HUD readout — raw editor space (the HUD shows the true
+    // chart beat, not the latency-shifted render beat); clamped to ≥ 0.
+    const curBeat = getPlayheadBeat({ clampNonNegative: true });
     cursorInfoRef.current = { canvasX, canvasY, beat: curBeat };
 
     const drag = dragRef.current;
@@ -984,9 +989,8 @@ export function UnifiedCanvas() {
       const selLineIdx = getSelectedLineIndex();
       const { isPlaying } = useAudioStore.getState();
       if (es.recordMode && isPlaying && selLineIdx !== null && bpmListRef.current) {
-        const currentBeat = bpmListRef.current.beatAtFloat(
-          useAudioStore.getState().currentTime - cs.chart.offset,
-        );
+        // Raw chart beat — captured keyframes land on the true musical beat.
+        const currentBeat = getPlayheadBeat();
         const lastBeat = es.recordedKeyframes.length > 0
           ? es.recordedKeyframes[es.recordedKeyframes.length - 1].beat : null;
         const kf = captureRecordKeyframe(
@@ -1053,9 +1057,8 @@ export function UnifiedCanvas() {
 
       // ---- Pattern tool: compute ghost notes ----
       if (es.activeTool === "place_pattern") {
-        const anchorBeat = bpmListRef.current
-          ? bpmListRef.current.beatAtFloat(Math.max(0, useAudioStore.getState().currentTime - useChartStore.getState().chart.offset))
-          : 0;
+        // Raw editor space, clamped — the pattern is placed at the true chart beat.
+        const anchorBeat = getPlayheadBeat({ clampNonNegative: true });
         es.setPatternGhostNotes(computePatternGhosts(es.patternConfig, anchorBeat));
       } else if (es.patternGhostNotes.length > 0) {
         // Clear ghost notes when switching away from pattern tool
@@ -1280,7 +1283,6 @@ export function UnifiedCanvas() {
           e.preventDefault();
           const canvasEl = canvasRef.current;
           const es = useEditorStore.getState();
-          const cs = useChartStore.getState();
           const selLineIdx = getSelectedLineIndex();
           if (!canvasEl || selLineIdx === null) return;
 
@@ -1295,10 +1297,8 @@ export function UnifiedCanvas() {
           const canvasX = (pixelX - centerX) / scale;
           const canvasY = -(pixelY - centerY) / scale;
 
-          // Get current beat
-          const { currentTime } = useAudioStore.getState();
-          const bpmList = new BpmList(cs.chart.bpm_list);
-          const beat = bpmList.beatAtFloat(Math.max(0, currentTime - cs.chart.offset));
+          // Current beat — raw editor space, clamped to ≥ 0 (placement target).
+          const beat = getPlayheadBeat({ clampNonNegative: true });
 
           setCanvasContextMenu({
             x: e.clientX,
