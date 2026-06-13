@@ -112,8 +112,22 @@ export const useAudioStore = create<AudioState>()((set, _get) => ({
     set((state) => ({ hitSoundEnabled: !state.hitSoundEnabled })),
 
   // ---- Loop region actions ----
-  setLoopStart: (beat) => set({ loopStartBeat: beat }),
-  setLoopEnd: (beat) => set({ loopEndBeat: beat }),
+  // H7: normalize so the stored region stays ordered (start <= end). The [ / ]
+  // hotkeys can set the markers out of order; an inverted region would otherwise
+  // render backwards and (without the tick's start<end guard) freeze the loop.
+  // Setting a marker past the other swaps them so the region stays valid.
+  setLoopStart: (beat) =>
+    set((s) =>
+      beat !== null && s.loopEndBeat !== null && beat > s.loopEndBeat
+        ? { loopStartBeat: s.loopEndBeat, loopEndBeat: beat }
+        : { loopStartBeat: beat },
+    ),
+  setLoopEnd: (beat) =>
+    set((s) =>
+      beat !== null && s.loopStartBeat !== null && beat < s.loopStartBeat
+        ? { loopStartBeat: beat, loopEndBeat: s.loopStartBeat }
+        : { loopEndBeat: beat },
+    ),
   toggleLoop: () => set((s) => ({ loopEnabled: !s.loopEnabled })),
   clearLoop: () => set({ loopEnabled: false, loopStartBeat: null, loopEndBeat: null }),
 

@@ -110,6 +110,16 @@ class AudioEngine {
           // O1: publish the loaded source so useOnsetDetection re-detects on a song
           // CHANGE even when musicLoaded never toggled (project swap).
           store.setMusicUrl(src);
+          // H8: if the user pressed play WHILE this was still decoding, play()
+          // skipped the howl (_loaded was still false) and only ran the timer.
+          // Start the howl now at the timer-advanced position so audio catches up,
+          // instead of the tick snapping back to the howl's 0 position (the freeze).
+          if (store.isPlaying) {
+            const id = howl.play();
+            this._soundId = id;
+            howl.rate(store.playbackRate, id);
+            howl.seek(store.currentTime, id);
+          }
           resolve();
         },
         onloaderror: (_id, err) => {
@@ -265,7 +275,16 @@ class AudioEngine {
       }
 
       // ---- Loop region: seek back to loop start when we reach loop end ----
-      if (store.loopEnabled && store.loopStartBeat !== null && store.loopEndBeat !== null) {
+      // H7: require a strictly forward region (start < end). An inverted or
+      // zero-length loop would seek back to a point at/after loopEnd and
+      // re-trigger every frame, freezing playback. Markers are also normalized
+      // to ordered on set (audioStore.setLoopStart/setLoopEnd).
+      if (
+        store.loopEnabled &&
+        store.loopStartBeat !== null &&
+        store.loopEndBeat !== null &&
+        store.loopStartBeat < store.loopEndBeat
+      ) {
         try {
           const cs = useChartStore.getState();
           // Use cached BpmList — avoids O(n) construction 60x/sec in loop mode
