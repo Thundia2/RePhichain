@@ -29,6 +29,12 @@ export interface AudioState {
   metronomeEnabled: boolean;
   hitSoundEnabled: boolean;
   musicLoaded: boolean;
+  /** URL of the currently-loaded audio source — engine-authoritative mirror of
+   *  audioEngine._currentUrl, set in its onload/unload. Reactive so
+   *  useOnsetDetection can treat a song CHANGE (not just a musicLoaded toggle) as
+   *  a re-detect trigger (O1): a project swap reloads audio without musicLoaded
+   *  ever going false, so the old [onsetEnabled, musicLoaded] deps never re-fired. */
+  musicUrl: string | null;
 
   // ---- Loop region ----
   loopEnabled: boolean;
@@ -61,6 +67,9 @@ export interface AudioState {
   setCurrentTime: (time: number) => void;
   setDuration: (duration: number) => void;
   setMusicLoaded: (loaded: boolean) => void;
+  /** Set the current audio source URL. Called by the engine on load (onload) and
+   *  unload so the value is authoritative. */
+  setMusicUrl: (url: string | null) => void;
   /** Internal: set playback rate state without calling engine (avoids circular call) */
   _setPlaybackRateInternal: (rate: number) => void;
 }
@@ -73,6 +82,7 @@ export const useAudioStore = create<AudioState>()((set, _get) => ({
   metronomeEnabled: false,
   hitSoundEnabled: true,
   musicLoaded: false,
+  musicUrl: null,
 
   // ---- Loop region ----
   loopEnabled: false,
@@ -117,5 +127,6 @@ export const useAudioStore = create<AudioState>()((set, _get) => ({
   // Q1: the ghost-song bug is fixed at its source (audioEngine load-generation
   // guard) — the stack-capturing DEBUG probe that used to live here is removed.
   setMusicLoaded: (loaded) => set({ musicLoaded: loaded }),
+  setMusicUrl: (url) => set({ musicUrl: url }),
   _setPlaybackRateInternal: (rate: number) => set({ playbackRate: rate }),
 }));

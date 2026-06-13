@@ -105,7 +105,11 @@ class AudioEngine {
           this._loaded = true;
           this._currentUrl = src; // Set after successful load (not before unload() clears it)
           const duration = howl.duration() ?? 0;
-          useAudioStore.getState().setDuration(duration);
+          const store = useAudioStore.getState();
+          store.setDuration(duration);
+          // O1: publish the loaded source so useOnsetDetection re-detects on a song
+          // CHANGE even when musicLoaded never toggled (project swap).
+          store.setMusicUrl(src);
           resolve();
         },
         onloaderror: (_id, err) => {
@@ -136,6 +140,7 @@ class AudioEngine {
     store.setDuration(0);
     store.setCurrentTime(0);
     store.pause();
+    store.setMusicUrl(null); // O1: no source loaded (cleared before each reload + on real unload)
   }
 
   /** Start or resume playback */
