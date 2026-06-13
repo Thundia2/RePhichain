@@ -131,9 +131,13 @@ export function ParametricDialog({ open, onClose }: ParametricDialogProps) {
       return;
     }
 
-    for (const event of events) {
-      cs.addEvent(selectedLineIndex, event);
-    }
+    // One undo entry (finding L1) + route flat<->layer (finding L3) so generated
+    // events land where the evaluator reads on a layered (RPE-imported) line.
+    cs.transaction(() => {
+      for (const event of events) {
+        cs.addEventRouted(selectedLineIndex, event);
+      }
+    });
 
     setError(null);
     onClose();

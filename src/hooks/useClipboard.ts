@@ -138,10 +138,12 @@ export function performPaste(): void {
       const duration = beatToFloat(event.end_beat) - beatToFloat(event.start_beat);
       const pasted: LineEvent = {
         ...structuredClone(event),
+        id: undefined, // fresh id (finding L2) — structuredClone carried the source id
         start_beat: offsetBeat(event.start_beat, beatOffset),
         end_beat: offsetBeat(event.start_beat, beatOffset + duration),
       };
-      cs.addEvent(lineIndex, pasted);
+      // Route flat<->layer (finding L3) so a paste onto a layered line is visible.
+      cs.addEventRouted(lineIndex, pasted);
     }
   });
 
@@ -194,6 +196,7 @@ export function useClipboard() {
           const duration = beatToFloat(event.end_beat) - beatToFloat(event.start_beat);
           return {
             ...structuredClone(event),
+            id: undefined, // fresh id (finding L2) — avoid duplicate event ids across copies
             start_beat: offsetBeat(event.start_beat, beatOffset),
             end_beat: offsetBeat(event.start_beat, beatOffset + duration),
           };
