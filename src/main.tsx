@@ -181,6 +181,7 @@ if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__editorStore = useEditorStore;
   (window as unknown as Record<string, unknown>).__tabStore = useTabStore;
   (window as unknown as Record<string, unknown>).__respackStore = useRespackStore;
+  (window as unknown as Record<string, unknown>).__settingsStore = useSettingsStore;
 }
 
 // Initialize respacks from IndexedDB (non-blocking)

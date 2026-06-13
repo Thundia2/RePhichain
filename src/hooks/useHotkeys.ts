@@ -29,6 +29,8 @@ import { CANVAS_WIDTH } from "../types/chart";
 import type { BookmarkPreset } from "../types/bookmark";
 import { addBeats, subtractBeats, minimumBeat, snapBeat, beatToFloat, floatToBeat } from "../utils/beat";
 import { getPlayheadBeat } from "../utils/playhead";
+import { resolveHotkey } from "../utils/resolveHotkey";
+import { splitSelectedEventsAtPlayhead } from "../utils/eventSplit";
 import { addMarkerAtCurrentBeat, seekToPrevBookmark, seekToNextBookmark } from "../utils/bookmarkNavigation";
 import type { EditorTool } from "../types/editor";
 import { useToastStore } from "../stores/toastStore";
@@ -42,38 +44,48 @@ export function useGlobalHotkeys(callbacks: {
   onShowPasteSpecial?: () => void;
   onShowOnsetCalibration?: () => void;
 }) {
+  // ---- Hotkey resolution (L7) ----
+  // Subscribe to overrides so a rebind in HotkeySettings re-renders this hook and
+  // react-hotkeys-hook swaps the listener to the new key. hk(id) = override ?? registry
+  // default. Every registry-backed binding below passes hk("action_id") as its key, so
+  // the settings panel + conflict checker + persisted overrides are finally live.
+  // grep resolveHotkey. Modal/secondary combos (CapsLock event tools, panel toggles,
+  // improv number keys, escape) stay hardcoded — intentionally not rebindable.
+  const overrides = useSettingsStore((s) => s.hotkeyOverrides);
+  const hk = (id: string) => resolveHotkey(overrides, id);
+
   // ---- Tool shortcuts ----
   const setTool = (tool: EditorTool) => () => useEditorStore.getState().setTool(tool);
 
-  useHotkeys("v", setTool("select"), { preventDefault: true });
-  useHotkeys("x", setTool("eraser"), { preventDefault: true });
+  useHotkeys(hk("select_tool"), setTool("select"), { preventDefault: true });
+  useHotkeys(hk("eraser_tool"), setTool("eraser"), { preventDefault: true });
 
   // Q/W/E/R: CapsLock = event tool; else mark / step record / note tool.
   // CapsLock takes priority — see plan tingly-napping-crayon.md §4.
   // event.getModifierState("CapsLock") reads the OS state and works
   // in Tauri's webview the same as in the browser.
-  useHotkeys("q", (event) => {
+  useHotkeys(hk("place_tap"), (event) => {
     const es = useEditorStore.getState();
     if (event.getModifierState("CapsLock")) { es.setTool("place_event_x"); return; }
     if (es.improvisationMode) { improvPlace("tap"); return; }
     if (es.stepRecordActive) { es.setStepRecordNoteKind("tap"); return; }
     es.setTool("place_tap");
   }, { preventDefault: true });
-  useHotkeys("w", (event) => {
+  useHotkeys(hk("place_drag"), (event) => {
     const es = useEditorStore.getState();
     if (event.getModifierState("CapsLock")) { es.setTool("place_event_y"); return; }
     if (es.improvisationMode) { improvPlace("drag"); return; }
     if (es.stepRecordActive) { es.setStepRecordNoteKind("drag"); return; }
     es.setTool("place_drag");
   }, { preventDefault: true });
-  useHotkeys("e", (event) => {
+  useHotkeys(hk("place_flick"), (event) => {
     const es = useEditorStore.getState();
     if (event.getModifierState("CapsLock")) { es.setTool("place_event_rotation"); return; }
     if (es.improvisationMode) { improvPlace("flick"); return; }
     if (es.stepRecordActive) { es.setStepRecordNoteKind("flick"); return; }
     es.setTool("place_flick");
   }, { preventDefault: true });
-  useHotkeys("r", (event) => {
+  useHotkeys(hk("place_hold"), (event) => {
     const es = useEditorStore.getState();
     if (event.getModifierState("CapsLock")) { es.setTool("place_event_opacity"); return; }
     if (es.improvisationMode) { improvPlace("hold"); return; }
@@ -110,14 +122,14 @@ export function useGlobalHotkeys(callbacks: {
   useHotkeys("alt+r", () => useEditorStore.getState().toggleRecordMode(), { preventDefault: true });
 
   // ---- Onset Detection toggle ----
-  useHotkeys("shift+o", () => {
+  useHotkeys(hk("toggle_onset_detection"), () => {
     const ss = useSettingsStore.getState();
     ss.updateSettings({ onsetDetectionEnabled: !ss.onsetDetectionEnabled });
   }, { preventDefault: true });
 
   // ---- Undo / Redo ----
   // Interleaved: compare sequence numbers to decide which store (chart vs bookmark) to undo/redo
-  useHotkeys("ctrl+z, meta+z", () => {
+  useHotkeys(hk("undo"), () => {
     const cs = useChartStore.getState();
     const bs = useBookmarkStore.getState();
     const es = useEditorStore.getState();
@@ -137,7 +149,7 @@ export function useGlobalHotkeys(callbacks: {
     }
   }, { preventDefault: true });
   // Redo — Ctrl+Y added as alias alongside Ctrl+Shift+Z
-  useHotkeys("ctrl+shift+z, meta+shift+z, ctrl+y", () => {
+  useHotkeys(hk("redo"), () => {
     const cs = useChartStore.getState();
     const bs = useBookmarkStore.getState();
 
@@ -152,7 +164,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Delete selected ----
-  useHotkeys("delete, backspace", () => {
+  useHotkeys(hk("delete"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
     const bs = useBookmarkStore.getState();
@@ -213,7 +225,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Select all notes on current line ----
-  useHotkeys("ctrl+a, meta+a", () => {
+  useHotkeys(hk("select_all"), () => {
     const cs = useChartStore.getState();
     const lineIndex = getSelectedLineIndex();
     if (lineIndex === null) return;
@@ -225,7 +237,7 @@ export function useGlobalHotkeys(callbacks: {
   // ---- Move selected notes/events with arrow keys ----
 
   // ArrowUp: Move selected notes/events forward in time by one grid step
-  useHotkeys("up", () => {
+  useHotkeys(hk("move_up"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
     const lineIndex = getSelectedLineIndex();
@@ -259,7 +271,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ArrowDown: Move selected notes/events backward in time
-  useHotkeys("down", () => {
+  useHotkeys(hk("move_down"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
     const lineIndex = getSelectedLineIndex();
@@ -293,7 +305,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ArrowRight: Move selected notes right in X position
-  useHotkeys("right", () => {
+  useHotkeys(hk("move_right"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
     const lineIndex = getSelectedLineIndex();
@@ -313,7 +325,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ArrowLeft: Move selected notes left in X position
-  useHotkeys("left", () => {
+  useHotkeys(hk("move_left"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
     const lineIndex = getSelectedLineIndex();
@@ -333,36 +345,38 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Playback ----
-  useHotkeys("space", () => {
+  useHotkeys(hk("toggle_playback"), () => {
     audioEngine.togglePlayPause();
   }, { preventDefault: true });
 
   // ---- Loop region markers ----
   // [ — set loop start at current playhead beat
-  useHotkeys("[", () => {
+  // useKey:true — punctuation matches via event.key; without it react-hotkeys-hook
+  // compares event.code ("BracketLeft") and "[" never fires (the old dead binding).
+  useHotkeys(hk("loop_start"), () => {
     const as_ = useAudioStore.getState();
     const cs = useChartStore.getState();
     if (!cs.isLoaded) return;
     const currentBeat = getPlayheadBeat({ clampNonNegative: true });
     as_.setLoopStart(currentBeat);
-  }, { preventDefault: true });
+  }, { preventDefault: true, useKey: true });
 
   // ] — set loop end at current playhead beat
-  useHotkeys("]", () => {
+  useHotkeys(hk("loop_end"), () => {
     const as_ = useAudioStore.getState();
     const cs = useChartStore.getState();
     if (!cs.isLoaded) return;
     const currentBeat = getPlayheadBeat({ clampNonNegative: true });
     as_.setLoopEnd(currentBeat);
-  }, { preventDefault: true });
+  }, { preventDefault: true, useKey: true });
 
-  // \ — toggle loop on/off
-  useHotkeys("\\", () => {
+  // \ — toggle loop on/off (useKey:true, same punctuation reason as the loop brackets)
+  useHotkeys(hk("toggle_loop"), () => {
     useAudioStore.getState().toggleLoop();
-  }, { preventDefault: true });
+  }, { preventDefault: true, useKey: true });
 
   // ---- Save ----
-  useHotkeys("ctrl+s, meta+s", async () => {
+  useHotkeys(hk("save"), async () => {
     const cs = useChartStore.getState();
     if (!cs.isLoaded) return;
     try {
@@ -379,7 +393,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- New chart ----
-  useHotkeys("ctrl+n, meta+n", () => {
+  useHotkeys(hk("new_chart"), () => {
     callbacks.onNewChart?.();
   }, { preventDefault: true });
 
@@ -399,7 +413,9 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Go to Beat dialog ----
-  useHotkeys("ctrl+j, meta+j", () => {
+  // L7 drift fix: registry default is now ctrl+g (was bound to ctrl+j in code; the
+  // pattern tool vacated ctrl+g → moved to "p"). grep go_to_beat / pattern_tool.
+  useHotkeys(hk("go_to_beat"), () => {
     callbacks.onShowGoToBeat?.();
   }, { preventDefault: true });
 
@@ -409,12 +425,12 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Paste Special dialog ----
-  useHotkeys("ctrl+alt+v, meta+alt+v", () => {
+  useHotkeys(hk("paste_special"), () => {
     callbacks.onShowPasteSpecial?.();
   }, { preventDefault: true });
 
   // ---- Flip selected notes above/below ----
-  useHotkeys("f", () => {
+  useHotkeys(hk("flip_notes"), () => {
     const cs = useChartStore.getState();
     const lineIndex = getSelectedLineIndex();
     const noteIndices = getSelectedNoteIndices();
@@ -431,7 +447,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Mirror selected notes horizontally (negate X) ----
-  useHotkeys("m", () => {
+  useHotkeys(hk("mirror_notes"), () => {
     const cs = useChartStore.getState();
     const lineIndex = getSelectedLineIndex();
     const noteIndices = getSelectedNoteIndices();
@@ -448,7 +464,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Quantize selected notes to beat grid ----
-  useHotkeys("ctrl+q, meta+q", () => {
+  useHotkeys(hk("quantize_notes"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
     const lineIndex = getSelectedLineIndex();
@@ -466,7 +482,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Distribute selected notes evenly in time ----
-  useHotkeys("ctrl+d, meta+d", () => {
+  useHotkeys(hk("distribute_notes"), () => {
     const cs = useChartStore.getState();
     const lineIndex = getSelectedLineIndex();
     const noteIndices = getSelectedNoteIndices();
@@ -493,7 +509,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Strum/stagger selected notes (spread beats by X position order) ----
-  useHotkeys("ctrl+shift+s, meta+shift+s", () => {
+  useHotkeys(hk("strum_notes"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
     const lineIndex = getSelectedLineIndex();
@@ -547,9 +563,16 @@ export function useGlobalHotkeys(callbacks: {
     useEditorStore.getState().setTool("place_event_text");
   }, { preventDefault: true });
 
-  // ---- Step Record toggle ----
-  useHotkeys("s", () => {
+  // ---- Step Record toggle (L7: moved off "s" → registry step_record default "b";
+  //      "s" now belongs to split_event, registered below) ----
+  useHotkeys(hk("step_record"), () => {
     useEditorStore.getState().toggleStepRecord();
+  }, { preventDefault: true, enableOnFormTags: false });
+
+  // ---- Split Event at playhead (L7: registry split_event, default "s") ----
+  // Shares splitSelectedEventsAtPlayhead with the Edit-menu item (useMenus.ts).
+  useHotkeys(hk("split_event"), () => {
+    splitSelectedEventsAtPlayhead();
   }, { preventDefault: true, enableOnFormTags: false });
 
   // ---- X Snap toggle ----
@@ -570,8 +593,9 @@ export function useGlobalHotkeys(callbacks: {
 
   // ---- Group editing ----
 
-  // Ctrl+G: Toggle pattern tool
-  useHotkeys("ctrl+g, meta+g", () => {
+  // Toggle pattern tool (L7: moved off ctrl+g → registry pattern_tool default "p";
+  // ctrl+g now opens Go to Beat).
+  useHotkeys(hk("pattern_tool"), () => {
     const es = useEditorStore.getState();
     es.setTool(es.activeTool === "place_pattern" ? "select" : "place_pattern");
   }, { preventDefault: true });
@@ -646,7 +670,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: false });
 
   // G: Context-aware — toggle mini preview in unrolled editor, else enter group edit mode
-  useHotkeys("g", () => {
+  useHotkeys(hk("enter_group_edit"), () => {
     // Check which tab type is active to decide behavior
     const activeTab = useTabStore.getState().tabs.find(
       (t) => t.id === useTabStore.getState().activeTabId
@@ -673,7 +697,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true, enableOnFormTags: false });
 
   // Ctrl+Shift+U: Open/focus the unrolled editor tab
-  useHotkeys("ctrl+shift+u, meta+shift+u", () => {
+  useHotkeys(hk("open_unrolled"), () => {
     useTabStore.getState().openUnrolledEditor();
   }, { preventDefault: true });
 
@@ -716,8 +740,25 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: false, enableOnFormTags: false });
 
   // ---- Section marker hotkey (Ctrl+B) — add marker at current beat ----
-  useHotkeys("ctrl+b, meta+b", () => {
+  useHotkeys(hk("add_section_marker"), () => {
     addMarkerAtCurrentBeat();
+  }, { preventDefault: true });
+
+  // ---- Bookmark marker navigation (L7: registry prev/next_marker, ctrl+up/down).
+  // These ops already existed (Ctrl+Shift+Scroll wheel below); now keyboard-bound too. ----
+  useHotkeys(hk("prev_marker"), () => {
+    if (!useChartStore.getState().isLoaded) return;
+    seekToPrevBookmark();
+  }, { preventDefault: true });
+  useHotkeys(hk("next_marker"), () => {
+    if (!useChartStore.getState().isLoaded) return;
+    seekToNextBookmark();
+  }, { preventDefault: true });
+
+  // ---- Toggle in-app DevTools panel (L7: registry toggle_devtools, "f12").
+  // Note: native webview devtools may swallow F12 in `tauri dev`; works in prod. ----
+  useHotkeys(hk("toggle_devtools"), () => {
+    useEditorStore.getState().toggleDevTools();
   }, { preventDefault: true });
 
   // ---- Ctrl+Shift+Scroll for bookmark navigation ----

@@ -22,6 +22,8 @@ import {
   getMultiSelectedLineIndices,
 } from "../stores/selection";
 import { getPlayheadBeat } from "../utils/playhead";
+import { useSettingsStore } from "../stores/settingsStore";
+import { resolveHotkey } from "../utils/resolveHotkey";
 import { beatToFloat, floatToBeat } from "../types/chart";
 import type { Note, LineEvent, Beat } from "../types/chart";
 
@@ -152,6 +154,10 @@ export function performPaste(): void {
 }
 
 export function useClipboard() {
+  // Subscribe to overrides so cross_line_paste rebinds live (L7). copy/cut/paste stay
+  // hardcoded — they're not in the registry (conventional clipboard combos).
+  const overrides = useSettingsStore((s) => s.hotkeyOverrides);
+
   // ---- Copy (Ctrl+C) — delegates to extracted performCopy ----
   useHotkeys("ctrl+c, meta+c", () => performCopy(), { preventDefault: true });
 
@@ -161,8 +167,8 @@ export function useClipboard() {
   // ---- Paste (Ctrl+V) — delegates to extracted performPaste ----
   useHotkeys("ctrl+v, meta+v", () => performPaste(), { preventDefault: true });
 
-  // ---- Cross-Line Paste (Ctrl+Shift+V) — paste to all multi-selected lines ----
-  useHotkeys("ctrl+shift+v, meta+shift+v", () => {
+  // ---- Cross-Line Paste (registry cross_line_paste, default Ctrl+Shift+V) ----
+  useHotkeys(resolveHotkey(overrides, "cross_line_paste"), () => {
     if (!clipboard) return;
     const cs = useChartStore.getState();
 
