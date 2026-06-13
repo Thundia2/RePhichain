@@ -130,6 +130,12 @@ export function GamePreview() {
     hitEffectRef.current.setHitSoundCallback((kind) => {
       hitSoundRef.current.play(kind);
     });
+    // Q7: wire hit sounds for the Pixi renderer too — its hit-effect layer has a
+    // setHitSoundCallback (mirrors the Canvas2D HitEffectManager) but nothing
+    // called it, so Pixi mode was silent. No-op when Pixi isn't the active renderer.
+    pixiRendererRef.current?.setHitSoundCallback((kind) => {
+      hitSoundRef.current.play(kind);
+    });
 
     const container = containerRef.current;
     let observer: ResizeObserver | null = null;
