@@ -159,8 +159,29 @@ pub fn save_project(project_path: String, chart_json: String) -> Result<(), Stri
         return Err("Chart JSON missing 'lines' field".to_string());
     }
 
-    std::fs::write(chart_path, &chart_json)
-        .map_err(|e| format!("Failed to write chart.json: {}", e))?;
+    // R5 (Wave 1, critical): atomic write. Write to a sibling temp file, fsync it,
+    // then rename over chart.json. A crash or interrupted write can no longer
+    // truncate/destroy the only copy — a reader sees either the complete old file
+    // or the complete new one, never a half-written one. The .tmp MUST sit in the
+    // same directory as chart.json so the rename stays intra-volume (rename is only
+    // atomic within one volume; std::fs::rename maps to rename(2) on Unix and
+    // MoveFileExW + MOVEFILE_REPLACE_EXISTING on Windows, both of which replace the
+    // destination atomically there). create_project's writes are left as-is — a
+    // failed create has no prior copy to protect.
+    let tmp_path = validated.join("chart.json.tmp");
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&tmp_path)
+            .map_err(|e| format!("Failed to create temp chart file: {}", e))?;
+        f.write_all(chart_json.as_bytes())
+            .map_err(|e| format!("Failed to write temp chart file: {}", e))?;
+        f.sync_all()
+            .map_err(|e| format!("Failed to flush temp chart file: {}", e))?;
+    }
+    std::fs::rename(&tmp_path, &chart_path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp_path); // best-effort: don't leave an orphan .tmp
+        format!("Failed to commit chart.json: {}", e)
+    })?;
 
     Ok(())
 }

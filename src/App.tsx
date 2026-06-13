@@ -68,11 +68,13 @@ import { FavoritesWizard } from "./components/ContextPanel/wizard/FavoritesWizar
 import { useEditorStore } from "./stores/editorStore";
 import { useAudioStore } from "./stores/audioStore";
 import { useDialogStore } from "./stores/dialogStore";
+import { useToastStore } from "./stores/toastStore";
 import { audioEngine } from "./audio/audioEngine";
 import { useGlobalHotkeys } from "./hooks/useHotkeys";
 import { useOnsetDetection } from "./hooks/useOnsetDetection";
 import { useClipboard } from "./hooks/useClipboard";
 import { triggerImportChart } from "./utils/importChart";
+import { commitRecordedKeyframes } from "./utils/recordingCommit";
 import { ToastContainer } from "./components/common/Toast";
 import { ConfirmDialog } from "./components/common/ConfirmDialog";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
@@ -540,7 +542,30 @@ export default function App() {
       <OnsetCalibrationDialog open={showOnsetCalibration} onClose={() => closeDialog("onset-calibration")} />
       <ExportDiffDialog open={showExportDiff} onClose={() => closeDialog("export-diff")} />
       <SelectiveExportDialog open={showSelectiveExport} onClose={() => closeDialog("selective-export")} />
-      <RecordReviewDialog open={showRecordReview} onClose={() => closeDialog("record-review")} onAccept={() => closeDialog("record-review")} />
+      <RecordReviewDialog
+        open={showRecordReview}
+        onClose={() => closeDialog("record-review")}
+        onAccept={(simplifyThreshold) => {
+          // D1 (critical): actually commit the recording. The old handler just
+          // closed the dialog, silently discarding every recorded keyframe.
+          const result = commitRecordedKeyframes(simplifyThreshold);
+          if (result.ok) {
+            useToastStore.getState().addToast(
+              result.committed > 0
+                ? { message: `Recording applied — ${result.committed} event${result.committed === 1 ? "" : "s"} added`, type: "success" }
+                : { message: "Recording had no usable channels — nothing applied", type: "info" },
+            );
+          } else {
+            useToastStore.getState().addToast({
+              message: result.reason === "no-line"
+                ? "Select a line before applying the recording"
+                : "No recording to apply",
+              type: "error",
+            });
+          }
+          closeDialog("record-review");
+        }}
+      />
       <CommandPalette
         open={showCommandPalette}
         onClose={() => closeDialog("command-palette")}

@@ -379,11 +379,24 @@ export function useGlobalHotkeys(callbacks: {
   useHotkeys(hk("save"), async () => {
     const cs = useChartStore.getState();
     if (!cs.isLoaded) return;
+    // H1 (critical): a projectless chart (freshly imported / never saved to a folder)
+    // has no disk target. The old code still ran markClean()+"saved" toast in that
+    // case → a fake save that made the user believe edits were persisted, then lost
+    // them. Mirror the useMenus "Save Project" guard (useMenus.ts), but surface WHY
+    // nothing was written (there is no save-as-to-folder flow — Export is the path)
+    // rather than a silent no-op. markClean()+success now run ONLY after a real
+    // saveProject() resolves.
+    if (!cs.projectPath) {
+      useToastStore.getState().addToast({
+        message: "No project folder — use Export (PEZ/RPE/Official) to save this chart.",
+        type: "info",
+        duration: 2500,
+      });
+      return;
+    }
     try {
-      if (cs.projectPath) {
-        const { saveProject } = await import("../utils/ipc");
-        await saveProject(cs.projectPath, cs.getChartJson());
-      }
+      const { saveProject } = await import("../utils/ipc");
+      await saveProject(cs.projectPath, cs.getChartJson());
       cs.markClean();
       useToastStore.getState().addToast({ message: "Project saved", type: "success", duration: 1500 });
     } catch (e) {

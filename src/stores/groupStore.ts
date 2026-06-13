@@ -698,9 +698,24 @@ export const useGroupStore = create<GroupState>()((set, get) => ({
         console.error("Failed to load groups: expected an array");
         return;
       }
-      // Filter out invalid entries — each group must be an object with an id and members array
+      // Validate each entry against the REAL serialized shape (finding S1, critical).
+      // The old predicate required an `Array.isArray(g.members)` field that the
+      // persisted format NEVER has: getGroupsJson serializes EditorGroup[] as
+      // {type:"line"|"note", lines|notes:[...]} (new) or legacy-v1 {lines|notes:[...]}
+      // with no `type`. So the filter dropped 100% of groups on every .pez re-import —
+      // and because the store was then empty, pezExport omitted Canvas/groups.json on
+      // re-export (pezExport.ts:88), permanently destroying the groups. Accept
+      // new-format groups (by `type`) and legacy-v1 groups (by a lines/notes array);
+      // migrateGroup (types/group.ts) handles both. grep loadGroupsJson / migrateGroup.
       const validRaw = raw.filter(
-        (g) => g && typeof g === "object" && typeof g.id === "string" && Array.isArray(g.members)
+        (g) =>
+          g &&
+          typeof g === "object" &&
+          typeof g.id === "string" &&
+          (g.type === "line" ||
+            g.type === "note" ||
+            Array.isArray(g.lines) ||
+            Array.isArray(g.notes)),
       );
       const groups = validRaw.map(migrateGroup);
       set({ groups });

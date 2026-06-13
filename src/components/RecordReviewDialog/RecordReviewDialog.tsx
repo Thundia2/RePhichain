@@ -8,13 +8,17 @@
 
 import { useState, useMemo } from "react";
 import { useEditorStore } from "../../stores/editorStore";
-import { simplifyKeyframes, previewSimplification } from "../../utils/keyframeSimplify";
+import { previewSimplification } from "../../utils/keyframeSimplify";
 import type { SimplifiableKeyframe } from "../../utils/keyframeSimplify";
 
 interface RecordReviewDialogProps {
   open: boolean;
   onClose: () => void;
-  onAccept: (simplified: SimplifiableKeyframe[]) => void;
+  // D1: the dialog signals INTENT (raw vs. simplified-at-threshold); the actual
+  // multi-channel keyframe→event conversion happens in commitRecordedKeyframes
+  // (wired in App's onAccept). Passing the dialog's collapsed SimplifiableKeyframe[]
+  // would drop the y/rotation channels. null = raw (no simplification).
+  onAccept: (simplifyThreshold: number | null) => void;
 }
 
 export function RecordReviewDialog({ open, onClose, onAccept }: RecordReviewDialogProps) {
@@ -28,11 +32,6 @@ export function RecordReviewDialog({ open, onClose, onAccept }: RecordReviewDial
 
   const simplifiedCount = useMemo(
     () => previewSimplification(asSimplifiable, threshold),
-    [asSimplifiable, threshold],
-  );
-
-  const simplified = useMemo(
-    () => simplifyKeyframes(asSimplifiable, threshold),
     [asSimplifiable, threshold],
   );
 
@@ -108,14 +107,14 @@ export function RecordReviewDialog({ open, onClose, onAccept }: RecordReviewDial
               color: "var(--text-primary)",
               border: "1px solid var(--border-color)",
             }}
-            onClick={() => onAccept(asSimplifiable)}
+            onClick={() => onAccept(null)}
           >
             Accept Raw
           </button>
           <button
             className="px-3 py-1.5 rounded text-xs font-medium"
             style={{ backgroundColor: "var(--accent-primary)", color: "#fff" }}
-            onClick={() => onAccept(simplified)}
+            onClick={() => onAccept(threshold)}
           >
             Accept Simplified
           </button>
