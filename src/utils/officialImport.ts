@@ -76,16 +76,14 @@ interface OfficialChart {
 // Conversion Helpers
 // ============================================================
 
-/** Convert seconds to Beat tuple using the line's BPM */
-function timeToBeat(time: number): Beat {
-  // Official format: beat = time * 1.875 / 60
-  // 1.875 = 32/128 * 60 / BPM... actually this is a fixed conversion:
-  // The time values in Official format are "tick-based" using 1875000 ticks per minute
-  // Simplified: beat = time * 1.875 / 60
-  // But wait — in the Rust code the BPM is per-line and time conversion is fixed at 1.875/60
-  // This gives us the beat position
-  const beatValue = time * 1.875 / 60;
-  return floatToBeat(beatValue);
+/** Convert an official `time` to a Beat tuple in the GLOBAL bpm timeline.
+ *  T7: each official line's `time` is in its OWN line bpm's units; scale by
+ *  globalBpm/lineBpm so a line whose bpm differs from the base line lands at the
+ *  correct beat. bpmScale is 1 for the common single-bpm chart (every line shares
+ *  the base bpm) so this is a no-op there. The base `time*1.875/60` mirrors the
+ *  fixed tick conversion in official.rs into_primitive. */
+function timeToBeat(time: number, bpmScale: number): Beat {
+  return floatToBeat(time * 1.875 / 60 * bpmScale);
 }
 
 /** Map Official note type number to NoteKind */
@@ -121,11 +119,13 @@ export function convertOfficialToPhichain(json: string): PhichainChart {
 
   const chartLines: Line[] = official.judgeLineList.map((oLine, idx) => {
     const events: LineEvent[] = [];
+    // T7: per-line bpm scale (globalBpm/lineBpm); 1 when this line shares the base bpm.
+    const bpmScale = oLine.bpm > 0 ? globalBpm / oLine.bpm : 1;
 
     // Convert move events → X and Y events
     for (const event of oLine.judgeLineMoveEvents) {
-      const startBeat = timeToBeat(event.startTime);
-      const endBeat = timeToBeat(event.endTime);
+      const startBeat = timeToBeat(event.startTime, bpmScale);
+      const endBeat = timeToBeat(event.endTime, bpmScale);
 
       let startX: number, endX: number, startY: number, endY: number;
 
@@ -166,8 +166,8 @@ export function convertOfficialToPhichain(json: string): PhichainChart {
 
     // Convert rotation events
     for (const event of oLine.judgeLineRotateEvents) {
-      const startBeat = timeToBeat(event.startTime);
-      const endBeat = timeToBeat(event.endTime);
+      const startBeat = timeToBeat(event.startTime, bpmScale);
+      const endBeat = timeToBeat(event.endTime, bpmScale);
 
       events.push({
         kind: "rotation",
@@ -181,8 +181,8 @@ export function convertOfficialToPhichain(json: string): PhichainChart {
 
     // Convert opacity events (Official: 0-1 → phichain: 0-255)
     for (const event of oLine.judgeLineDisappearEvents) {
-      const startBeat = timeToBeat(event.startTime);
-      const endBeat = timeToBeat(event.endTime);
+      const startBeat = timeToBeat(event.startTime, bpmScale);
+      const endBeat = timeToBeat(event.endTime, bpmScale);
       const startVal = event.start * 255;
       const endVal = event.end * 255;
 
@@ -200,8 +200,8 @@ export function convertOfficialToPhichain(json: string): PhichainChart {
     // Official speed events have a single "value" (constant speed for that range)
     // Rust conversion: speed = value / 2.0 * 9.0
     for (const event of oLine.speedEvents) {
-      const startBeat = timeToBeat(event.startTime);
-      const endBeat = timeToBeat(event.endTime);
+      const startBeat = timeToBeat(event.startTime, bpmScale);
+      const endBeat = timeToBeat(event.endTime, bpmScale);
       const speed = event.value / 2.0 * 9.0;
 
       events.push({
@@ -217,7 +217,7 @@ export function convertOfficialToPhichain(json: string): PhichainChart {
 
     const convertNote = (oNote: OfficialNote, above: boolean): Note => {
       const kind = noteTypeToKind(oNote.type);
-      const beat = timeToBeat(oNote.time);
+      const beat = timeToBeat(oNote.time, bpmScale);
       // Official X: 0-18 range → canvas: x/18 * CANVAS_WIDTH, centered
       const x = oNote.positionX / 18.0 * CANVAS_WIDTH;
 
@@ -230,7 +230,7 @@ export function convertOfficialToPhichain(json: string): PhichainChart {
       };
 
       if (kind === "hold" && oNote.holdTime > 0) {
-        note.hold_beat = timeToBeat(oNote.holdTime);
+        note.hold_beat = timeToBeat(oNote.holdTime, bpmScale);
       }
 
       return note;
