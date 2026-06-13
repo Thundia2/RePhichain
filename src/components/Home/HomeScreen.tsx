@@ -25,6 +25,8 @@ import {
   setSkipNextSave,
   setSkipNextRestore,
   setStoredProjectId,
+  setAudioBlobUrl,
+  clearProjectAudio,
 } from "../../utils/chartSessions";
 import { EditorGuideModal } from "./EditorGuideModal";
 
@@ -124,6 +126,11 @@ async function handleOpenRecent(project: RecentProject) {
         const ext = projectData.music_path.split(".").pop()?.toLowerCase() ?? "mp3";
         await audioEngine.load(url, ext);
         useAudioStore.getState().setMusicLoaded(true);
+      } else {
+        // E3: defensive — a disk project normally must have audio (the Rust loader
+        // requires a music file), but if music_path is ever null don't leave the
+        // previous project's song playing under this one.
+        clearProjectAudio();
       }
 
       if (projectData.illustration_path) {
@@ -162,11 +169,16 @@ async function handleOpenRecent(project: RecentProject) {
       const mimeTypes: Record<string, string> = { mp3: "audio/mpeg", ogg: "audio/ogg", wav: "audio/wav", flac: "audio/flac", m4a: "audio/mp4" };
       const blob = new Blob([stored.audioBlob], { type: mimeTypes[stored.audioExt] ?? "audio/mpeg" });
       const url = URL.createObjectURL(blob);
+      // F5: publish the blob URL + format BEFORE awaiting the decode so a tab
+      // switch mid-decode still snapshots this tab's audio source (see importChart).
+      setAudioBlobUrl(url, stored.audioExt);
       await audioEngine.load(url, stored.audioExt);
       useAudioStore.getState().setMusicLoaded(true);
-      // Track the blob URL + format so tab session restore can reuse it
-      const { setAudioBlobUrl } = await import("../../utils/chartSessions");
-      setAudioBlobUrl(url, stored.audioExt);
+    } else {
+      // E3: this recent project has no audio — unload any song still playing from
+      // the previously open project (the swap leaves isLoaded true, so App's
+      // close-time unload effect never fires here).
+      clearProjectAudio();
     }
 
     // Bug audit #4: record the IndexedDB id so restoreSession can

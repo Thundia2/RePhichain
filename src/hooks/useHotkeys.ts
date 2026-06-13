@@ -394,10 +394,11 @@ export function useGlobalHotkeys(callbacks: {
       });
       return;
     }
+    const token = cs._dirtySeq; // F2: capture before the async write (see markCleanIf)
     try {
       const { saveProject } = await import("../utils/ipc");
-      await saveProject(cs.projectPath, cs.getChartJson());
-      cs.markClean();
+      await saveProject(cs.projectPath, cs.getChartJson(), JSON.stringify(cs.meta));
+      cs.markCleanIf(token);
       useToastStore.getState().addToast({ message: "Project saved", type: "success", duration: 1500 });
     } catch (e) {
       console.error("Save failed:", e);

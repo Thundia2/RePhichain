@@ -219,6 +219,21 @@ export function getAudioFormat(): string | null {
   return _lastAudioFormat;
 }
 
+/** E3: unload the current song + clear audio tracking when a project that has NO
+ *  audio is loaded over a previous one. loadFromProjectData leaves isLoaded true
+ *  on a project SWAP, so App's close-time unload effect (App.tsx, keyed on
+ *  isLoaded going false) never fires — the entry points (importChart /
+ *  HomeScreen.handleOpenRecent) must unload explicitly or the previous project's
+ *  song keeps playing under the new (song-less) chart. Clears the tracked blob
+ *  URL/format too so the next saveSession doesn't record stale audio-intent (F5).
+ *  grep clearProjectAudio. */
+export function clearProjectAudio(): void {
+  audioEngine.unload();
+  useAudioStore.getState().setMusicLoaded(false);
+  _lastAudioBlobUrl = null;
+  _lastAudioFormat = null;
+}
+
 /** Bug audit #4: Call immediately after saving/loading a project via
  *  projectStorage so that chartSessions can fall back to IndexedDB if
  *  the in-memory blob URL is revoked. Pass `null` for disk projects.
@@ -341,7 +356,14 @@ export function saveSession(tabId: string): void {
     musicUrl: _lastAudioBlobUrl || cs.musicPath,
     audioFormat: _lastAudioFormat || (cs.musicPath ? cs.musicPath.split(".").pop()?.toLowerCase() ?? null : null),
     audioCurrentTime: as_.currentTime,
-    musicLoaded: as_.musicLoaded,
+    // F5: don't snapshot the transient as_.musicLoaded alone — it's false during
+    // an in-flight decode (audioEngine.load() not yet resolved), so a tab switch
+    // mid-decode would persist "no audio" and restoreSession would skip the reload,
+    // permanently losing this tab's audio. The durable signal is "does this tab
+    // have an audio SOURCE to reload?" — a tracked blob URL or a disk musicPath.
+    // The entry points publish the blob URL (setAudioBlobUrl) BEFORE awaiting the
+    // decode, so this stays true even while the decode is in flight. grep F5.
+    musicLoaded: as_.musicLoaded || !!(_lastAudioBlobUrl || cs.musicPath),
 
     // Editor-only data — references (both stores do immutable replace). The old
     // structuredClone here was pure overhead (finding L5/Z2).

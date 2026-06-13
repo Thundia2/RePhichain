@@ -80,7 +80,8 @@ export function useMenus(
 ): Menu[] {
   const projectPath = useChartStore((s) => s.projectPath);
   const getChartJson = useChartStore((s) => s.getChartJson);
-  const markClean = useChartStore((s) => s.markClean);
+  // F2: the Save action now uses markCleanIf(token) via getState() (race-safe),
+  // so the markClean selector is no longer needed here.
   const closeProject = useChartStore((s) => s.closeProject);
   const canUndo = useChartStore((s) => s.canUndo);
   const canRedo = useChartStore((s) => s.canRedo);
@@ -100,9 +101,12 @@ export function useMenus(
           disabled: !isLoaded,
           action: async () => {
             if (!projectPath) return;
+            // F2: capture the dirty token before the async write (see markCleanIf).
+            const cs = useChartStore.getState();
+            const token = cs._dirtySeq;
             try {
-              await saveProject(projectPath, getChartJson());
-              markClean();
+              await saveProject(projectPath, getChartJson(), JSON.stringify(cs.meta));
+              cs.markCleanIf(token);
             } catch (e) {
               console.error("Save failed:", e);
             }

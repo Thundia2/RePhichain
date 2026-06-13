@@ -97,9 +97,16 @@ const EDIT_BUTTONS: ActionButtonDef[] = [
 
 const FILE_BUTTONS: ActionButtonDef[] = [
   { icon: "\uD83D\uDCC2", label: "Open", hotkey: "Ctrl+O", action: () => triggerImportChart() },
-  { icon: "\uD83D\uDCBE", label: "Save", hotkey: "Ctrl+S", action: () => {
+  { icon: "\uD83D\uDCBE", label: "Save", hotkey: "Ctrl+S", action: async () => {
     const cs = useChartStore.getState();
-    if (cs.projectPath) saveProject(cs.projectPath, cs.getChartJson());
+    if (!cs.projectPath) return;
+    const token = cs._dirtySeq; // F2: capture before the async write (see markCleanIf)
+    try {
+      await saveProject(cs.projectPath, cs.getChartJson(), JSON.stringify(cs.meta));
+      cs.markCleanIf(token);
+    } catch (e) {
+      console.error("Save failed:", e);
+    }
   }},
   { icon: "\uD83D\uDCE4", label: "Export", hotkey: "\u2014", action: () => useDialogStore.getState().openDialog("selective-export") },
   { icon: "\uD83D\uDCC4", label: "Import", hotkey: "Ctrl+O", action: () => triggerImportChart() },

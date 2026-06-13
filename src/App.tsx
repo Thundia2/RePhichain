@@ -497,14 +497,25 @@ export default function App() {
             className="mosaic-dark-theme"
           />
         )}
+        {/* UC2-c: the editor surfaces get their own ErrorBoundary so a render
+            throw (e.g. a transient out-of-range index mid-undo) shows a Retry
+            card instead of unmounting the whole app to a white screen. The
+            underlying crash is already dead (L2 made selection uid-resolved),
+            this is defense-in-depth. */}
         {activeTab.type === "line_event_editor" && activeTab.data && (
-          <LineEventEditor lineIndex={activeTab.data.lineIndex as number} />
+          <ErrorBoundary panelName="Line Event Editor">
+            <LineEventEditor lineIndex={activeTab.data.lineIndex as number} />
+          </ErrorBoundary>
         )}
         {activeTab.type === "unified_editor" && (
-          <UnifiedEditorTab />
+          <ErrorBoundary panelName="Unified Editor">
+            <UnifiedEditorTab />
+          </ErrorBoundary>
         )}
         {activeTab.type === "unrolled_editor" && (
-          <UnrolledEditorTab lineIndex={activeTab.data?.lineIndex as number | undefined} />
+          <ErrorBoundary panelName="Unrolled Editor">
+            <UnrolledEditorTab lineIndex={activeTab.data?.lineIndex as number | undefined} />
+          </ErrorBoundary>
         )}
         {activeTab.type === "panel" && activeTab.data && (
           <div className="w-full h-full" style={{ backgroundColor: "var(--bg-secondary)" }}>

@@ -33,6 +33,7 @@ import {
   setSkipNextRestore,
   setAudioBlobUrl,
   setStoredProjectId,
+  clearProjectAudio,
 } from "./chartSessions";
 import type { ExtraConfig } from "../types/extra";
 import type { ProjectMeta, PhichainChart } from "../types/chart";
@@ -411,10 +412,19 @@ export function triggerImportChart() {
         if (_trackedMusicUrl) URL.revokeObjectURL(_trackedMusicUrl);
         const musicUrl = URL.createObjectURL(musicBlob);
         _trackedMusicUrl = musicUrl;
+        // F5: publish the blob URL + format BEFORE awaiting the decode so a tab
+        // switch mid-decode still snapshots this tab's audio source (saveSession
+        // treats a tracked URL as loaded-intent). setMusicLoaded(true) still waits
+        // for the decode to actually finish.
+        setAudioBlobUrl(musicUrl, musicExt);
         await audioEngine.load(musicUrl, musicExt);
         useAudioStore.getState().setMusicLoaded(true);
-        // Track the blob URL + format so tab session restore can reuse it
-        setAudioBlobUrl(musicUrl, musicExt);
+      } else {
+        // E3: the imported chart has no audio — unload the previous project's song
+        // so it doesn't keep playing under the new chart (loadFromProjectData
+        // leaves isLoaded true on a swap, so App's close-time unload never fires).
+        if (_trackedMusicUrl) { URL.revokeObjectURL(_trackedMusicUrl); _trackedMusicUrl = null; }
+        clearProjectAudio();
       }
 
       // ── Load illustration ───────────────────────────────────

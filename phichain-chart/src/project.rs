@@ -4,13 +4,22 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+// R1: `extra` captures any meta.json fields beyond the five named ones — Phira's
+// info.yml extensions (tags, preview_start, intro, …) and the RPE round-trip
+// fields (rpe_song, rpe_background, rpe_id, …). #[serde(flatten)] makes BOTH the
+// load path (serde_json::from_reader in into_project) and any re-serialization
+// preserve them, so opening then saving a Phira/RPE-sourced project no longer
+// strips its metadata down to the five core strings. `Eq` is dropped from the
+// derive because serde_json::Value is not Eq (it can hold an f64).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ProjectMeta {
     pub composer: String,
     pub charter: String,
     pub illustrator: String,
     pub name: String,
     pub level: String,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Error, Debug)]
@@ -102,5 +111,33 @@ impl ProjectPath {
             meta,
             id: Uuid::new_v4(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // R1: a meta.json carrying Phira/RPE fields beyond the five core strings must
+    // survive a deserialize -> serialize round-trip (collected into `extra` by
+    // #[serde(flatten)]) — otherwise opening then saving a project strips them.
+    #[test]
+    fn project_meta_preserves_unknown_fields() {
+        let json = r#"{
+            "composer": "C", "charter": "Ch", "illustrator": "I",
+            "name": "N", "level": "Lv",
+            "tags": ["a", "b"], "rpe_song": "song.ogg", "preview_start": 12.5
+        }"#;
+        let meta: ProjectMeta = serde_json::from_str(json).unwrap();
+        assert_eq!(meta.name, "N");
+        assert_eq!(meta.extra.get("rpe_song").and_then(|v| v.as_str()), Some("song.ogg"));
+        assert_eq!(meta.extra.get("preview_start").and_then(|v| v.as_f64()), Some(12.5));
+        // Named fields are captured by name, NOT duplicated into extra.
+        assert!(!meta.extra.contains_key("name"));
+
+        // Re-serialize and confirm the extras are still present.
+        let out = serde_json::to_value(&meta).unwrap();
+        assert_eq!(out.get("rpe_song").and_then(|v| v.as_str()), Some("song.ogg"));
+        assert_eq!(out.get("tags").and_then(|v| v.as_array()).map(|a| a.len()), Some(2));
     }
 }

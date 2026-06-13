@@ -57,13 +57,19 @@ export async function loadProject(path: string): Promise<ProjectData> {
 }
 
 /**
- * Save the chart to disk.
+ * Save the chart (and metadata) to disk.
+ *
+ * R1: meta.json is now written alongside chart.json, so meta edits (song name,
+ * charter, Phira info.yml fields…) survive a restart instead of being silently
+ * dropped. Pass `JSON.stringify(cs.meta)` — the backend writes it verbatim so
+ * round-trip-only fields (rpe_song, tags, …) are preserved (see commands.rs).
  *
  * @param projectPath - Absolute path to the project directory
  * @param chartJson - The full chart as a JSON string
+ * @param metaJson - The project metadata as a JSON string
  */
-export async function saveProject(projectPath: string, chartJson: string): Promise<void> {
-  return invoke<void>("save_project", { projectPath, chartJson });
+export async function saveProject(projectPath: string, chartJson: string, metaJson: string): Promise<void> {
+  return invoke<void>("save_project", { projectPath, chartJson, metaJson });
 }
 
 /**

@@ -130,27 +130,62 @@ pub fn load_project(path: String) -> Result<ProjectData, String> {
     })
 }
 
-/// Save the chart to disk.
+/// Write `contents` to `path` atomically (R5, Wave 1 critical): write a sibling
+/// temp file, fsync it, then rename over the destination. A crash or interrupted
+/// write can no longer truncate/destroy the only copy — a reader sees either the
+/// complete old file or the complete new one, never a half-written one. The .tmp
+/// MUST sit in the same directory as `path` so the rename stays intra-volume
+/// (rename is only atomic within one volume; std::fs::rename maps to rename(2) on
+/// Unix and MoveFileExW + MOVEFILE_REPLACE_EXISTING on Windows, both of which
+/// replace the destination atomically there). grep atomic_write.
+fn atomic_write(path: &std::path::Path, contents: &str) -> Result<(), String> {
+    let dir = path.parent()
+        .ok_or_else(|| "Target path has no parent directory".to_string())?;
+    let file_name = path.file_name()
+        .ok_or_else(|| "Target path has no file name".to_string())?;
+    let mut tmp_name = file_name.to_os_string();
+    tmp_name.push(".tmp");
+    let tmp_path = dir.join(tmp_name);
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&tmp_path)
+            .map_err(|e| format!("Failed to create temp file {}: {}", tmp_path.display(), e))?;
+        f.write_all(contents.as_bytes())
+            .map_err(|e| format!("Failed to write temp file {}: {}", tmp_path.display(), e))?;
+        f.sync_all()
+            .map_err(|e| format!("Failed to flush temp file {}: {}", tmp_path.display(), e))?;
+    }
+    std::fs::rename(&tmp_path, path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp_path); // best-effort: don't leave an orphan .tmp
+        format!("Failed to commit {}: {}", path.display(), e)
+    })?;
+    Ok(())
+}
+
+/// Save the chart AND metadata to disk.
 ///
-/// The frontend sends the full chart as a JSON string, and we write
-/// it to chart.json in the project directory.
+/// The frontend sends the full chart and metadata as JSON strings; we write them
+/// to chart.json and meta.json in the project directory.
 ///
-/// We validate that the input is well-formed JSON with the expected top-level
-/// structure (has "format" and "lines" fields), but we do NOT deserialize into
-/// PhichainChart because the TypeScript frontend supports extended event types
-/// (scale_x, color, text, incline, gif) for RPE compatibility that the Rust
-/// backend doesn't define. These are valid chart data that must be preserved.
+/// We validate that each input is a well-formed JSON object (chart.json must also
+/// have the "format" and "lines" top-level fields), but we do NOT deserialize
+/// into PhichainChart/ProjectMeta — the TypeScript frontend carries extended
+/// event types (scale_x, color, text, incline, gif) and extended meta fields
+/// (Phira info.yml, RPE round-trip) the Rust types don't model. They're valid
+/// data we must preserve verbatim, so we write the raw strings.
+///
+/// R1: meta.json used to never be written here, so metadata edits were lost on
+/// restart. Both files now go through atomic_write (R5) so a crash mid-save can't
+/// corrupt either. create_project's first-time writes are left as-is — a failed
+/// create has no prior copy to protect.
 #[tauri::command]
-pub fn save_project(project_path: String, chart_json: String) -> Result<(), String> {
+pub fn save_project(project_path: String, chart_json: String, meta_json: String) -> Result<(), String> {
     let validated = validate_path(&project_path)?;
-    let chart_path = validated.join("chart.json");
 
-    // Validate that the input is well-formed JSON with expected structure
-    let json_value: serde_json::Value = serde_json::from_str(&chart_json)
-        .map_err(|e| format!("Invalid JSON: {}", e))?;
-
-    // Basic structure check: ensure it has the required top-level fields
-    let obj = json_value.as_object()
+    // Validate chart JSON shape.
+    let chart_value: serde_json::Value = serde_json::from_str(&chart_json)
+        .map_err(|e| format!("Invalid chart JSON: {}", e))?;
+    let obj = chart_value.as_object()
         .ok_or_else(|| "Chart JSON must be an object".to_string())?;
     if !obj.contains_key("format") {
         return Err("Chart JSON missing 'format' field".to_string());
@@ -159,29 +194,16 @@ pub fn save_project(project_path: String, chart_json: String) -> Result<(), Stri
         return Err("Chart JSON missing 'lines' field".to_string());
     }
 
-    // R5 (Wave 1, critical): atomic write. Write to a sibling temp file, fsync it,
-    // then rename over chart.json. A crash or interrupted write can no longer
-    // truncate/destroy the only copy — a reader sees either the complete old file
-    // or the complete new one, never a half-written one. The .tmp MUST sit in the
-    // same directory as chart.json so the rename stays intra-volume (rename is only
-    // atomic within one volume; std::fs::rename maps to rename(2) on Unix and
-    // MoveFileExW + MOVEFILE_REPLACE_EXISTING on Windows, both of which replace the
-    // destination atomically there). create_project's writes are left as-is — a
-    // failed create has no prior copy to protect.
-    let tmp_path = validated.join("chart.json.tmp");
-    {
-        use std::io::Write;
-        let mut f = std::fs::File::create(&tmp_path)
-            .map_err(|e| format!("Failed to create temp chart file: {}", e))?;
-        f.write_all(chart_json.as_bytes())
-            .map_err(|e| format!("Failed to write temp chart file: {}", e))?;
-        f.sync_all()
-            .map_err(|e| format!("Failed to flush temp chart file: {}", e))?;
+    // R1: validate meta is a JSON object, then write it verbatim (preserving the
+    // frontend's Phira/RPE round-trip fields).
+    let meta_value: serde_json::Value = serde_json::from_str(&meta_json)
+        .map_err(|e| format!("Invalid metadata JSON: {}", e))?;
+    if !meta_value.is_object() {
+        return Err("Metadata JSON must be an object".to_string());
     }
-    std::fs::rename(&tmp_path, &chart_path).map_err(|e| {
-        let _ = std::fs::remove_file(&tmp_path); // best-effort: don't leave an orphan .tmp
-        format!("Failed to commit chart.json: {}", e)
-    })?;
+
+    atomic_write(&validated.join("chart.json"), &chart_json)?;
+    atomic_write(&validated.join("meta.json"), &meta_json)?;
 
     Ok(())
 }

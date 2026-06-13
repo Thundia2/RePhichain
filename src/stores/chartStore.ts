@@ -245,6 +245,17 @@ function createDefaultLine(name?: string, index?: number): Line {
 // batch ops) wrap the loop in transaction(fn) so the whole gesture is a single
 // Ctrl+Z entry instead of flooding the MAX_HISTORY-deep stack. grep
 // `.transaction(` / `beginTransaction(` for the call sites.
+
+// ---- Helper: mark the chart dirty + advance the dirty token (finding F2) ----
+// EVERY path that sets isDirty=true must go through here so the _dirtySeq token
+// advances in lockstep — markCleanIf relies on that to detect an edit landing
+// during an in-flight save. Call sites: pushHistory (both branches), setMeta,
+// undo, redo. grep markStateDirty.
+function markStateDirty(state: ChartState) {
+  state.isDirty = true;
+  state._dirtySeq++;
+}
+
 function pushHistory(state: ChartState) {
   if (state._txnDepth > 0) {
     if (!state._txnDidPush && state._txnSnapshot) {
@@ -258,7 +269,7 @@ function pushHistory(state: ChartState) {
       state._futureSeqs = [];
       state._txnDidPush = true;
     }
-    state.isDirty = true;
+    markStateDirty(state);
     return;
   }
   state._past.push(current(state.chart));
@@ -269,7 +280,7 @@ function pushHistory(state: ChartState) {
   }
   state._future = [];
   state._futureSeqs = [];
-  state.isDirty = true;
+  markStateDirty(state);
 }
 
 // ---- Helper: sort notes by beat within a line ----
@@ -351,6 +362,12 @@ export interface ChartState {
   illustrationPath: string | null;
   meta: ProjectMeta;
   isDirty: boolean;
+  /** Monotonic counter bumped on every edit that marks the chart dirty (finding
+   *  F2). A save captures this token before its async write and later clears
+   *  isDirty via markCleanIf(token) ONLY if no edit landed meanwhile — so an
+   *  edit made DURING an in-flight save is never falsely marked saved. grep
+   *  _dirtySeq / markCleanIf. */
+  _dirtySeq: number;
   isLoaded: boolean;
 
   // Chart data (serialized to/from chart.json)
@@ -376,8 +393,13 @@ export interface ChartState {
   loadFromProjectData: (data: ProjectData) => void;
   /** Close current project, reset all state to defaults. */
   closeProject: () => void;
-  /** Mark the project as saved (isDirty = false). */
+  /** Mark the project as saved (isDirty = false). Unconditional — used by
+   *  closeProject and any flow that knows the on-disk copy is current. */
   markClean: () => void;
+  /** Mark clean ONLY if no dirtying edit happened since `token` (the _dirtySeq
+   *  captured at save start). Closes the in-flight-save race where edits made
+   *  during the async write would otherwise be clobbered as "saved" (F2). */
+  markCleanIf: (token: number) => void;
 
   // ---- Chart-level mutations ----
   /** Set the chart's audio offset in seconds. Pushes undo. */
@@ -539,6 +561,7 @@ export const useChartStore = create<ChartState>()((set, get) => ({
   illustrationPath: null,
   meta: { ...DEFAULT_META },
   isDirty: false,
+  _dirtySeq: 0,
   isLoaded: false,
   chart: structuredClone(DEFAULT_CHART),
   _past: [],
@@ -613,6 +636,13 @@ export const useChartStore = create<ChartState>()((set, get) => ({
 
   markClean: () => set({ isDirty: false }),
 
+  // F2: clear dirty only if the token (a _dirtySeq snapshot taken at save start)
+  // still matches — i.e. nothing edited the chart/meta during the async write.
+  // If an edit landed mid-save, _dirtySeq advanced past the token and we keep
+  // isDirty so that edit is saved by the next pass instead of being lost.
+  markCleanIf: (token) =>
+    set((state) => (state._dirtySeq === token ? { isDirty: false } : {})),
+
   // ---- Chart-level mutations ----
 
   setOffset: (offset) =>
@@ -629,8 +659,9 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         // Meta is intentionally excluded from undo history (finding S6):
         // undo/redo restore only state.chart, so pushing a snapshot here
         // created a no-op undo entry that evicted real chart history once
-        // the stack reached MAX_HISTORY. We still mark dirty so the edit saves.
-        state.isDirty = true;
+        // the stack reached MAX_HISTORY. We still mark dirty so the edit saves
+        // (and advance the dirty token so an in-flight save won't clobber it).
+        markStateDirty(state);
         Object.assign(state.meta, changes);
       }),
     ),
@@ -1020,7 +1051,7 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         state._future.push(current(state.chart));
         state._futureSeqs.push(state._pastSeqs.pop()!);
         state.chart = state._past.pop()!;
-        state.isDirty = true;
+        markStateDirty(state);
       }),
     ),
 
@@ -1031,7 +1062,7 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         state._past.push(current(state.chart));
         state._pastSeqs.push(state._futureSeqs.pop()!);
         state.chart = state._future.pop()!;
-        state.isDirty = true;
+        markStateDirty(state);
       }),
     ),
 
