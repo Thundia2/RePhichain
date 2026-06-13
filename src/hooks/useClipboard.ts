@@ -14,6 +14,7 @@
 import { useHotkeys } from "react-hotkeys-hook";
 import { useEditorStore } from "../stores/editorStore";
 import { useChartStore } from "../stores/chartStore";
+import { generateNoteUid } from "../utils/noteUid";
 import { useAudioStore } from "../stores/audioStore";
 import { BpmList } from "../utils/bpmList";
 import { beatToFloat, floatToBeat } from "../types/chart";
@@ -101,35 +102,53 @@ export function performPaste(): void {
   const es = useEditorStore.getState();
   const cs = useChartStore.getState();
   if (es.selectedLineIndex === null) return;
+  const lineIndex = es.selectedLineIndex;
 
   const { currentTime } = useAudioStore.getState();
   const bpmList = new BpmList(cs.chart.bpm_list);
   const currentBeat = bpmList.beatAtFloat(currentTime - cs.chart.offset);
   const beatOffset = currentBeat - clipboard.baseBeat;
 
-  for (const note of clipboard.notes) {
-    const pasted: Note = { ...structuredClone(note), beat: offsetBeat(note.beat, beatOffset) };
-    cs.addNote(es.selectedLineIndex, pasted);
-  }
-  for (const event of clipboard.events) {
-    const duration = beatToFloat(event.end_beat) - beatToFloat(event.start_beat);
-    const pasted: LineEvent = {
-      ...structuredClone(event),
-      start_beat: offsetBeat(event.start_beat, beatOffset),
-      end_beat: offsetBeat(event.start_beat, beatOffset + duration),
-    };
-    cs.addEvent(es.selectedLineIndex, pasted);
-  }
+  // Assign fresh uids up front so pasted notes don't collide with their source
+  // notes (finding A2 — structuredClone previously carried the original uid,
+  // producing duplicate uids that break group refs and identity reselection),
+  // and so we can reselect them by identity after the adds re-sort the array.
+  const pastedNotes: Note[] = clipboard.notes.map((note) => ({
+    ...structuredClone(note),
+    uid: generateNoteUid(),
+    beat: offsetBeat(note.beat, beatOffset),
+  }));
+  const pastedUids = new Set(pastedNotes.map((n) => n.uid!));
 
-  // Select pasted notes
-  if (clipboard.notes.length > 0) {
-    const pastedBeats = clipboard.notes.map(n => beatToFloat(offsetBeat(n.beat, beatOffset)));
-    const line = cs.chart.lines[es.selectedLineIndex];
-    const newSelection: number[] = [];
-    for (let i = 0; i < line.notes.length; i++) {
-      if (pastedBeats.some(pb => Math.abs(pb - beatToFloat(line.notes[i].beat)) < 1e-9)) newSelection.push(i);
+  // One undo entry for the whole paste (L1 transaction) instead of one per note.
+  cs.transaction(() => {
+    for (const pasted of pastedNotes) {
+      cs.addNote(lineIndex, pasted);
     }
-    es.setNoteSelection(newSelection);
+    for (const event of clipboard!.events) {
+      const duration = beatToFloat(event.end_beat) - beatToFloat(event.start_beat);
+      const pasted: LineEvent = {
+        ...structuredClone(event),
+        start_beat: offsetBeat(event.start_beat, beatOffset),
+        end_beat: offsetBeat(event.start_beat, beatOffset + duration),
+      };
+      cs.addEvent(lineIndex, pasted);
+    }
+  });
+
+  // Reselect the pasted notes by uid against FRESH post-mutation state
+  // (finding H5 — the old code read the stale pre-paste cs snapshot and matched
+  // by beat, which selected nothing or also grabbed pre-existing co-beat notes).
+  if (pastedUids.size > 0) {
+    const line = useChartStore.getState().chart.lines[lineIndex];
+    if (line) {
+      const newSelection: number[] = [];
+      for (let i = 0; i < line.notes.length; i++) {
+        const uid = line.notes[i].uid;
+        if (uid && pastedUids.has(uid)) newSelection.push(i);
+      }
+      es.setNoteSelection(newSelection);
+    }
   }
 }
 
