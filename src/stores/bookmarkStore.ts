@@ -15,7 +15,7 @@ import { create } from "zustand";
 import type { Bookmark } from "../types/bookmark";
 import { BOOKMARK_PRESETS } from "../types/bookmark";
 import type { BookmarkPreset } from "../types/bookmark";
-import type { Beat, NoteKind } from "../types/chart";
+import type { Beat, NoteKind, Note } from "../types/chart";
 import { useChartStore, registerProjectLoadReset } from "./chartStore";
 import { nextUndoSeq } from "../utils/undoSequence";
 
@@ -178,13 +178,17 @@ export const useBookmarkStore = create<BookmarkState>()((set, get) => ({
 
     for (const bm of toConvert) {
       const kind = presetToNoteKind(bm.preset);
-      cs.addNote(bm.lineIndex, {
+      const note: Note = {
         kind,
         beat: bm.beat,
         x: bm.x,
         above: bm.above,
         speed: 1,
-      });
+      };
+      // SW1: a hold note needs a non-zero hold_beat (1 beat) or it exports as a
+      // zero-length hold — same default the inspector seeds on kind→hold (P6).
+      if (kind === "hold") note.hold_beat = [1, 0, 1] as Beat;
+      cs.addNote(bm.lineIndex, note);
     }
 
     // Push undo before removing bookmarks (note addition is separately undoable via chartStore)

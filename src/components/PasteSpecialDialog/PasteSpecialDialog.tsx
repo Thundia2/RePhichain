@@ -84,6 +84,19 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
         end_beat: floatToBeat(Math.max(0, finalStart + finalDuration)),
       };
 
+      // SW2: x events carry a horizontal position, so apply the same Mirror X / X-offset
+      // the notes get above. The dialog only transformed event BEATS before, leaving x
+      // events un-mirrored/un-offset (the label is "negate horizontal position").
+      if (event.kind === "x" && (mirrorX || xOffset !== 0)) {
+        const tx = (v: number) => (mirrorX ? -v : v) + xOffset;
+        if ("constant" in pasted.value) {
+          pasted.value = { constant: tx(pasted.value.constant) };
+        } else if ("transition" in pasted.value) {
+          const t = pasted.value.transition;
+          pasted.value = { transition: { ...t, start: tx(t.start), end: tx(t.end) } };
+        }
+      }
+
       cs.addEvent(selectedLineIndex!, pasted);
     }
 

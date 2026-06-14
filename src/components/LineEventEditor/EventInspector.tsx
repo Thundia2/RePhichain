@@ -14,7 +14,7 @@ import { Field, SelectField, BeatField, EASING_OPTIONS } from "../common/FormFie
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import type { LineEvent, LineEventKind, EasingType } from "../../types/chart";
 import { EVENT_COLORS } from "../../constants/eventColors";
-import { DEFAULT_EVENT_VALUES } from "../../constants/eventConfig";
+import { defaultEventValue, defaultEventTransition } from "../../constants/eventConfig";
 
 const KIND_LABELS: Record<LineEventKind, string> = {
   x: "X Position",
@@ -147,15 +147,15 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
           }}
           onClick={() => {
             const snappedBeat = floatToBeat(currentBeat);
-            const defaultValue = DEFAULT_EVENT_VALUES[activeProperty] ?? 0;
-            // Short span, not [1000]: a constant holds via inheritance, so the
-            // far-end baseline is unnecessary and would shadow later events
-            // under the value-tiebreak (finding L4).
+            // Short span, not [1000]: a constant holds via inheritance, so the far-end
+            // baseline is unnecessary and would shadow later events under the value-
+            // tiebreak (finding L4). M6: defaultEventValue produces a valid shape for
+            // color/text too, not a bare { constant: 0 }.
             addEventRouted(lineIndex, {
               kind: activeProperty,
               start_beat: snappedBeat,
               end_beat: floatToBeat(currentBeat + 1),
-              value: { constant: defaultValue },
+              value: defaultEventValue(activeProperty),
             }, activeLayer);
           }}
         >
@@ -171,14 +171,13 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
           onClick={() => {
             const startBeat = floatToBeat(currentBeat);
             const endBeat = floatToBeat(currentBeat + 4); // 4 beats long
-            const defaultValue = DEFAULT_EVENT_VALUES[activeProperty] ?? 0;
+            // M6: defaultEventTransition gives a valid color_transition/text_transition
+            // shape for those kinds, not a numeric { transition } with a 0 value.
             addEventRouted(lineIndex, {
               kind: activeProperty,
               start_beat: startBeat,
               end_beat: endBeat,
-              value: {
-                transition: { start: defaultValue, end: defaultValue, easing: "linear" },
-              },
+              value: defaultEventTransition(activeProperty),
             }, activeLayer);
           }}
         >

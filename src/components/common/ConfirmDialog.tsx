@@ -6,6 +6,7 @@
 //   if (await showConfirm("Delete this item?")) { ... }
 // ============================================================
 
+import { useEffect } from "react";
 import { create } from "zustand";
 
 interface ConfirmState {
@@ -43,6 +44,21 @@ export const showConfirm = (message: string) => useConfirmStore.getState().showC
 
 export function ConfirmDialog() {
   const { open, message, respond } = useConfirmStore();
+
+  // Q5: keyboard support + suppress global hotkeys while the modal is open. The capture-
+  // phase window listener runs before react-hotkeys-hook's document listener, so
+  // stopPropagation() keeps editor hotkeys from firing behind the modal; Esc cancels,
+  // Enter confirms.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.stopPropagation();
+      if (e.key === "Escape") { e.preventDefault(); respond(false); }
+      else if (e.key === "Enter") { e.preventDefault(); respond(true); }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, respond]);
 
   if (!open) return null;
 

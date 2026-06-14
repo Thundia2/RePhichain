@@ -42,7 +42,12 @@ export function getClipboard(): ClipboardData | null {
 }
 
 function offsetBeat(beat: Beat, delta: number): Beat {
-  return floatToBeat(Math.max(0, beatToFloat(beat) + delta));
+  // G5: keep the source beat's denominator so triplets / odd subdivisions survive a paste.
+  // The default floatToBeat density can't represent e.g. 1/3, re-quantizing the note onto
+  // the wrong grid. A whole-beat paste offset stays exact; an odd delta snaps to the
+  // source's own grid (still better than the coarse default).
+  const denom = beat[2] || 1;
+  return floatToBeat(Math.max(0, beatToFloat(beat) + delta), denom);
 }
 
 /**
@@ -134,12 +139,13 @@ export function performPaste(): void {
       cs.addNote(lineIndex, pasted);
     }
     for (const event of clipboard!.events) {
-      const duration = beatToFloat(event.end_beat) - beatToFloat(event.start_beat);
       const pasted: LineEvent = {
         ...structuredClone(event),
         id: undefined, // fresh id (finding L2) — structuredClone carried the source id
+        // G5: offset each endpoint by the same beatOffset, preserving its OWN denominator
+        // (the old form rebuilt end from start+duration, snapping end onto start's grid).
         start_beat: offsetBeat(event.start_beat, beatOffset),
-        end_beat: offsetBeat(event.start_beat, beatOffset + duration),
+        end_beat: offsetBeat(event.end_beat, beatOffset),
       };
       // Route flat<->layer (finding L3) so a paste onto a layered line is visible.
       cs.addEventRouted(lineIndex, pasted);
