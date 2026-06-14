@@ -305,18 +305,23 @@ export function LineStrip() {
   // BpmList for time-to-beat conversion
   const bpmList = useMemo(() => new BpmList(bpmPoints), [bpmPoints]);
   const currentBeat = useMemo(() => bpmList.beatAtFloat(currentTime - offset), [bpmList, currentTime, offset]);
+  // Z3: quantize to half-beats for classification. The activity tiers only change at beat
+  // granularity (coming-soon within 8 beats, etc.), so classifyBeat stays a stable number
+  // for ~half a beat — that drops lineData's classifyLine sweep (opacity-range scans +
+  // note binary-searches, for every line) from 60Hz during playback to ~2-4Hz.
+  const classifyBeat = Math.floor(currentBeat * 2) / 2;
 
   // Classify all lines and compute sort order (considers both opacity and note proximity)
   const lineData = useMemo(() => {
     return lines.map((line, i) => {
       const classification = classifyLine(
-        line.events, line.event_layers, currentBeat,
+        line.events, line.event_layers, classifyBeat,
         line.notes, bpmList, inactivityTimeoutSeconds,
       );
       const category = line._category ?? autoCategorize(line);
       return { index: i, line, category, ...classification };
     });
-  }, [lines, currentBeat, bpmList, inactivityTimeoutSeconds]);
+  }, [lines, classifyBeat, bpmList, inactivityTimeoutSeconds]);
 
   // Sort: active first, then coming-soon, just-passed, long-passed, inactive
   const sortedLines = useMemo(() => {

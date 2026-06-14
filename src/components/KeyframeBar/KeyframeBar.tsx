@@ -272,9 +272,9 @@ export function KeyframeBar() {
         if (Math.abs(mouseX - startPx) <= DIAMOND_HIT_RADIUS) {
           // Find the global index in displayEvents
           const globalIdx = displayEvents.indexOf(event);
-          // Find the index within that kind's events for layer-aware operations
-          const kindEvents = displayEvents.filter((e) => e.kind === kind);
-          const kindIdx = kindEvents.indexOf(event);
+          // `events` is already this kind's slice and `event` is at index `ei` within it,
+          // so the kind-local index is just `ei` — no need to re-filter + indexOf (Z6).
+          const kindIdx = ei;
 
           return {
             kind,
@@ -444,6 +444,21 @@ export function KeyframeBar() {
       // (resolving selection to flat indices is wrong once events live in layers).
       const selEvtIds = new Set(useEditorStore.getState().selectedEventIds);
 
+      // Z6: group events by kind ONCE per frame instead of re-filtering the whole event
+      // list inside the per-kind lane loop below (was O(kinds × events) every rAF frame).
+      const eventsByKind = new Map<string, LineEvent[]>();
+      for (const e of displayEvents) {
+        const a = eventsByKind.get(e.kind);
+        if (a) a.push(e); else eventsByKind.set(e.kind, [e]);
+      }
+      const taggedByKind = new Map<string, TaggedEvent[]>();
+      if (taggedEvents) {
+        for (const t of taggedEvents) {
+          const a = taggedByKind.get(t.event.kind);
+          if (a) a.push(t); else taggedByKind.set(t.event.kind, [t]);
+        }
+      }
+
       for (let ki = 0; ki < kinds.length; ki++) {
         const kind = kinds[ki];
         const cy = 4 + laneHeight * (ki + 0.5);
@@ -457,7 +472,7 @@ export function KeyframeBar() {
 
         // Draw keyframes — use tagged events in group mode for per-member coloring
         if (taggedEvents) {
-          const kindTagged = taggedEvents.filter((t) => t.event.kind === kind);
+          const kindTagged = taggedByKind.get(kind) ?? []; // Z6: reuse the per-kind grouping
           for (const tagged of kindTagged) {
             const startBeat = beatToFloat(tagged.event.start_beat);
             const endBeat = beatToFloat(tagged.event.end_beat);
@@ -485,7 +500,7 @@ export function KeyframeBar() {
           }
         } else {
           // Normal mode rendering
-          const events = displayEvents.filter((e) => e.kind === kind);
+          const events = eventsByKind.get(kind) ?? []; // Z6: reuse the per-kind grouping
           for (const event of events) {
             const startBeat = beatToFloat(event.start_beat);
             const endBeat = beatToFloat(event.end_beat);

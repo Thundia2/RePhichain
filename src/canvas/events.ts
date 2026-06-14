@@ -617,6 +617,19 @@ function integrateEasedSpeed(
   return (h / 3) * sum;
 }
 
+// Z1: pre-built, sorted speed segments for distanceAt, cached per input array (see the
+// distanceAt body for the why + the frame-scoped-array invariant).
+interface DistanceSegment {
+  startTime: number;
+  endTime: number;
+  startValue: number;
+  endValue: number;
+  easing: EasingType;
+  easingLeft: number;
+  easingRight: number;
+}
+const _distanceSegmentCache = new WeakMap<LineEvent[], DistanceSegment[]>();
+
 /**
  * Calculate the distance a note has traveled at a given time.
  * This is the integral of speed over time, used to position notes
@@ -634,19 +647,30 @@ export function distanceAt(
   time: number,
   bpmTimeAt: (beat: Beat) => number,
 ): number {
-  // Build sorted speed segments with pre-computed times
-  const segments = speedEvents
-    .filter((e) => e.kind === "speed")
-    .map((e) => ({
-      startTime: bpmTimeAt(e.start_beat),
-      endTime: bpmTimeAt(e.end_beat),
-      startValue: "transition" in e.value ? (e.value as { transition: { start: number; end: number } }).transition.start : (e.value as { constant: number }).constant,
-      endValue: "transition" in e.value ? (e.value as { transition: { start: number; end: number } }).transition.end : (e.value as { constant: number }).constant,
-      easing: ("transition" in e.value ? (e.value as { transition: { start: number; end: number; easing: EasingType } }).transition.easing : "linear") as EasingType,
-      easingLeft: e.easing_left ?? 0,
-      easingRight: e.easing_right ?? 1,
-    }))
-    .sort((a, b) => a.startTime - b.startTime);
+  // Build sorted speed segments with pre-computed times.
+  // Z1: cache them per input array. distanceAt is called once per note per frame with the
+  // SAME speedEvents array — the caller filters line.events once per line per frame and
+  // reuses it for currentDistance + every note + hold end — so rebuilding here meant
+  // ~3M Segment allocations/sec on a busy chart. The WeakMap is keyed by the input-array
+  // reference, which is frame-scoped (every caller rebuilds it each frame via .filter), so
+  // cached segments never outlive the bpmTimeAt they were built with. (A future caller that
+  // memoizes the filtered array across a bpm_list change would need to bust this — none do.)
+  let segments = _distanceSegmentCache.get(speedEvents);
+  if (!segments) {
+    segments = speedEvents
+      .filter((e) => e.kind === "speed")
+      .map((e) => ({
+        startTime: bpmTimeAt(e.start_beat),
+        endTime: bpmTimeAt(e.end_beat),
+        startValue: "transition" in e.value ? (e.value as { transition: { start: number; end: number } }).transition.start : (e.value as { constant: number }).constant,
+        endValue: "transition" in e.value ? (e.value as { transition: { start: number; end: number } }).transition.end : (e.value as { constant: number }).constant,
+        easing: ("transition" in e.value ? (e.value as { transition: { start: number; end: number; easing: EasingType } }).transition.easing : "linear") as EasingType,
+        easingLeft: e.easing_left ?? 0,
+        easingRight: e.easing_right ?? 1,
+      }))
+      .sort((a, b) => a.startTime - b.startTime);
+    _distanceSegmentCache.set(speedEvents, segments);
+  }
 
   let lastTime = 0;
   let lastSpeed = 10; // Default speed
