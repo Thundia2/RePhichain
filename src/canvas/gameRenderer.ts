@@ -209,6 +209,11 @@ export class GameRenderer {
     return this.textureCache.has(path);
   }
 
+  /** Drop a cached line texture so a re-uploaded image (same path) reloads (finding Q2). */
+  invalidateLineTexture(path: string): void {
+    this.textureCache.delete(path);
+  }
+
   /**
    * Render a single frame of the game preview.
    * Returns a RenderResult with computed screen positions for all lines and notes,
@@ -745,7 +750,10 @@ export class GameRenderer {
     ctx.globalAlpha = 0.9 * noteAlpha;
 
     if (respack) {
-      const texKey = note.kind === "tap" ? "tap" : note.kind as "drag" | "flick";
+      // Q4: a degenerate hold (kind "hold" with no hold_beat lands here, not in
+      // drawHoldNote) has no single image in `textures` — "hold" is the composite
+      // parts object — so map it to the tap texture, mirroring Pixi's getNoteTexture.
+      const texKey = (note.kind === "tap" || note.kind === "hold") ? "tap" : note.kind as "drag" | "flick";
       const mhKey = (texKey + "MH") as "tapMH" | "dragMH" | "flickMH";
       const texture = (isMultiHighlight && respack.textures[mhKey])
         ? respack.textures[mhKey] as HTMLImageElement
@@ -796,7 +804,8 @@ export class GameRenderer {
   ) {
     // Try texture rendering first
     if (respack) {
-      const texKey = note.kind === "tap" ? "tap" : note.kind as "drag" | "flick";
+      // Q4: map a degenerate hold to the tap texture (see drawNote).
+      const texKey = (note.kind === "tap" || note.kind === "hold") ? "tap" : note.kind as "drag" | "flick";
       const texture = respack.textures[texKey] as HTMLImageElement | null;
       if (texture) {
         this.drawNoteTexture(ctx, noteX, noteY, noteW, texture);

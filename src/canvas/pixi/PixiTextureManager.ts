@@ -144,6 +144,15 @@ export class PixiTextureManager {
   }
 
   /**
+   * Drop the cached GPU texture for a line-texture path so a re-uploaded image under
+   * the same name reloads instead of showing the stale one (finding Q2). The underlying
+   * Texture stays in `cache` (keyed by its HTMLImageElement) and is freed on destroy().
+   */
+  invalidateLineTexture(path: string): void {
+    this.lineTextureCache.delete(path);
+  }
+
+  /**
    * Clear all cached textures. Call when the renderer is disposed
    * or when a major state change occurs (e.g. loading a new chart).
    */

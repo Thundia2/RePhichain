@@ -562,11 +562,19 @@ export class PixiLineContainer extends Container {
       this.lineVisual.visible = false;
       this.lineTextureSprite.visible = false;
       this.textDisplay.visible = false;
-      this.alpha = 0;
+      // X2: do NOT touch this.alpha — that fades the child notesContainer too. The
+      // notes were already drawn above (the alpha-0 "invisible line" technique relies
+      // on state.opacity >= 0 still rendering notes); only the line visuals hide here.
       return;
     }
 
-    this.alpha = state.opacity;
+    // X2: opacity applies to the line visual + text ONLY, never the container — notes
+    // carry their own per-note alpha (matches gameRenderer.ts, which resets globalAlpha
+    // before drawing notes). Container stays opaque so notes + anchor/select overlays
+    // are unaffected by line fades.
+    this.lineVisual.alpha = state.opacity;
+    this.lineTextureSprite.alpha = state.opacity;
+    this.textDisplay.alpha = state.opacity;
 
     // Check if line has text events (hides the line rect per RPE spec)
     const lineHasTextEvents = line.events.some((e) => e.kind === "text");

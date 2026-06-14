@@ -302,6 +302,14 @@ export class PixiGameRenderer {
   }
 
   /**
+   * Drop a cached line texture so a re-uploaded image reloads (finding Q2).
+   * Compatible with GameRenderer.invalidateLineTexture().
+   */
+  invalidateLineTexture(path: string): void {
+    this.textureManager.invalidateLineTexture(path);
+  }
+
+  /**
    * Render a single frame of the game preview.
    *
    * Same signature as GameRenderer.render() for drop-in compatibility.

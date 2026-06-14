@@ -113,6 +113,11 @@ import {
   computePlacementGhost,
 } from "./CanvasMouseHandlers";
 
+// Q6: when the Pixi renderer is active it draws the game scene at identity (viewport
+// zoom/pan is a future enhancement — see the render loop), so overlays + mouse hit-tests
+// use this identity viewport instead of es.canvasViewport, or they drift from the lines.
+const IDENTITY_VIEWPORT = { zoom: 1, offsetX: 0, offsetY: 0 };
+
 export function UnifiedCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null); // Canvas 2D overlay for handles/selection (Pixi mode)
@@ -134,6 +139,11 @@ export function UnifiedCanvas() {
   // FloatingInspector reads this instead of the logical (viewport-adjusted) drag coords,
   // which would mis-place the fixed-position popover (the other 3 call sites pass clientX/Y).
   const lastClientRef = useRef<{ x: number; y: number } | null>(null);
+  // Q2/Q8: line-texture load bookkeeping. texInFlightRef = names with a decode in flight
+  // (so a load isn't re-kicked every frame); loadedTexBlobsRef = the Blob last loaded per
+  // name, so a re-upload under the same name (new Blob) reloads + invalidates the stale one.
+  const texInFlightRef = useRef<Set<string>>(new Set());
+  const loadedTexBlobsRef = useRef<Map<string, Blob>>(new Map());
 
   const isLoaded = useChartStore((s) => s.isLoaded);
 
@@ -341,19 +351,39 @@ export function UnifiedCanvas() {
       // ---- Load line textures into active renderer cache ----
       const activeRenderer = renderer || pixiRenderer;
       for (const line of cs.chart.lines) {
-        if (line.texture && activeRenderer && !activeRenderer.hasLineTexture(line.texture)) {
-          const blob = cs.lineTextures.get(line.texture);
-          if (blob) {
-            const img = new Image();
-            const url = URL.createObjectURL(blob);
-            img.onload = () => {
-              activeRenderer.loadLineTexture(line.texture!, img);
-              URL.revokeObjectURL(url);
-            };
-            img.onerror = () => URL.revokeObjectURL(url);
-            img.src = url;
+        if (!line.texture || !activeRenderer) continue;
+        const texName = line.texture;
+        const blob = cs.lineTextures.get(texName);
+        if (!blob) continue;
+        // Q8: skip if a decode for this name is already running (the old loop kicked a
+        // fresh Image every frame until it finished). Q2: reload when the Blob changed
+        // (re-upload under the same name) or the renderer lost it, invalidating the stale one.
+        if (texInFlightRef.current.has(texName)) continue;
+        const have = activeRenderer.hasLineTexture(texName);
+        const loadedBlob = loadedTexBlobsRef.current.get(texName);
+        if (have && loadedBlob === blob) continue;
+        if (have && loadedBlob !== blob) activeRenderer.invalidateLineTexture(texName);
+
+        texInFlightRef.current.add(texName);
+        const img = new Image();
+        const url = URL.createObjectURL(blob);
+        img.onload = () => {
+          texInFlightRef.current.delete(texName);
+          // Re-resolve the renderer — it may have been swapped/destroyed mid-decode.
+          const r = rendererRef.current || pixiRendererRef.current;
+          if (r) {
+            try {
+              r.loadLineTexture(texName, img);
+              loadedTexBlobsRef.current.set(texName, blob);
+            } catch { /* renderer torn down between guard and call */ }
           }
-        }
+          URL.revokeObjectURL(url);
+        };
+        img.onerror = () => {
+          texInFlightRef.current.delete(texName);
+          URL.revokeObjectURL(url);
+        };
+        img.src = url;
       }
 
       // ---- Render options (shared by both renderers) ----
@@ -428,11 +458,11 @@ export function UnifiedCanvas() {
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, overlay.width, overlay.height);
             ctx.restore();
-            // Apply DPR + viewport transform
+            // Q6: Pixi renders the scene at identity (no viewport transform yet), so the
+            // overlay must NOT apply the viewport either — otherwise handles/selection
+            // drift from the rendered lines when zoomed/panned. DPR only here.
             ctx.save();
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            ctx.translate(vp.offsetX, vp.offsetY);
-            ctx.scale(vp.zoom, vp.zoom);
           }
         }
       } else if (renderer) {
@@ -681,8 +711,10 @@ export function UnifiedCanvas() {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
 
-    // Convert to logical (viewport-adjusted) coordinates for hit-testing
-    const vp = es.canvasViewport;
+    // Convert to logical (viewport-adjusted) coordinates for hit-testing. Q6: in Pixi
+    // mode the scene renders at identity, so hit-test in identity space too or clicks
+    // land off the rendered lines when zoomed/panned.
+    const vp = usePixiRef.current ? IDENTITY_VIEWPORT : es.canvasViewport;
     const mouseX = (rawMouseX - vp.offsetX) / vp.zoom;
     const mouseY = (rawMouseY - vp.offsetY) / vp.zoom;
 
@@ -907,8 +939,8 @@ export function UnifiedCanvas() {
 
 
 
-    // Convert to logical (viewport-adjusted) coordinates
-    const vp = useEditorStore.getState().canvasViewport;
+    // Convert to logical (viewport-adjusted) coordinates. Q6: identity viewport in Pixi mode.
+    const vp = usePixiRef.current ? IDENTITY_VIEWPORT : useEditorStore.getState().canvasViewport;
     const mouseX = (rawMouseX - vp.offsetX) / vp.zoom;
     const mouseY = (rawMouseY - vp.offsetY) / vp.zoom;
 
@@ -1313,7 +1345,7 @@ export function UnifiedCanvas() {
           // rect.width/2*zoom + offsetX, so the quick-event X/Y landed off by a
           // zoom-dependent amount whenever zoom ≠ 1.
           const rect = canvasEl.getBoundingClientRect();
-          const vp = es.canvasViewport;
+          const vp = usePixiRef.current ? IDENTITY_VIEWPORT : es.canvasViewport;
           const mouseX = (e.clientX - rect.left - vp.offsetX) / vp.zoom;
           const mouseY = (e.clientY - rect.top - vp.offsetY) / vp.zoom;
           const canvasX = (mouseX / rect.width - 0.5) * CANVAS_WIDTH;

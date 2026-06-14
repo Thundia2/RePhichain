@@ -52,7 +52,11 @@ export function GamePreview() {
   const videoBackgroundRef = useRef<VideoBackgroundManager>(new VideoBackgroundManager());
   const hitSoundRef = useRef<HitSoundManager>(new HitSoundManager());
   const lastRespackIdRef = useRef<string | null>(null);
-  const loadedTexturesRef = useRef<Set<string>>(new Set());
+  // Q2/Q8: texInFlightRef = names currently decoding (in-flight guard); loadedTexBlobsRef
+  // = the Blob last successfully loaded per name, so a re-upload under the same name
+  // (new Blob) reloads + invalidates the stale cached texture instead of showing it.
+  const texInFlightRef = useRef<Set<string>>(new Set());
+  const loadedTexBlobsRef = useRef<Map<string, Blob>>(new Map());
   const textureUrlsRef = useRef<Map<string, string>>(new Map());
   const rafRef = useRef<number>(0);
   const wasPlayingRef = useRef(false);
@@ -156,7 +160,8 @@ export function GamePreview() {
     const videoBackground = videoBackgroundRef.current;
     const hitSound = hitSoundRef.current;
     const textureUrls = textureUrlsRef.current;
-    const loadedTextures = loadedTexturesRef.current;
+    const inFlight = texInFlightRef.current;
+    const loadedBlobs = loadedTexBlobsRef.current;
     const pixiRenderer = pixiRendererRef.current;
 
     return () => {
@@ -171,7 +176,8 @@ export function GamePreview() {
         URL.revokeObjectURL(url);
       }
       textureUrls.clear();
-      loadedTextures.clear();
+      inFlight.clear();
+      loadedBlobs.clear();
     };
   }, [resizeCanvas]);
 
@@ -269,32 +275,42 @@ export function GamePreview() {
       const activeRenderer = renderer || pixiRenderer;
       const lineTextures = cs.lineTextures;
       for (const [texName, texBlob] of lineTextures) {
-        if (!loadedTexturesRef.current.has(texName) && activeRenderer && !activeRenderer.hasLineTexture(texName)) {
-          loadedTexturesRef.current.add(texName);
-          const url = URL.createObjectURL(texBlob);
-          textureUrlsRef.current.set(texName, url);
-          const img = new Image();
-          img.onload = () => {
-            if (cancelled) return;
-            // Re-resolve the renderer at callback time — the one we
-            // captured in `activeRenderer` may have been replaced.
-            const r = rendererRef.current || pixiRendererRef.current;
-            if (!r) return;
-            try {
-              r.loadLineTexture(texName, img);
-            } catch (err) {
-              // Renderer was destroyed between our guards and this call,
-              // or the texture is malformed. Don't bring down the frame loop.
-              console.warn(`Failed to load line texture "${texName}":`, err);
-            }
-          };
-          img.onerror = () => {
-            URL.revokeObjectURL(url);
-            textureUrlsRef.current.delete(texName);
-            loadedTexturesRef.current.delete(texName);
-          };
-          img.src = url;
-        }
+        if (!activeRenderer) break;
+        // Q8: skip while a decode for this name is already in flight (don't re-kick a
+        // fresh Image every frame). Q2: reload when the Blob changed (re-upload under the
+        // same name) or the renderer lost the texture (swap); invalidate the stale one.
+        if (texInFlightRef.current.has(texName)) continue;
+        const have = activeRenderer.hasLineTexture(texName);
+        const loadedBlob = loadedTexBlobsRef.current.get(texName);
+        if (have && loadedBlob === texBlob) continue;
+        if (have && loadedBlob !== texBlob) activeRenderer.invalidateLineTexture(texName);
+
+        texInFlightRef.current.add(texName);
+        const prevUrl = textureUrlsRef.current.get(texName);
+        if (prevUrl) URL.revokeObjectURL(prevUrl);
+        const url = URL.createObjectURL(texBlob);
+        textureUrlsRef.current.set(texName, url);
+        const img = new Image();
+        img.onload = () => {
+          texInFlightRef.current.delete(texName);
+          if (cancelled) return;
+          // Re-resolve the renderer at callback time — the captured one may be stale.
+          const r = rendererRef.current || pixiRendererRef.current;
+          if (!r) return;
+          try {
+            r.loadLineTexture(texName, img);
+            loadedTexBlobsRef.current.set(texName, texBlob);
+          } catch (err) {
+            // Renderer destroyed between guards and this call, or malformed texture.
+            console.warn(`Failed to load line texture "${texName}":`, err);
+          }
+        };
+        img.onerror = () => {
+          texInFlightRef.current.delete(texName);
+          URL.revokeObjectURL(url);
+          textureUrlsRef.current.delete(texName);
+        };
+        img.src = url;
       }
 
       // Rebuild BpmList if changed
