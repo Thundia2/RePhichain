@@ -182,6 +182,9 @@ if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__tabStore = useTabStore;
   (window as unknown as Record<string, unknown>).__respackStore = useRespackStore;
   (window as unknown as Record<string, unknown>).__settingsStore = useSettingsStore;
+  // Render smoke-test harness: window.__smoke.loadChartFromUrl("/test-charts/<name>").
+  // See src/dev/smokeHarness.ts + scripts/render-smoke.md. DEV-only (tree-shaken).
+  import("./dev/smokeHarness").then((m) => m.installSmokeHarness());
 }
 
 // Initialize respacks from IndexedDB (non-blocking)

@@ -247,10 +247,26 @@ export function EffectsTimeline({
   }, [effects, laneOrder, beatZoom, scrollX, currentBeat, selectedIndex]);
 
   // ---- Animation loop ----
+  //
+  // Z4: `draw` is memoized on ALL of its inputs (effects/laneOrder/beatZoom/
+  // scrollX/currentBeat/selectedIndex), and currentBeat derives from the
+  // SUBSCRIBED currentTime — so any change that affects the picture recreates
+  // `draw` and re-runs this effect. Between those, the old loop redrew the same
+  // closed-over inputs 60×/sec (identical pixels), even while paused. Now the
+  // loop is dirty-gated: it redraws once per effect run (lastSig resets to "")
+  // and otherwise only when the canvas's CSS size changes (the one redraw
+  // trigger that doesn't go through React). Idle ⇒ a clientWidth read + string
+  // compare, no canvas work.
   useEffect(() => {
     let rafId = 0;
+    let lastSig = "";
     const tick = () => {
-      draw();
+      const canvas = canvasRef.current;
+      const sig = canvas ? `${canvas.clientWidth}x${canvas.clientHeight}` : "";
+      if (sig !== lastSig) {
+        lastSig = sig;
+        draw();
+      }
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);

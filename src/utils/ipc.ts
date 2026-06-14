@@ -300,8 +300,10 @@ export interface OnsetBundle {
 
 /** The frontend's compiled-in expectation of the Rust pipeline version.
  *  Bump this alongside `ONSET_PIPELINE_VERSION` on the Rust side; mismatch
- *  surfaces a dev-mode warning + clears the cached results. */
-export const EXPECTED_ONSET_PIPELINE_VERSION = 2;
+ *  surfaces a dev-mode warning + clears the cached results.
+ *  v3 (2026-06-14): O3 gapless decode + O7 resampler delay compensation shifted
+ *  onset times earlier — stale v2 salience must be re-detected. */
+export const EXPECTED_ONSET_PIPELINE_VERSION = 3;
 
 /** Run ML onset detection on an audio file. musicPath must be absolute.
  *  Returns the whole song's per-frame salience plus a version stamp. */
