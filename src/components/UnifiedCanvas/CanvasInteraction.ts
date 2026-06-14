@@ -39,6 +39,9 @@ export interface TranslateDragState {
   currentCanvasX: number;
   currentCanvasY: number;
   startRotationDeg: number; // Initial rotation in degrees (for ghost preview)
+  /** UC6: parent line's world rotation (radians); the screen delta is un-rotated by
+   *  this before becoming a LOCAL x/y delta. 0 for root lines (no parent). */
+  parentWorldRotation: number;
 }
 
 export interface RotateDragState {
@@ -50,6 +53,9 @@ export interface RotateDragState {
   startCanvasY: number;
   startRotationDeg: number;
   currentRotationDeg: number;
+  /** UC6: parent's world rotation (radians) to subtract from the committed value so a
+   *  rotate-with-father child stores LOCAL rotation. 0 for roots / non-inheriting children. */
+  parentWorldRotation: number;
 }
 
 export interface PanDragState {
@@ -291,6 +297,7 @@ export function startTranslateDrag(
   canvasX: number,
   canvasY: number,
   rotationDeg: number,
+  parentWorldRotation: number = 0,
 ): TranslateDragState {
   return {
     type: "translate",
@@ -302,6 +309,7 @@ export function startTranslateDrag(
     currentCanvasX: canvasX,
     currentCanvasY: canvasY,
     startRotationDeg: rotationDeg,
+    parentWorldRotation,
   };
 }
 
@@ -315,12 +323,22 @@ export function updateTranslateDrag(
   canvasWidth: number,
   canvasHeight: number,
 ): TranslateDragState {
-  const { dx, dy } = screenDeltaToCanvasDelta(
-    mouseX - drag.startMouseX,
-    mouseY - drag.startMouseY,
-    canvasWidth,
-    canvasHeight,
-  );
+  // UC6: rotate the world-space screen delta into the parent's local frame before
+  // converting to RPE units. computeWorldTransforms maps a child's local offset to world
+  // via R(-parentWorldRotation), so the inverse here is R(+parentWorldRotation). No-op
+  // for root lines (parentWorldRotation === 0).
+  let sdx = mouseX - drag.startMouseX;
+  let sdy = mouseY - drag.startMouseY;
+  const p = drag.parentWorldRotation;
+  if (p) {
+    const cos = Math.cos(p);
+    const sin = Math.sin(p);
+    const rx = sdx * cos - sdy * sin;
+    const ry = sdx * sin + sdy * cos;
+    sdx = rx;
+    sdy = ry;
+  }
+  const { dx, dy } = screenDeltaToCanvasDelta(sdx, sdy, canvasWidth, canvasHeight);
   return {
     ...drag,
     currentCanvasX: drag.startCanvasX + dx,
@@ -368,6 +386,7 @@ export function startRotateDrag(
   canvasX: number,
   canvasY: number,
   rotationDeg: number,
+  parentWorldRotation: number = 0,
 ): RotateDragState {
   return {
     type: "rotate",
@@ -378,6 +397,7 @@ export function startRotateDrag(
     startCanvasY: canvasY,
     startRotationDeg: rotationDeg,
     currentRotationDeg: rotationDeg,
+    parentWorldRotation,
   };
 }
 
@@ -416,9 +436,14 @@ export function finishRotateDrag(
   const threshold = 0.5;
 
   if (Math.abs(drag.currentRotationDeg - drag.startRotationDeg) > threshold) {
+    // UC6: currentRotationDeg is the desired WORLD rotation; the line stores LOCAL
+    // rotation, so subtract the parent's world rotation (already 0 unless this is a
+    // rotate-with-father child — see tryHandleDrag). The threshold above stays in
+    // world space — the difference is parent-invariant.
+    const parentDeg = (drag.parentWorldRotation * 180) / Math.PI;
     commitValue(
       drag.lineIndex, "rotation",
-      Math.round(drag.currentRotationDeg * 10) / 10,
+      Math.round((drag.currentRotationDeg - parentDeg) * 10) / 10,
       currentBeat,
     );
   }

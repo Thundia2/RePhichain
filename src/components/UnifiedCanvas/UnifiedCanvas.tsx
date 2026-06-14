@@ -130,6 +130,10 @@ export function UnifiedCanvas() {
   const spaceDownRef = useRef(false);
   // Raw cursor position in screen pixels (for screen-space overlays like ghost beat label)
   const rawCursorRef = useRef<{ x: number; y: number } | null>(null);
+  // UC7: last absolute client coords — handleMouseUp has no event, so the drag-select
+  // FloatingInspector reads this instead of the logical (viewport-adjusted) drag coords,
+  // which would mis-place the fixed-position popover (the other 3 call sites pass clientX/Y).
+  const lastClientRef = useRef<{ x: number; y: number } | null>(null);
 
   const isLoaded = useChartStore((s) => s.isLoaded);
 
@@ -699,9 +703,18 @@ export function UnifiedCanvas() {
     if (selectedLineInfo) {
       const chartLine = cs.chart.lines[selectedLineInfo.lineIndex];
       if (chartLine) {
+        // UC6: a child line's committed x/y/rotation are LOCAL (in the parent's
+        // frame), but the drag delta + handle angle are world-space. Pass the parent's
+        // world rotation so the drag un-rotates the delta and subtracts it from the
+        // committed rotation (no-op for root lines, where father_index < 0).
+        const fatherIdx = chartLine.father_index ?? -1;
+        const parentInfo = fatherIdx >= 0
+          ? lastRenderResultRef.current?.lines.find((l) => l.lineIndex === fatherIdx)
+          : null;
+        const parentWorldRotation = parentInfo?.rotation ?? 0;
         const handleResult = tryHandleDrag(
           mouseX, mouseY, selectedLineInfo, chartLine,
-          getCurrentBeat(), rect.width,
+          getCurrentBeat(), rect.width, parentWorldRotation,
         );
         if (handleResult) {
           dragRef.current = handleResult.drag;
@@ -890,6 +903,9 @@ export function UnifiedCanvas() {
     const rawMouseY = e.clientY - rect.top;
     // Store raw cursor position for screen-space overlays (ghost beat label, eraser count)
     rawCursorRef.current = { x: rawMouseX, y: rawMouseY };
+    lastClientRef.current = { x: e.clientX, y: e.clientY }; // UC7: absolute coords for the popover
+
+
 
     // Convert to logical (viewport-adjusted) coordinates
     const vp = useEditorStore.getState().canvasViewport;
@@ -1078,7 +1094,10 @@ export function UnifiedCanvas() {
           );
           es.setPendingNote(ghost);
         }
-      } else {
+      } else if (!es.stepRecordActive) {
+        // UC4: don't clear the ghost while step-record owns it — the "Step record
+        // ghost note" block above set es.pendingNote this same move, and the bare
+        // else cleared it every frame, making the step-record ghost flicker/vanish.
         if (es.pendingNote) {
           es.setPendingNote(null);
         }
@@ -1138,8 +1157,10 @@ export function UnifiedCanvas() {
           if (hitNotes.length > 0) {
             setNoteSelectionByIndex(hitNotes);
             const targetType = hitNotes.length > 1 ? "multi_note" : "note";
-            // Use drag end coordinates since the mouse event is not available in this callback
-            es.showFloatingInspector(drag.currentX, drag.currentY, targetType);
+            // UC7: the popover is position:fixed (absolute client coords). drag.currentX/Y
+            // are logical viewport-adjusted coords, so fall back to the last client position.
+            const lc = lastClientRef.current;
+            es.showFloatingInspector(lc?.x ?? drag.currentX, lc?.y ?? drag.currentY, targetType);
           } else {
             es.clearSelection();
           }
@@ -1286,16 +1307,17 @@ export function UnifiedCanvas() {
           const selLineIdx = getSelectedLineIndex();
           if (!canvasEl || selLineIdx === null) return;
 
-          // Compute canvas-space coordinates
+          // UC3: use the SAME viewport→canvas mapping as the cursor HUD and the
+          // click hit-tests (handleMouseMove/handleMouseDown). The old formula put
+          // the rendered center at rect.width/2 + offsetX, but it actually sits at
+          // rect.width/2*zoom + offsetX, so the quick-event X/Y landed off by a
+          // zoom-dependent amount whenever zoom ≠ 1.
           const rect = canvasEl.getBoundingClientRect();
           const vp = es.canvasViewport;
-          const pixelX = (e.clientX - rect.left);
-          const pixelY = (e.clientY - rect.top);
-          const centerX = rect.width / 2 + vp.offsetX;
-          const centerY = rect.height / 2 + vp.offsetY;
-          const scale = (rect.width / 1350) * vp.zoom;
-          const canvasX = (pixelX - centerX) / scale;
-          const canvasY = -(pixelY - centerY) / scale;
+          const mouseX = (e.clientX - rect.left - vp.offsetX) / vp.zoom;
+          const mouseY = (e.clientY - rect.top - vp.offsetY) / vp.zoom;
+          const canvasX = (mouseX / rect.width - 0.5) * CANVAS_WIDTH;
+          const canvasY = (0.5 - mouseY / rect.height) * (CANVAS_WIDTH * (900 / 1350));
 
           // Current beat — raw editor space, clamped to ≥ 0 (placement target).
           const beat = getPlayheadBeat({ clampNonNegative: true });

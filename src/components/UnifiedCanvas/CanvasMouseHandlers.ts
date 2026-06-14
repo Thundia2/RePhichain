@@ -141,8 +141,13 @@ export function tryHandleDrag(
   chartLine: Line,
   currentBeat: number,
   canvasWidth: number,
+  parentWorldRotation: number = 0, // UC6: parent's world rotation (radians); 0 for roots
 ): HandleDragResult | null {
   const screenRotation = -lineInfo.rotation;
+
+  // UC6: translate composition always rotates a child's offset by its parent, but the
+  // committed rotation only inherits the parent when rotate_with_father isn't disabled.
+  const parentRotForRotate = chartLine.rotate_with_father !== false ? parentWorldRotation : 0;
 
   // Check rotation handle first (higher priority — smaller target)
   if (hitTestRotationHandle(
@@ -158,6 +163,7 @@ export function tryHandleDrag(
       lineInfo.lineIndex,
       lineInfo.screenX, lineInfo.screenY,
       state.x, state.y, rotDeg,
+      parentRotForRotate,
     );
     return { type: "rotate", drag, interactionMode: "dragging_rotate" };
   }
@@ -175,6 +181,7 @@ export function tryHandleDrag(
       lineInfo.lineIndex,
       mouseX, mouseY,
       state.x, state.y, rotDeg,
+      parentWorldRotation,
     );
     return { type: "translate", drag, interactionMode: "dragging_translate" };
   }

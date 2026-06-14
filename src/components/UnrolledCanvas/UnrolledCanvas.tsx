@@ -31,7 +31,7 @@ import {
 import { useSettingsStore } from "../../stores/settingsStore";
 import { UnrolledRenderer, effectiveGutterWidth, EVENT_DIAMOND_HIT_RADIUS, EVENT_GUTTER_EXTRA } from "../../canvas/unrolledRenderer";
 import type { UnrolledOverlayLine } from "../../canvas/unrolledRenderer";
-import { BEAT_GUTTER_WIDTH } from "../../constants/canvasConstants";
+import { BEAT_GUTTER_WIDTH, BASE_PX_PER_BEAT } from "../../constants/canvasConstants";
 import { getPlayheadBeat } from "../../utils/playhead";
 import { beatToFloat } from "../../types/chart";
 import { snapBeat, floatToBeat } from "../../utils/beat";
@@ -233,7 +233,9 @@ export function UnrolledCanvas({
       const followPlayback = es.unrolledFollowPlayback[followPlaybackKey] ?? true;
       if (as_.isPlaying && followPlayback) {
         const scrollBeat = getScrollBeat();
-        const pxPerBeat = 80 * es.timelineZoom;
+        // Y8: BASE_PX_PER_BEAT (not a bare 80) so this auto-follow math stays in
+        // lockstep with UnrolledRenderer.beatToY, which scales by the same constant.
+        const pxPerBeat = BASE_PX_PER_BEAT * es.timelineZoom;
         const maxVisibleBeat = scrollBeat + h / pxPerBeat;
         // If playhead is about to go off-screen, scroll to center it
         if (currentBeat > maxVisibleBeat - 1 || currentBeat < scrollBeat + 0.5) {
