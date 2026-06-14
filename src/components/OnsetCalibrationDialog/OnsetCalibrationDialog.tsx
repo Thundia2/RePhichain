@@ -263,7 +263,10 @@ export function OnsetCalibrationDialog({ open, onClose }: OnsetCalibrationDialog
     audioEngine.seek(region.startTime);
     audioEngine.play();
     setPlayingRegion(region.label);
-    const ms = (region.endTime - region.startTime) * 1000;
+    // O8: scale the auto-stop timeout by the playback rate — a region of length L played
+    // at 2× finishes in L/2 real seconds, so a rate-1 timeout kept playing past the region.
+    const rate = useAudioStore.getState().playbackRate || 1;
+    const ms = ((region.endTime - region.startTime) * 1000) / rate;
     playTimerRef.current = setTimeout(() => {
       audioEngine.pause();
       setPlayingRegion(null);
