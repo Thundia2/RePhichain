@@ -344,15 +344,21 @@ export function LineStrip() {
     }
   }, [toggleLineStripSearch]);
 
-  // Horizontal wheel scroll — converts vertical scroll to horizontal on the chip bar.
-  // stopPropagation prevents the event from reaching the canvas scroll handler.
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (scrollRef.current) {
-      // Use deltaY (vertical scroll) as primary, fall back to deltaX for trackpads
-      scrollRef.current.scrollLeft += e.deltaY !== 0 ? e.deltaY : e.deltaX;
-    }
+  // W8: attach the horizontal-scroll wheel handler NATIVELY with { passive: false }.
+  // React's onWheel is registered passively, so e.preventDefault() there is a no-op (and
+  // logs an "Unable to preventDefault inside passive event listener" warning) — the chip
+  // bar couldn't swallow the canvas's vertical-scroll seek. deltaY drives the horizontal
+  // scroll (deltaX fallback for trackpads); stopPropagation keeps it off the canvas.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.scrollLeft += e.deltaY !== 0 ? e.deltaY : e.deltaX;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
   // Auto-scroll selected line into view
@@ -367,7 +373,6 @@ export function LineStrip() {
   return (
     <div
       ref={scrollRef}
-      onWheel={handleWheel}
       style={{
         height: 30,
         display: "flex",

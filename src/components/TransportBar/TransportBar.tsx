@@ -72,7 +72,10 @@ export function TransportBar() {
   };
 
   const maxTime = Math.max(duration, 1);
-  const progress = (displayTime / maxTime) * 100;
+  // W5: clamp to [0,100]. displayTime can briefly exceed duration (Howler reports a
+  // currentTime slightly past the end, or duration is stale mid-load), which otherwise
+  // pushes the filled bar + thumb past the track and into the time label.
+  const progress = Math.max(0, Math.min(100, (displayTime / maxTime) * 100));
 
   return (
     <div
@@ -253,7 +256,7 @@ export function TransportBar() {
 
       {/* ── Time scrub slider ── */}
       <div style={{ width: 260, display: "flex", alignItems: "center", gap: 6 }}>
-        <div style={{ position: "relative", flex: 1, height: 16, display: "flex", alignItems: "center" }}>
+        <div style={{ position: "relative", flex: 1, height: 16, display: "flex", alignItems: "center", overflow: "hidden" }}>
           {/* Track background */}
           <div
             style={{
