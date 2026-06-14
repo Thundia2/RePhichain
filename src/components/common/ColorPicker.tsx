@@ -108,8 +108,10 @@ export function ColorPicker({ value, onChange, onClose }: ColorPickerProps) {
       ctx.fill();
     }
 
-    // Hue indicator
-    const hueRad = ((hue - 90) * Math.PI) / 180;
+    // Hue indicator. E1: the ring draws hue=deg at canvas-angle deg (fillStyle
+    // hsl(deg)), so the indicator + the click handler below use the SAME mapping
+    // (hue ↔ angle, no 90° offset) — otherwise clicking a color picked a hue 90° away.
+    const hueRad = (hue * Math.PI) / 180;
     const indicR = (outerR + innerR) / 2;
     const ix = cx + Math.cos(hueRad) * indicR;
     const iy = cy + Math.sin(hueRad) * indicR;
@@ -162,7 +164,7 @@ export function ColorPicker({ value, onChange, onClose }: ColorPickerProps) {
     const dist = Math.hypot(x, y);
     if (dist < 55 || dist > 88) return; // not on the ring
 
-    let angle = (Math.atan2(y, x) * 180) / Math.PI + 90;
+    let angle = (Math.atan2(y, x) * 180) / Math.PI; // E1: hue = canvas angle (matches the drawn ring)
     if (angle < 0) angle += 360;
 
     const newHsl: [number, number, number] = [angle, hsl[1], hsl[2]];
@@ -175,10 +177,11 @@ export function ColorPicker({ value, onChange, onClose }: ColorPickerProps) {
     const canvas = slCanvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const x = Math.max(0, Math.min(119, e.clientX - rect.left));
-    const y = Math.max(0, Math.min(119, e.clientY - rect.top));
-    const s = x / 119;
-    const l = 1 - y / 119;
+    // E2: the SL canvas is 120px internally but displayed at 80px (CSS). Normalize the
+    // click by the DISPLAYED rect (not a hard-coded 119) — otherwise s=1 / full dark-light
+    // are unreachable: a click at the right edge (CSS x≈80) was read as 80/119 ≈ 0.67.
+    const s = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const l = Math.max(0, Math.min(1, 1 - (e.clientY - rect.top) / rect.height));
 
     const newHsl: [number, number, number] = [hsl[0], s, l];
     setHsl(newHsl);

@@ -596,6 +596,10 @@ export function drawBeatGrid(
     ctx.globalAlpha = 0.35;
     ctx.fillStyle = "#6c8aff";
     ctx.font = "9px sans-serif";
+    // E6: set textAlign explicitly so the beat numbers don't inherit a "right"/"center"
+    // alignment left over from an earlier overlay. Scoped by this function's save/restore.
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
     for (const { text, x, y } of labels) {
       ctx.fillText(text, x, y);
     }

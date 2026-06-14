@@ -566,18 +566,27 @@ function evaluateAnimatedVar(
     }
   }
 
-  // If past all events, return the end value of the last event
-  const lastEvent = events[events.length - 1];
-  const lastEnd = beatToFloat(lastEvent.endTime);
-  if (beat > lastEnd) {
-    return typeof lastEvent.end === "number" ? lastEvent.end : fallback;
+  // E7: not inside any event. Hold the END value of the most recent event that has
+  // already ended — a gap BETWEEN two events must hold the previous end value, not snap
+  // to the fallback (the old code fell through to `return fallback` for gaps). Computed
+  // order-independently so it doesn't rely on the events being sorted.
+  let held: number | null = null;
+  let heldEnd = -Infinity;
+  let firstStart = Infinity;
+  let firstStartVal = fallback;
+  for (const ev of events) {
+    const sb = beatToFloat(ev.startTime);
+    const eb = beatToFloat(ev.endTime);
+    if (eb <= beat && eb >= heldEnd) {
+      heldEnd = eb;
+      held = typeof ev.end === "number" ? ev.end : fallback;
+    }
+    if (sb < firstStart) {
+      firstStart = sb;
+      firstStartVal = typeof ev.start === "number" ? ev.start : fallback;
+    }
   }
-
-  // Before all events, return the start value of the first event
-  const firstStart = beatToFloat(events[0].startTime);
-  if (beat < firstStart) {
-    return typeof events[0].start === "number" ? events[0].start : fallback;
-  }
-
+  if (held !== null) return held;              // gap or past-all → previous end value
+  if (beat < firstStart) return firstStartVal; // before the first event → its start value
   return fallback;
 }

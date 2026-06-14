@@ -444,6 +444,19 @@ function KeyframeEditor({
   // before, finding T3 / L6).
   const currentBeat = getPlayheadBeat({ time: currentTime });
 
+  // E5: stable React keys. updateEvent re-sorts on every keystroke; with index keys that
+  // rebinds the focused input to a different event when the edit reorders the list (the
+  // edit then lands on the wrong keyframe). Give each event object a persistent id via a
+  // WeakMap and carry it onto the edited event's new object so React follows the row
+  // through the sort. The data stays sorted (export-safe) — only the React keys are stable.
+  const keyMap = useRef(new WeakMap<AnimationEvent, string>());
+  const keySeq = useRef(0);
+  const keyFor = (ev: AnimationEvent): string => {
+    let k = keyMap.current.get(ev);
+    if (!k) { k = `kf${keySeq.current++}`; keyMap.current.set(ev, k); }
+    return k;
+  };
+
   const addAtCurrentBeat = useCallback(() => {
     // Find what value to use at the current beat
     let val = 0;
@@ -486,9 +499,13 @@ function KeyframeEditor({
 
   const updateEvent = useCallback(
     (index: number, changes: Partial<AnimationEvent>) => {
-      const updated = events.map((ev, i) =>
-        i === index ? { ...ev, ...changes } : ev,
-      );
+      const updated = events.map((ev, i) => {
+        if (i !== index) return ev;
+        const next = { ...ev, ...changes };
+        const id = keyMap.current.get(ev); // E5: carry the stable id onto the new object
+        if (id) keyMap.current.set(next, id);
+        return next;
+      });
       onChange(updated.sort(
         (a, b) => beatToFloat(a.startTime) - beatToFloat(b.startTime),
       ));
@@ -516,7 +533,7 @@ function KeyframeEditor({
       {/* Event list */}
       {events.map((ev, i) => (
         <KeyframeEventRow
-          key={i}
+          key={keyFor(ev)}
           event={ev}
           index={i}
           onUpdate={(changes) => updateEvent(i, changes)}

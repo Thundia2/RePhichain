@@ -227,6 +227,11 @@ function EffectCard({
             {varNames.map((name) => {
               const defaultVal = defaults[name];
               const currentVal = effect.vars?.[name];
+              // E4: an animated var is an AnimationEvent[] (array of objects). Show a
+              // read-only marker rather than a constant input — the input would display
+              // the default and OVERWRITE the whole animation with a constant on edit.
+              // Animated vars are edited in the keyframe editor (ShaderVarAnimEditor).
+              const isAnimated = Array.isArray(currentVal) && typeof currentVal[0] === "object";
               const numVal = typeof currentVal === "number" ? currentVal :
                              typeof defaultVal === "number" ? defaultVal :
                              Array.isArray(defaultVal) ? 0 : 0;
@@ -234,21 +239,27 @@ function EffectCard({
               return (
                 <div key={name} style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "2px" }}>
                   <span style={{ fontSize: "10px", color: "var(--text-muted)", minWidth: "80px" }}>{name}</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={numVal}
-                    onChange={(e) => {
-                      const n = safeParseNumber(e.target.value);
-                      if (n === null) return;
-                      const newVars = { ...(effect.vars ?? {}), [name]: n };
-                      onUpdate({ vars: newVars });
-                    }}
-                    style={{
-                      ...INPUT_STYLE,
-                      flex: 1,
-                    }}
-                  />
+                  {isAnimated ? (
+                    <span style={{ fontSize: "10px", color: "var(--accent-primary)", flex: 1 }}>
+                      animated · {(currentVal as unknown[]).length} keyframe{(currentVal as unknown[]).length !== 1 ? "s" : ""}
+                    </span>
+                  ) : (
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={numVal}
+                      onChange={(e) => {
+                        const n = safeParseNumber(e.target.value);
+                        if (n === null) return;
+                        const newVars = { ...(effect.vars ?? {}), [name]: n };
+                        onUpdate({ vars: newVars });
+                      }}
+                      style={{
+                        ...INPUT_STYLE,
+                        flex: 1,
+                      }}
+                    />
+                  )}
                 </div>
               );
             })}
