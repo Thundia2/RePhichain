@@ -51,21 +51,26 @@ function Select({
   value,
   onChange,
   children,
+  "aria-label": ariaLabel,
 }: {
   value: string | number;
   onChange: (v: string) => void;
   children: React.ReactNode;
+  "aria-label"?: string;
 }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      aria-label={ariaLabel}
       style={SELECT_STYLE}
     >
       {children}
     </select>
   );
 }
+// Named by its CardRow label.
+Select.labelable = true;
 
 function Slider({
   value,

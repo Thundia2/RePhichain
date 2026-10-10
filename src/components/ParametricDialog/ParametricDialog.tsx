@@ -13,7 +13,7 @@ import { getSelectedLineIndex } from "../../stores/selection";
 import type { LineEventKind } from "../../types/chart";
 import { generateParametricEvents, type ParametricConfig } from "../../utils/parametricTrajectory";
 import { safeParseNumber, NumericInput } from "../common/FormFields";
-import { Card, CardRow, SectionHeader, INPUT_STYLE } from "../common/UIKit";
+import { Card, CardRow, SectionHeader, INPUT_STYLE, withRowLabel } from "../common/UIKit";
 import { Dialog } from "../common/Dialog";
 import { Button } from "../common/Button";
 
@@ -46,7 +46,7 @@ function ControlRow({
 }) {
   return (
     <CardRow label={label} last={last}>
-      <div style={{ width: 130 }}>{children}</div>
+      <div style={{ width: 130 }}>{withRowLabel(children, label)}</div>
     </CardRow>
   );
 }
@@ -67,10 +67,10 @@ function CardRowWide({
         borderBottom: last ? "none" : "var(--rule) solid var(--separator)",
       }}
     >
-      <label style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)", display: "block", marginBottom: "var(--space-4)" }}>
+      <div style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)", marginBottom: "var(--space-4)" }}>
         {label}
-      </label>
-      {children}
+      </div>
+      {withRowLabel(children, label)}
     </div>
   );
 }

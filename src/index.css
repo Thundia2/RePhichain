@@ -177,10 +177,14 @@
 /* ============================================================
    Base styles
    ============================================================ */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* In the base layer (like Tailwind's preflight), so spacing utilities
+   such as px-2 / mb-3 can override it. Unlayered, it beat every utility. */
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 }
 
 html, body, #root {

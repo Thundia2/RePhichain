@@ -618,6 +618,7 @@ export function NewProjectDialog({ open, onClose }: Props) {
                 </div>
               </div>
               <NumericInput
+                aria-label="Initial BPM"
                 commitMode="blur"
                 min={1}
                 fallback={120}

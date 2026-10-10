@@ -170,6 +170,7 @@ export function NumericInput({
   placeholder,
   disabled,
   title,
+  "aria-label": ariaLabel,
   onFocus,
   onBlur,
 }: {
@@ -189,6 +190,7 @@ export function NumericInput({
   placeholder?: string;
   disabled?: boolean;
   title?: string;
+  "aria-label"?: string;
   onFocus?: (e: React.FocusEvent<HTMLInputElement>) => void;
   onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
 }) {
@@ -222,7 +224,7 @@ export function NumericInput({
       max={max}
       placeholder={placeholder}
       disabled={disabled}
-      aria-label={title}
+      aria-label={ariaLabel ?? title}
       value={localValue}
       style={style}
       className={className}
@@ -259,6 +261,8 @@ export function NumericInput({
   // `title` names the field and shows as the shared tooltip.
   return title ? <Tooltip content={title}>{input}</Tooltip> : input;
 }
+/** Lets a CardRow pass its label down as this field's accessible name. */
+NumericInput.labelable = true;
 
 /** Select dropdown field */
 export function SelectField({

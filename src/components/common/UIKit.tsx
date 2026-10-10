@@ -6,6 +6,7 @@
 // instead of raw HTML to maintain visual consistency.
 // ============================================================
 
+import { Children, cloneElement, isValidElement } from "react";
 import { Button } from "./Button";
 import { Tooltip } from "./Tooltip";
 
@@ -85,9 +86,26 @@ export function CardRow({
           </div>
         )}
       </div>
-      <div style={{ flexShrink: 0 }}>{children}</div>
+      <div style={{ flexShrink: 0 }}>{withRowLabel(children, label)}</div>
     </div>
   );
+}
+
+/**
+ * The row's visible label is not a <label> element (clicking it must not
+ * operate the control), so pass it to a single unnamed field as its name.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function withRowLabel(children: React.ReactNode, label: string): React.ReactNode {
+  const items = Children.toArray(children);
+  if (items.length !== 1 || !isValidElement<Record<string, unknown>>(items[0])) return children;
+  const el = items[0];
+  if (el.type === Toggle) return el.props.label ? el : cloneElement(el, { label });
+  const labelable = typeof el.type === "string"
+    ? ["input", "select", "textarea"].includes(el.type)
+    : Boolean((el.type as { labelable?: boolean }).labelable);
+  if (!labelable || el.props["aria-label"] || el.props["aria-labelledby"]) return el;
+  return cloneElement(el, { "aria-label": label });
 }
 
 /* ── SectionHeader ── */
