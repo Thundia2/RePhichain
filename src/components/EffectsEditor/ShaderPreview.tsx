@@ -19,6 +19,7 @@ import {
   SHADER_DEFAULTS,
 } from "../../canvas/shaders";
 import { getPlayheadBeat } from "../../utils/playhead";
+import { chromeTheme, rgbOf, withAlpha } from "../../canvas/chromeTheme";
 
 // ---- Constants ----
 const PREVIEW_WIDTH = 200;
@@ -195,20 +196,21 @@ function CSSFilterFallback({
       const sy = (PREVIEW_HEIGHT - sh) / 2;
       ctx.drawImage(illustrationImage, sx, sy, sw, sh);
     } else {
-      // Gradient fallback — sample *content* for the effect preview, not chrome
+      // No illustration: a sample image for the effect to act on — a dark-to-light
+      // ramp with two shapes, in theme colours.
+      const t = chromeTheme();
       const grad = ctx.createLinearGradient(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
-      grad.addColorStop(0, "#2b2d42");
-      grad.addColorStop(0.5, "#8d99ae");
-      grad.addColorStop(1, "#edf2f4");
+      grad.addColorStop(0, t.bgActive);
+      grad.addColorStop(0.5, t.textSecondary);
+      grad.addColorStop(1, t.textPrimary);
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
 
-      // Add some visual elements
-      ctx.fillStyle = "rgba(255,255,255,0.1)";
+      ctx.fillStyle = withAlpha(t.textPrimary, 0.1);
       ctx.beginPath();
       ctx.arc(100, 75, 40, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "rgba(239,71,111,0.3)";
+      ctx.fillStyle = withAlpha(t.error, 0.3);
       ctx.beginPath();
       ctx.arc(60, 50, 25, 0, Math.PI * 2);
       ctx.fill();
@@ -274,12 +276,12 @@ function CSSFilterFallback({
             ...glitchStyle,
           }}
         />
-        {/* Vignette overlay */}
+        {/* Vignette overlay — simulates the shader's edge darkening (effect output, not chrome) */}
         {effect.shader === "vignette" && (
           <div style={{
             position: "absolute",
             inset: 0,
-            background: `radial-gradient(ellipse at center, transparent ${(1 - (uniforms.extend ?? 0.25)) * 70}%, rgba(0,0,0,${uniforms.extend ?? 0.25}) 100%)`,
+            background: `radial-gradient(ellipse at center, transparent ${(1 - (uniforms.extend ?? 0.25)) * 70}%, color-mix(in srgb, var(--canvas-bg) ${Math.round((uniforms.extend ?? 0.25) * 100)}%, transparent) 100%)`,
             pointerEvents: "none",
           }} />
         )}
@@ -424,18 +426,19 @@ function uploadTexture(state: WebGLState, image: HTMLImageElement) {
 function uploadFallbackTexture(state: WebGLState) {
   const { gl, texture } = state;
 
-  // Create a small gradient texture
+  // A small diagonal ramp in theme colours (bg-active → text-primary), the same
+  // sample the 2D preview uses when there is no illustration.
+  const t = chromeTheme();
+  const from = rgbOf(t.bgActive) ?? [34, 34, 48];
+  const to = rgbOf(t.textPrimary) ?? [224, 224, 232];
   const size = 64;
   const pixels = new Uint8Array(size * size * 4);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const idx = (y * size + x) * 4;
-      const fx = x / size;
-      const fy = y / size;
-      pixels[idx + 0] = Math.floor(43 + fx * 100);   // R
-      pixels[idx + 1] = Math.floor(45 + fy * 80);    // G
-      pixels[idx + 2] = Math.floor(66 + (fx + fy) * 50); // B
-      pixels[idx + 3] = 255;                          // A
+      const f = (x + y) / (2 * (size - 1));
+      for (let c = 0; c < 3; c++) pixels[idx + c] = Math.round(from[c] + (to[c] - from[c]) * f);
+      pixels[idx + 3] = 255;
     }
   }
 

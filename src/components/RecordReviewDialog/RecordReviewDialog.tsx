@@ -3,7 +3,8 @@
 //
 // Shown after recording mode is toggled off (when there are
 // recorded keyframes). Allows the user to apply simplification
-// before committing the keyframes as events.
+// before committing the keyframes as events. Opened with nothing
+// recorded, it explains how to record instead of doing nothing.
 // ============================================================
 
 import { useState, useMemo } from "react";
@@ -13,6 +14,7 @@ import { previewSimplification } from "../../utils/keyframeSimplify";
 import type { SimplifiableKeyframe } from "../../utils/keyframeSimplify";
 import { Dialog } from "../common/Dialog";
 import { Button } from "../common/Button";
+import { Kbd } from "../common/Kbd";
 
 interface RecordReviewDialogProps {
   open: boolean;
@@ -38,7 +40,24 @@ export function RecordReviewDialog({ open, onClose, onAccept }: RecordReviewDial
     [asSimplifiable, threshold],
   );
 
-  if (!open || recordedKeyframes.length === 0) return null;
+  if (!open) return null;
+
+  if (recordedKeyframes.length === 0) {
+    return (
+      <Dialog
+        title="Review recorded keyframes"
+        icon={CircleDot}
+        onClose={onClose}
+        width={320}
+        footer={<Button onClick={onClose}>Close</Button>}
+      >
+        <div style={{ fontSize: "var(--fs-body)", color: "var(--text-secondary)", lineHeight: "18px" }}>
+          Nothing recorded yet. Turn on record mode with <Kbd>Alt+R</Kbd>, move the line during playback,
+          then turn it off to review the keyframes here.
+        </div>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog

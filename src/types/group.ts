@@ -96,12 +96,6 @@ export const DEFAULT_GROUP_EDIT_SETTINGS: GroupEditSettings = {
   simplifiedCanvas: true,
 };
 
-/** Preset colors for new groups */
-export const GROUP_COLORS = [
-  "#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c",
-  "#38d9a9", "#4dabf7", "#748ffc", "#da77f2",
-];
-
 // ---- Helpers ----
 
 /**

@@ -10,7 +10,7 @@
 
 import type React from "react";
 import { useState, useCallback, useId } from "react";
-import { ChevronRight, Copy, Minus, Plus, Spline, SquareDashed, Star, Trash2 } from "lucide-react";
+import { ArrowRight, ChevronRight, Copy, Minus, Plus, Spline, SquareDashed, Star, Trash2 } from "lucide-react";
 import { useEditorStore } from "../../../stores/editorStore";
 import { useSelectedLineIndex, setEventSelectionByIndex } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
@@ -19,7 +19,7 @@ import { BUILTIN_PRESETS } from "../../../presets/builtinPresets";
 import { applyPresetAtPlayhead } from "../../../utils/applyPreset";
 import type { LineEventKind, LineEvent, NoteKind } from "../../../types/chart";
 import { EVENT_KIND_META, EXTENDED_EVENT_KINDS } from "../../../constants/eventConfig";
-import { getEasingLabel, getEventValueSummary, formatBeat } from "../../../utils/eventHelpers";
+import { getEasingLabel, getEventValueRange, getEventValueSummary, formatBeat } from "../../../utils/eventHelpers";
 import { NumericInput } from "../../common/FormFields";
 import { Icon } from "../../common/Icon";
 import { IconButton } from "../../common/IconButton";
@@ -394,8 +394,17 @@ function EventGroup({ color, label, entries, onAdd }: {
                 whiteSpace: "nowrap",
                 fontFamily: "var(--font-mono)",
                 color: "var(--text-primary)",
-              }}>
-                {getEventValueSummary(ev)}
+              }} aria-label={getEventValueSummary(ev)}>
+                {(() => {
+                  const range = getEventValueRange(ev);
+                  return range ? (
+                    <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+                      {range[0]}
+                      <Icon icon={ArrowRight} size={12} style={{ color: "var(--text-secondary)" }} />
+                      {range[1]}
+                    </span>
+                  ) : getEventValueSummary(ev);
+                })()}
               </span>
               {/* Easing chip */}
               <span style={{

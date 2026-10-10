@@ -25,7 +25,8 @@ import { Field, SelectField, BeatField, EASING_OPTIONS } from "../common/FormFie
 import { BatchNoteOps } from "../common/BatchNoteOps";
 import { EVENT_COLORS } from "../../constants/eventColors";
 import { useBookmarkStore } from "../../stores/bookmarkStore";
-import { BOOKMARK_PRESETS } from "../../types/bookmark";
+import { BOOKMARK_PRESET_KEYS } from "../../types/bookmark";
+import { bookmarkColor } from "../../canvas/chromeTheme";
 import type { BookmarkPreset } from "../../types/bookmark";
 import { NoteGlyph } from "../common/NoteGlyph";
 import { SegmentedControl, type SegmentOption } from "../common/SegmentedControl";
@@ -319,12 +320,10 @@ function LineSection({ lineIndex }: { lineIndex: number }) {
 // Bookmark Inspector Sections
 // ============================================================
 
-const PRESET_ENTRIES = Object.entries(BOOKMARK_PRESETS) as [BookmarkPreset, string][];
-
 function PresetDots({ activePreset, onSelect }: { activePreset?: BookmarkPreset; onSelect: (p: BookmarkPreset) => void }) {
   return (
     <div style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-6)" }}>
-      {PRESET_ENTRIES.map(([preset, color]) => (
+      {BOOKMARK_PRESET_KEYS.map((preset) => (
         <IconButton
           key={preset}
           label={`${preset[0].toUpperCase()}${preset.slice(1)} color`}
@@ -332,8 +331,8 @@ function PresetDots({ activePreset, onSelect }: { activePreset?: BookmarkPreset;
           active={activePreset === undefined ? undefined : activePreset === preset}
           onClick={() => onSelect(preset)}
         >
-          {/* Preset swatch — a user data colour */}
-          <span style={{ width: 12, height: 12, borderRadius: "var(--radius-xs)", background: color }} />
+          {/* Preset swatch — the --mark-<preset> token */}
+          <span style={{ width: 12, height: 12, borderRadius: "var(--radius-xs)", background: bookmarkColor(preset) }} />
         </IconButton>
       ))}
     </div>

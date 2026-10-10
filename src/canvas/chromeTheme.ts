@@ -45,6 +45,8 @@ export interface ChromeTheme {
   beatLinePrimary: string;
   beatLineSecondary: string;
   judgmentLine: string;
+  pickerRingLight: string;
+  pickerRingDark: string;
   fontSans: string;
   fontMono: string;
 }
@@ -81,21 +83,32 @@ const TOKENS: Record<keyof ChromeTheme, [cssVar: string, fallback: string]> = {
   beatLinePrimary: ["--beat-line-primary", "rgba(255, 255, 255, 0.25)"],
   beatLineSecondary: ["--beat-line-secondary", "rgba(255, 255, 255, 0.10)"],
   judgmentLine: ["--judgment-line", "#ffffff"],
+  pickerRingLight: ["--picker-ring-light", "#ffffff"],
+  pickerRingDark: ["--picker-ring-dark", "#000000"],
   fontSans: ["--font-sans", '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'],
   fontMono: ["--font-mono", '"SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", monospace'],
 };
 
 let cache: ChromeTheme | null = null;
 
+/** :root computed styles, or null without a DOM (unit tests). */
+function rootStyles(): CSSStyleDeclaration | null {
+  return typeof document !== "undefined" && typeof getComputedStyle === "function"
+    ? getComputedStyle(document.documentElement)
+    : null;
+}
+
+/** A token's resolved value, or `fallback` when it isn't available. */
+function tokenValue(styles: CSSStyleDeclaration | null, cssVar: string, fallback: string): string {
+  return styles?.getPropertyValue(cssVar).trim() || fallback;
+}
+
 function readTheme(): ChromeTheme {
   const out = {} as ChromeTheme;
-  const styles =
-    typeof document !== "undefined" && typeof getComputedStyle === "function"
-      ? getComputedStyle(document.documentElement)
-      : null;
+  const styles = rootStyles();
   for (const key of Object.keys(TOKENS) as (keyof ChromeTheme)[]) {
     const [cssVar, fallback] = TOKENS[key];
-    out[key] = styles?.getPropertyValue(cssVar).trim() || fallback;
+    out[key] = tokenValue(styles, cssVar, fallback);
   }
   return out;
 }
@@ -111,6 +124,7 @@ export function refreshChromeTheme(): void {
   cache = null;
   seriesCache = null;
   laneCache = null;
+  markCache = null;
 }
 
 /** Canvas font string in the UI's monospace (beats, values, time). Never below 10px for readable text. */
@@ -121,6 +135,20 @@ export function monoFont(size = 10, weight: number | "normal" | "bold" = "normal
 /** Canvas font string in the UI's sans face (labels). */
 export function sansFont(size = 11, weight: number | "normal" | "bold" = "normal"): string {
   return `${weight} ${size}px ${chromeTheme().fontSans}`;
+}
+
+/** [r, g, b] of a #rgb / #rrggbb / rgb() / rgba() colour; null for anything else. */
+export function rgbOf(color: string): [number, number, number] | null {
+  const c = color.trim();
+  if (c.startsWith("#")) {
+    const hex = c.length === 4 ? c.slice(1).split("").map((ch) => ch + ch).join("") : c.slice(1, 7);
+    const n = parseInt(hex, 16);
+    return Number.isNaN(n) ? null : [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  const m = c.match(/^rgba?\(([^)]+)\)$/);
+  if (!m) return null;
+  const [r, g, b] = m[1].split(",").map((p) => parseFloat(p));
+  return [r, g, b].some(Number.isNaN) ? null : [r, g, b];
 }
 
 /**
@@ -149,11 +177,8 @@ let seriesCache: string[] | null = null;
 /** The `--series-1…8` palette: one colour per overlaid line or group member. */
 export function seriesColors(): readonly string[] {
   if (!seriesCache) {
-    const styles =
-      typeof document !== "undefined" && typeof getComputedStyle === "function"
-        ? getComputedStyle(document.documentElement)
-        : null;
-    seriesCache = SERIES_FALLBACK.map((fb, i) => styles?.getPropertyValue(`--series-${i + 1}`).trim() || fb);
+    const styles = rootStyles();
+    seriesCache = SERIES_FALLBACK.map((fb, i) => tokenValue(styles, `--series-${i + 1}`, fb));
   }
   return seriesCache;
 }
@@ -162,6 +187,15 @@ export function seriesColors(): readonly string[] {
 export function seriesColor(index: number): string {
   const s = seriesColors();
   return s[index % s.length];
+}
+
+// New groups take the series colours in this order (red, orange, yellow, green,
+// teal, blue, indigo, violet) — the order groups have always used.
+const GROUP_SERIES_ORDER = [0, 6, 3, 2, 5, 1, 7, 4];
+
+/** Default colour for the `index`-th new group; stored in the group as a resolved value. */
+export function groupColor(index: number): string {
+  return seriesColors()[GROUP_SERIES_ORDER[index % GROUP_SERIES_ORDER.length]];
 }
 
 const EFFECT_LANE_FALLBACK: Record<string, string> = {
@@ -181,17 +215,36 @@ let laneCache: Record<string, string> | null = null;
 /** `--effect-<shader>` colour for a built-in shader's lane, or undefined for custom shaders. */
 export function effectLaneColor(shader: string): string | undefined {
   if (!laneCache) {
-    const styles =
-      typeof document !== "undefined" && typeof getComputedStyle === "function"
-        ? getComputedStyle(document.documentElement)
-        : null;
+    const styles = rootStyles();
     laneCache = {};
     for (const [key, fallback] of Object.entries(EFFECT_LANE_FALLBACK)) {
-      const cssVar = `--effect-${key.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase())}`;
-      laneCache[key] = styles?.getPropertyValue(cssVar).trim() || fallback;
+      laneCache[key] = tokenValue(styles, `--effect-${key.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase())}`, fallback);
     }
   }
   return laneCache[shader];
+}
+
+const MARK_FALLBACK: Record<string, string> = {
+  tap: "#48b5ff",
+  drag: "#ffd24a",
+  flick: "#ff4a6a",
+  hold: "#2a7fbf",
+  orange: "#ffa94d",
+  green: "#69db7c",
+  violet: "#da77f2",
+};
+let markCache: Record<string, string> | null = null;
+
+/** `--mark-<preset>` colour for a tap-to-mark bookmark preset; stored in the bookmark as a resolved value. */
+export function bookmarkColor(preset: string): string {
+  if (!markCache) {
+    const styles = rootStyles();
+    markCache = {};
+    for (const [key, fallback] of Object.entries(MARK_FALLBACK)) {
+      markCache[key] = tokenValue(styles, `--mark-${key}`, fallback);
+    }
+  }
+  return markCache[preset] ?? markCache.tap;
 }
 
 if (import.meta.hot) {

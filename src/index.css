@@ -102,6 +102,17 @@
   --effect-shockwave: #be5046;
   --effect-vignette: #c882e7;
   --judgment-line: #ffffff;     /* Judgment line in editor canvases */
+  /* Tap-to-mark bookmark presets (copied into each bookmark when set) */
+  --mark-tap: #48b5ff;
+  --mark-drag: #ffd24a;
+  --mark-flick: #ff4a6a;
+  --mark-hold: #2a7fbf;
+  --mark-orange: #ffa94d;
+  --mark-green: #69db7c;
+  --mark-violet: #da77f2;
+  /* Colour picker indicator rings: whichever contrasts with the picked colour */
+  --picker-ring-light: #ffffff;
+  --picker-ring-dark: #000000;
 
   /* Type */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -530,14 +541,14 @@ input[type="color"]::-webkit-color-swatch {
 }
 .ui-icon-btn--md { width: var(--control-md); height: var(--control-md); }
 .ui-icon-btn--sm { width: var(--control-sm); height: var(--control-sm); border-radius: var(--radius-sm); }
-.ui-icon-btn:hover:not(:disabled) {
+.ui-icon-btn:hover:not(:disabled, [aria-disabled="true"]) {
   background-color: var(--fill-hover);
   color: var(--text-primary);
 }
-.ui-icon-btn--sm:hover:not(:disabled) {
+.ui-icon-btn--sm:hover:not(:disabled, [aria-disabled="true"]) {
   background-color: var(--fill-strong);
 }
-.ui-icon-btn:active:not(:disabled) {
+.ui-icon-btn:active:not(:disabled, [aria-disabled="true"]) {
   background-color: var(--fill-strong);
 }
 .ui-icon-btn.is-active,
@@ -545,11 +556,12 @@ input[type="color"]::-webkit-color-swatch {
   background-color: var(--accent-selected);
   color: var(--accent-primary);
 }
-.ui-icon-btn--danger:hover:not(:disabled) {
+.ui-icon-btn--danger:hover:not(:disabled, [aria-disabled="true"]) {
   background-color: var(--danger-hover-bg);
   color: var(--danger-hover-fg);
 }
-.ui-icon-btn:disabled {
+.ui-icon-btn:disabled,
+.ui-icon-btn[aria-disabled="true"] {
   opacity: var(--opacity-disabled);
   cursor: default;
 }

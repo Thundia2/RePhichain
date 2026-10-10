@@ -9,6 +9,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "./Button";
 import { Tooltip } from "./Tooltip";
+import { chromeTheme } from "../../canvas/chromeTheme";
 
 /** Small numeric / text input well. */
 const WELL_STYLE: React.CSSProperties = {
@@ -140,7 +141,7 @@ export function ColorPicker({ value, onChange, onClose }: ColorPickerProps) {
     ctx.beginPath();
     ctx.arc(ix, iy, 6, 0, Math.PI * 2);
     // Indicator rings contrast against the colour field itself, not the chrome.
-    ctx.strokeStyle = "#fff";
+    ctx.strokeStyle = chromeTheme().pickerRingLight;
     ctx.lineWidth = 2;
     ctx.stroke();
   }, [hue]);
@@ -173,7 +174,7 @@ export function ColorPicker({ value, onChange, onClose }: ColorPickerProps) {
     const iy = (1 - hsl[2]) * (size - 1);
     ctx.beginPath();
     ctx.arc(ix, iy, 5, 0, Math.PI * 2);
-    ctx.strokeStyle = hsl[2] > 0.5 ? "#000" : "#fff";
+    ctx.strokeStyle = hsl[2] > 0.5 ? chromeTheme().pickerRingDark : chromeTheme().pickerRingLight;
     ctx.lineWidth = 2;
     ctx.stroke();
   }, [hsl]);

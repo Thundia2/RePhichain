@@ -1,6 +1,8 @@
 // ============================================================
 // IconButton — icon-only control. Its name and shortcut live in a
-// tooltip (and aria-label), never printed under the icon.
+// tooltip (and aria-label), never printed under the icon. A disabled
+// IconButton uses aria-disabled, so it stays hoverable/focusable and its
+// tooltip still says what it is; clicks are ignored.
 //
 //   <IconButton icon={Plus} label="Add new line" shortcut="Ctrl+L" onClick={…} />
 //   <IconButton label="Tap" shortcut="Q" active={…}><NoteGlyph kind="tap" /></IconButton>
@@ -56,13 +58,13 @@ export function IconButton({
   ].filter(Boolean).join(" ");
 
   return (
-    <Tooltip content={label} shortcut={shortcut} position={tooltipPosition} disabled={disabled}>
+    <Tooltip content={label} shortcut={shortcut} position={tooltipPosition}>
       <button
         type="button"
         aria-label={shortcut ? `${label} (${shortcut})` : label}
         aria-pressed={active === undefined ? undefined : active}
-        disabled={disabled}
-        onClick={onClick}
+        aria-disabled={disabled || undefined}
+        onClick={disabled ? (e) => e.preventDefault() : onClick}
         className={classes}
         style={style}
         {...rest}
