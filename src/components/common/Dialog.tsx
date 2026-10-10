@@ -102,7 +102,7 @@ export function Dialog({
         aria-labelledby={titleId}
         tabIndex={-1}
         className="ui-dialog"
-        style={{ width, height, outline: "none" }}
+        style={{ width, height }}
       >
         <div className="ui-dialog__header">
           {icon && <Icon icon={icon} size={16} style={{ color: iconColor ?? "var(--text-secondary)" }} />}

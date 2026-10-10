@@ -18,24 +18,12 @@ import { useAudioStore } from "../../stores/audioStore";
 import type { ShaderEffect } from "../../types/extra";
 import { beatToFloat } from "../../types/chart";
 import { getPlayheadBeat } from "../../utils/playhead";
-import { chromeTheme, monoFont, sansFont, withAlpha } from "../../canvas/chromeTheme";
+import { chromeTheme, effectLaneColor, monoFont, sansFont, withAlpha } from "../../canvas/chromeTheme";
 
-// ---- Lane color palette (one per shader type) ----
-const LANE_COLORS: Record<string, string> = {
-  chromatic: "#e06c75",
-  circleBlur: "#61afef",
-  fisheye: "#c678dd",
-  glitch: "#e5c07b",
-  grayscale: "#abb2bf",
-  noise: "#d19a66",
-  pixel: "#56b6c2",
-  radialBlur: "#98c379",
-  shockwave: "#be5046",
-  vignette: "#c882e7",
-};
-
+// Lane colour: the --effect-<shader> token for built-in shaders.
 function getLaneColor(shader: string): string {
-  if (LANE_COLORS[shader]) return LANE_COLORS[shader];
+  const token = effectLaneColor(shader);
+  if (token) return token;
   // Deterministic hash color for custom shaders
   let hash = 0;
   for (let i = 0; i < shader.length; i++) {

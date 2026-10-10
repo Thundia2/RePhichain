@@ -23,8 +23,12 @@ import { SELECT_STYLE } from "../common/UIKit";
 import { Button } from "../common/Button";
 import { IconButton } from "../common/IconButton";
 import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
 import { LINE_CATEGORY_COLORS, LINE_CATEGORY_LABELS, autoCategorize } from "./lineCategories";
 import { LineContextMenu } from "./LineContextMenu";
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const countLabel = (notes: number, events: number) => `${plural(notes, "note")} · ${plural(events, "event")}`;
 
 /**
  * Subscribe to the current beat, throttled to 100ms to avoid
@@ -344,9 +348,14 @@ export function LineList() {
                     )}
                     <span className="truncate">{line.name || `Line ${idx + 1}`}</span>
                   </span>
-                  <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
-                    {line.notes.length}N {line.events.length}E
-                  </span>
+                  <Tooltip content={countLabel(line.notes.length, line.events.length)} position="right">
+                    <span
+                      aria-label={countLabel(line.notes.length, line.events.length)}
+                      style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", flexShrink: 0 }}
+                    >
+                      {line.notes.length} · {line.events.length}
+                    </span>
+                  </Tooltip>
                 </button>
                 {isSelected && (
                   <div className="pl-6 pr-2 pb-1">

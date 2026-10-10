@@ -11,6 +11,7 @@
 // ============================================================
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Plus, Eye, EyeOff, Lock, LockOpen, TextCursorInput, Copy, Trash2, CornerLeftUp, Group } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
@@ -19,6 +20,7 @@ import { useSelectedLineIndex, selectLineByIndex } from "../../stores/selection"
 import { Button } from "../common/Button";
 import { IconButton } from "../common/IconButton";
 import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
 import { showPrompt } from "../common/PromptDialog";
 
 // ---- Context menu state ----
@@ -26,6 +28,8 @@ interface ContextMenu {
   x: number;
   y: number;
   lineIndex: number;
+  /** Document the menu opened in (the main window or a pop-out). */
+  doc: Document;
 }
 
 interface MenuEntry {
@@ -91,11 +95,12 @@ export function LineDrawer() {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setContextMenu(null);
     };
-    document.addEventListener("mousedown", handleClose);
-    document.addEventListener("keydown", handleKey);
+    const doc = contextMenu.doc;
+    doc.addEventListener("mousedown", handleClose);
+    doc.addEventListener("keydown", handleKey);
     return () => {
-      document.removeEventListener("mousedown", handleClose);
-      document.removeEventListener("keydown", handleKey);
+      doc.removeEventListener("mousedown", handleClose);
+      doc.removeEventListener("keydown", handleKey);
     };
   }, [contextMenu]);
 
@@ -109,7 +114,7 @@ export function LineDrawer() {
   const handleContextMenu = useCallback((e: React.MouseEvent, i: number) => {
     e.preventDefault();
     e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY, lineIndex: i });
+    setContextMenu({ x: e.clientX, y: e.clientY, lineIndex: i, doc: e.currentTarget.ownerDocument });
   }, []);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent, i: number) => {
@@ -245,16 +250,22 @@ export function LineDrawer() {
               )}
 
               {/* Note count */}
-              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
-                {line.notes.length}N
-              </span>
+              <Tooltip content={`${line.notes.length} ${line.notes.length === 1 ? "note" : "notes"}`} position="right">
+                <span
+                  aria-label={`${line.notes.length} ${line.notes.length === 1 ? "note" : "notes"}`}
+                  style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", flexShrink: 0 }}
+                >
+                  {line.notes.length}
+                </span>
+              </Tooltip>
             </div>
           );
         })}
       </div>
 
-      {/* Context menu */}
-      {contextMenu && (
+      {/* Context menu — portalled to the body: the drawer's slide transform would
+          otherwise make position: fixed relative to the drawer, not the window. */}
+      {contextMenu && createPortal(
         <div
           ref={menuRef}
           role="menu"
@@ -323,7 +334,8 @@ export function LineDrawer() {
               </button>
             </div>
           ))}
-        </div>
+        </div>,
+        contextMenu.doc.body,
       )}
     </div>
   );

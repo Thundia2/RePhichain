@@ -26,14 +26,14 @@ export function getEasingLabel(event: LineEvent): string {
   return "const";
 }
 
-/** Short summary of an event's value (e.g. "0 -> 255", "const 1.0", "rgb(...)") */
+/** Short summary of an event's value (e.g. "0 → 255", "const 1.0", "rgb(...)") */
 export function getEventValueSummary(event: LineEvent): string {
   const val = event.value;
   if ("constant" in val) return String(Math.round(val.constant * 100) / 100);
   if ("transition" in val) {
     const s = Math.round(val.transition.start * 100) / 100;
     const e = Math.round(val.transition.end * 100) / 100;
-    return `${s} \u2192 ${e}`;
+    return `${s} → ${e}`;
   }
   if ("color_constant" in val) return `rgb(${val.color_constant.join(",")})`;
   if ("color_transition" in val) return "color trans.";

@@ -90,6 +90,18 @@
   --series-6: #38d9a9;
   --series-7: #ffa94d;
   --series-8: #748ffc;
+  /* Effect lanes: one colour per built-in shader in the effects timeline */
+  --effect-chromatic: #e06c75;
+  --effect-circle-blur: #61afef;
+  --effect-fisheye: #c678dd;
+  --effect-glitch: #e5c07b;
+  --effect-grayscale: #abb2bf;
+  --effect-noise: #d19a66;
+  --effect-pixel: #56b6c2;
+  --effect-radial-blur: #98c379;
+  --effect-shockwave: #be5046;
+  --effect-vignette: #c882e7;
+  --judgment-line: #ffffff;     /* Judgment line in editor canvases */
 
   /* Type */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -712,6 +724,13 @@ input[type="color"]::-webkit-color-swatch {
   color: var(--text-primary);
   overflow: hidden;
   animation: ui-dialog-in var(--dur-base) var(--ease-out);
+}
+
+/* The panel itself takes focus only as a fallback target when a dialog
+   has no autofocus control; it is not a control, so no ring around the
+   whole dialog. Controls inside still get the standard ring. */
+.ui-dialog[tabindex="-1"]:focus-visible {
+  outline: none !important;
 }
 .ui-dialog__header {
   display: flex;

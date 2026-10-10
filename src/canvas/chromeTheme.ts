@@ -44,6 +44,7 @@ export interface ChromeTheme {
   onsetColor: string;
   beatLinePrimary: string;
   beatLineSecondary: string;
+  judgmentLine: string;
   fontSans: string;
   fontMono: string;
 }
@@ -79,6 +80,7 @@ const TOKENS: Record<keyof ChromeTheme, [cssVar: string, fallback: string]> = {
   onsetColor: ["--onset-color", "#ffaa32"],
   beatLinePrimary: ["--beat-line-primary", "rgba(255, 255, 255, 0.25)"],
   beatLineSecondary: ["--beat-line-secondary", "rgba(255, 255, 255, 0.10)"],
+  judgmentLine: ["--judgment-line", "#ffffff"],
   fontSans: ["--font-sans", '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'],
   fontMono: ["--font-mono", '"SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", monospace'],
 };
@@ -108,6 +110,7 @@ export function chromeTheme(): ChromeTheme {
 export function refreshChromeTheme(): void {
   cache = null;
   seriesCache = null;
+  laneCache = null;
 }
 
 /** Canvas font string in the UI's monospace (beats, values, time). Never below 10px for readable text. */
@@ -159,6 +162,36 @@ export function seriesColors(): readonly string[] {
 export function seriesColor(index: number): string {
   const s = seriesColors();
   return s[index % s.length];
+}
+
+const EFFECT_LANE_FALLBACK: Record<string, string> = {
+  chromatic: "#e06c75",
+  circleBlur: "#61afef",
+  fisheye: "#c678dd",
+  glitch: "#e5c07b",
+  grayscale: "#abb2bf",
+  noise: "#d19a66",
+  pixel: "#56b6c2",
+  radialBlur: "#98c379",
+  shockwave: "#be5046",
+  vignette: "#c882e7",
+};
+let laneCache: Record<string, string> | null = null;
+
+/** `--effect-<shader>` colour for a built-in shader's lane, or undefined for custom shaders. */
+export function effectLaneColor(shader: string): string | undefined {
+  if (!laneCache) {
+    const styles =
+      typeof document !== "undefined" && typeof getComputedStyle === "function"
+        ? getComputedStyle(document.documentElement)
+        : null;
+    laneCache = {};
+    for (const [key, fallback] of Object.entries(EFFECT_LANE_FALLBACK)) {
+      const cssVar = `--effect-${key.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase())}`;
+      laneCache[key] = styles?.getPropertyValue(cssVar).trim() || fallback;
+    }
+  }
+  return laneCache[shader];
 }
 
 if (import.meta.hot) {

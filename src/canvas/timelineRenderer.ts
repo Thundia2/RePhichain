@@ -275,7 +275,7 @@ export class TimelineRenderer {
       const pnBeat = beatToFloat(pn.beat);
       const pnY = TimelineRenderer.beatToY(pnBeat, scrollBeat, zoom, canvasHeight);
       const pnX = TimelineRenderer.noteXToPixel(pn.x, noteAreaLeft, noteAreaWidth);
-      const color = NOTE_COLORS[pn.kind] ?? "#fff";
+      const color = NOTE_COLORS[pn.kind] ?? chromeTheme().textPrimary;
 
       ctx.globalAlpha = 0.25;
       ctx.fillStyle = color;
@@ -481,7 +481,7 @@ export class TimelineRenderer {
   ) {
     const y = TimelineRenderer.beatToY(beat, scrollBeat, zoom, canvasHeight);
     const x = TimelineRenderer.noteXToPixel(note.x, noteAreaLeft, noteAreaWidth);
-    const color = NOTE_COLORS[note.kind] ?? "#fff";
+    const color = NOTE_COLORS[note.kind] ?? chromeTheme().textPrimary;
 
     // Draw hold body first (behind the note head)
     if (note.kind === "hold" && note.hold_beat) {

@@ -386,7 +386,7 @@ export class UnrolledRenderer {
       const pnY = UnrolledRenderer.beatToY(pnBeat, scrollBeat, zoom, canvasHeight);
       const pnX = UnrolledRenderer.noteXToPixel(pn.x, noteAreaLeft, noteAreaWidth);
       const colorMap = pn.above ? ABOVE_NOTE_COLORS : BELOW_NOTE_COLORS;
-      const color = colorMap[pn.kind] ?? "#fff";
+      const color = colorMap[pn.kind] ?? chromeTheme().textPrimary;
 
       // Bug audit #14: wrap setLineDash in try/finally so an exception
       // in strokeRect can't leak the dash pattern into subsequent
@@ -851,7 +851,7 @@ export class UnrolledRenderer {
 
     // Choose color based on above/below state
     const colorMap = note.above ? ABOVE_NOTE_COLORS : BELOW_NOTE_COLORS;
-    const color = colorMap[note.kind] ?? "#fff";
+    const color = colorMap[note.kind] ?? chromeTheme().textPrimary;
 
     // Compose alpha against the wrapper's current globalAlpha so the
     // ghost-mode dim (0.3 set in withVisibility) actually applies.

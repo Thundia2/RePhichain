@@ -23,7 +23,6 @@ const ROTATION_HANDLE_RADIUS = 6;
 // const ROTATION_HANDLE_DISTANCE = 80; // pixels from center
 const gridColor = () => withAlpha(chromeTheme().textPrimary, 0.06);
 const axisColor = () => withAlpha(chromeTheme().textPrimary, 0.15);
-const LINE_COLOR = "#ffffff";
 
 // ============================================================
 // Types
@@ -130,7 +129,7 @@ export class EventCanvasRenderer {
     }
 
     // Draw the actual line
-    this.drawJudgmentLine(ctx, screenX, screenY, rotation, opacity, halfLen, LINE_COLOR);
+    this.drawJudgmentLine(ctx, screenX, screenY, rotation, opacity, halfLen, chromeTheme().judgmentLine);
 
     // ---- Draw handles ----
     this.drawTranslateHandle(ctx, screenX, screenY, opacity);
