@@ -1,11 +1,15 @@
 // ============================================================
-// New Chart Dialog — Redesigned with sectioned card layout
+// New Chart Dialog — sectioned card layout on the shared Dialog
 //
-// Matches the Linear/Figma aesthetic: drag-drop file zones,
-// metadata card with difficulty selector, timing section.
+// File drop zones (filled bg-active wells with a dashed hairline
+// outline), a chart-info card with difficulty selector, and a
+// timing card. Chrome (overlay, header, close, footer) comes from
+// the shared <Dialog>.
 // ============================================================
 
 import { useState, useRef } from "react";
+import { FilePlus, Music, Image as ImageIcon, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { selectLineByIndex } from "../../stores/selection";
@@ -17,6 +21,12 @@ import { useRecentProjectsStore } from "../../stores/recentProjectsStore";
 import { saveStoredProject } from "../../utils/projectStorage";
 import type { ProjectMeta, PhichainChart } from "../../types/chart";
 import { safeParseNumber, NumericInput } from "../common/FormFields";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
+import { Icon } from "../common/Icon";
+import { Kbd } from "../common/Kbd";
+import { SegmentedControl } from "../common/SegmentedControl";
+import { INPUT_STYLE as KIT_INPUT_STYLE } from "../common/UIKit";
 
 interface Props {
   open: boolean;
@@ -29,11 +39,10 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        fontSize: 11,
-        textTransform: "uppercase",
-        letterSpacing: "0.5px",
-        color: "var(--text-muted)",
-        marginBottom: 10,
+        fontSize: "var(--fs-control)",
+        fontWeight: 600,
+        color: "var(--text-secondary)",
+        marginBottom: "var(--space-8)",
       }}
     >
       {children}
@@ -41,75 +50,27 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SegmentedControl({
-  value,
-  options,
-  onChange,
-}: {
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div
-      className="flex"
-      style={{
-        gap: 0,
-        backgroundColor: "var(--bg-secondary)",
-        borderRadius: 6,
-        padding: 2,
-      }}
-    >
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          style={{
-            flex: 1,
-            textAlign: "center",
-            padding: "5px 0",
-            borderRadius: 5,
-            fontSize: 10,
-            border: "none",
-            cursor: "pointer",
-            backgroundColor: value === opt.value ? "var(--accent-primary)" : "transparent",
-            color: value === opt.value ? "#fff" : "var(--text-muted)",
-            transition: "all 0.12s",
-          }}
-          onMouseEnter={(e) => {
-            if (value !== opt.value) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-active)";
-          }}
-          onMouseLeave={(e) => {
-            if (value !== opt.value) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-          }}
-          onClick={() => onChange(opt.value)}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+const DIFFICULTY_OPTIONS = [
+  { value: "EZ", label: "EZ" },
+  { value: "HD", label: "HD" },
+  { value: "IN", label: "IN" },
+  { value: "AT", label: "AT" },
+];
 
 const INPUT_STYLE: React.CSSProperties = {
+  ...KIT_INPUT_STYLE,
   width: "100%",
-  padding: "8px 12px",
-  borderRadius: 8,
-  fontSize: 12,
-  border: "0.5px solid var(--border-color)",
-  backgroundColor: "var(--bg-secondary)",
-  color: "var(--text-primary)",
-  fontFamily: "inherit",
-  outline: "none",
-  boxSizing: "border-box",
-  transition: "border-color 0.15s",
+  height: "var(--control-lg)",
+  padding: "0 var(--space-10)",
+  fontSize: "var(--fs-body)",
 };
 
-function focusInput(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--accent-primary)";
-}
-function blurInput(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--border-color)";
-}
+const LABEL_STYLE: React.CSSProperties = {
+  fontSize: "var(--fs-control)",
+  color: "var(--text-secondary)",
+  display: "block",
+  marginBottom: "var(--space-4)",
+};
 
 /* ── File Drop Zone ── */
 
@@ -126,7 +87,7 @@ function DropZone({
   onClick,
   onClear,
 }: {
-  icon: string;
+  icon: LucideIcon;
   title: string;
   description: string;
   extensions: string;
@@ -138,94 +99,57 @@ function DropZone({
   onClick: () => void;
   onClear: () => void;
 }) {
+  const clickable = !fileName;
   return (
     <div
-      onClick={fileName ? undefined : onClick}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? `${title}: ${description}` : undefined}
+      onClick={clickable ? onClick : undefined}
+      onKeyDown={clickable ? (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); }
+      } : undefined}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       style={{
-        border: `1.5px dashed ${dragOver ? "var(--accent-primary)" : "var(--border-color)"}`,
-        borderRadius: 10,
-        padding: 16,
+        border: `var(--hairline) dashed ${dragOver ? "var(--accent-primary)" : "var(--border-color)"}`,
+        borderRadius: "var(--radius-xl)",
+        padding: "var(--space-16)",
         textAlign: "center",
-        cursor: fileName ? "default" : "pointer",
-        transition: "border-color 0.15s, background 0.15s",
+        cursor: clickable ? "pointer" : "default",
+        transition: "border-color var(--dur-fast), background-color var(--dur-fast)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 6,
-        backgroundColor: dragOver ? "rgba(108,138,255,0.04)" : "transparent",
-      }}
-      onMouseEnter={(e) => {
-        if (!fileName && !dragOver) {
-          e.currentTarget.style.borderColor = "var(--text-muted)";
-          e.currentTarget.style.background = "rgba(108,138,255,0.04)";
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!dragOver) {
-          e.currentTarget.style.borderColor = dragOver ? "var(--accent-primary)" : "var(--border-color)";
-          e.currentTarget.style.background = "transparent";
-        }
+        gap: "var(--space-6)",
+        backgroundColor: dragOver ? "var(--accent-wash)" : "var(--bg-active)",
       }}
     >
+      <Icon
+        icon={icon}
+        size={20}
+        style={{ color: dragOver || fileName ? "var(--accent-primary)" : "var(--text-secondary)" }}
+      />
       {fileName ? (
         <>
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              backgroundColor: "var(--bg-active)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 18,
-            }}
-          >
-            {icon}
-          </div>
-          <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 500, wordBreak: "break-all" }}>
+          <div style={{ fontSize: "var(--fs-body)", color: "var(--text-primary)", fontWeight: 500, wordBreak: "break-all" }}>
             {fileName}
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={X}
             onClick={(e) => { e.stopPropagation(); onClear(); }}
-            style={{
-              fontSize: 10,
-              color: "var(--text-muted)",
-              background: "var(--bg-active)",
-              border: "none",
-              borderRadius: 4,
-              padding: "2px 8px",
-              cursor: "pointer",
-              transition: "color 0.1s",
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#ff6b6b"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"; }}
           >
             Remove
-          </button>
+          </Button>
         </>
       ) : (
         <>
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              backgroundColor: "var(--bg-active)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 18,
-            }}
-          >
-            {icon}
-          </div>
-          <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 500 }}>{title}</div>
-          <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{description}</div>
-          <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{extensions}</div>
+          <div style={{ fontSize: "var(--fs-body)", color: "var(--text-primary)", fontWeight: 500 }}>{title}</div>
+          <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>{description}</div>
+          <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>{extensions}</div>
         </>
       )}
     </div>
@@ -248,28 +172,24 @@ function CardRow({
   return (
     <div
       style={{
-        padding: "10px 14px",
-        borderBottom: last ? "none" : "1px solid rgba(42, 42, 53, 0.55)",
+        padding: "var(--space-10) var(--space-14)",
+        borderBottom: last ? "none" : "var(--rule) solid var(--separator)",
         display: side ? "flex" : undefined,
       }}
     >
       {side ? (
         <>
           <div style={{ flex: 1 }}>
-            <label style={{ fontSize: 11, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-              {label}
-            </label>
+            <label style={LABEL_STYLE}>{label}</label>
             {children}
           </div>
-          <div style={{ width: 160, paddingLeft: 14, borderLeft: "1px solid rgba(42, 42, 53, 0.55)" }}>
+          <div style={{ width: 160, paddingLeft: "var(--space-14)", marginLeft: "var(--space-14)", borderLeft: "var(--rule) solid var(--separator)" }}>
             {side}
           </div>
         </>
       ) : (
         <>
-          <label style={{ fontSize: 11, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-            {label}
-          </label>
+          <label style={LABEL_STYLE}>{label}</label>
           {children}
         </>
       )}
@@ -541,297 +461,196 @@ export function NewProjectDialog({ open, onClose }: Props) {
 
   return (
     <>
-      <style>{`
-        @keyframes ncFadeIn { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes ncScaleIn { from { opacity: 0; transform: scale(0.96) } to { opacity: 1; transform: scale(1) } }
-      `}</style>
-
       {/* Hidden file inputs */}
       <input ref={fileInputRef} type="file" accept="audio/*" style={{ display: "none" }} onChange={handleFileInput} />
       <input ref={illustrationInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={handleIllustrationFileInput} />
 
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 100,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "rgba(0,0,0,0.5)",
-          animation: "ncFadeIn 0.15s",
-        }}
-        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      <Dialog
+        title="New chart"
+        icon={FilePlus}
+        onClose={onClose}
+        width={480}
+        footer={
+          <>
+            <Kbd style={{ marginRight: "auto" }}>Ctrl+N</Kbd>
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button variant="primary" disabled={creating} onClick={handleCreate}>
+              {creating ? "Creating…" : "Create chart"}
+            </Button>
+          </>
+        }
       >
-        <div
-          className="flex flex-col"
-          style={{
-            width: 480,
-            maxHeight: "90vh",
-            backgroundColor: "var(--bg-secondary)",
-            border: "1px solid var(--border-color)",
-            borderRadius: 14,
-            boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
-            overflow: "hidden",
-            animation: "ncScaleIn 0.15s ease-out",
-          }}
-        >
-          {/* Header */}
-          <div
-            className="flex items-center justify-between flex-shrink-0"
-            style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-color)" }}
-          >
-            <div className="flex items-center" style={{ gap: 8 }}>
-              <span style={{ fontSize: 16 }}>📄</span>
-              <span style={{ fontWeight: 500, fontSize: 15, color: "var(--text-primary)" }}>New chart</span>
-            </div>
-            <button
-              className="flex items-center justify-center"
-              style={{
-                width: 28, height: 28, borderRadius: 6,
-                backgroundColor: "var(--bg-active)", color: "var(--text-muted)",
-                fontSize: 14, cursor: "pointer", border: "none", transition: "color 0.12s",
+        {/* Files section */}
+        <div style={{ marginBottom: "var(--space-20)" }}>
+          <SectionHeader>Files</SectionHeader>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-10)" }}>
+            <DropZone
+              icon={Music}
+              title="Music file"
+              description="Drop audio or click to browse"
+              extensions=".mp3 .wav .ogg .flac"
+              fileName={musicName}
+              dragOver={dragOverMusic}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverMusic(true); }}
+              onDragLeave={() => setDragOverMusic(false)}
+              onDrop={(e) => {
+                e.preventDefault(); setDragOverMusic(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file && /\.(mp3|wav|ogg|flac|m4a)$/i.test(file.name)) {
+                  setMusicFile(file); setMusicPath(null); setError(null);
+                  processAudioMetadata(file);
+                }
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-primary)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"; }}
-              onClick={onClose}
-            >
-              ✕
-            </button>
+              onClick={handlePickMusic}
+              onClear={() => { setMusicFile(null); setMusicPath(null); }}
+            />
+            <DropZone
+              icon={ImageIcon}
+              title="Illustration"
+              description="Drop image or click to browse"
+              extensions=".png .jpg .webp"
+              fileName={illustrationName}
+              dragOver={dragOverIllustration}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverIllustration(true); }}
+              onDragLeave={() => setDragOverIllustration(false)}
+              onDrop={(e) => {
+                e.preventDefault(); setDragOverIllustration(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file && /\.(png|jpg|jpeg|webp)$/i.test(file.name)) {
+                  setIllustrationFile(file); setIllustrationPath(null); setError(null);
+                }
+              }}
+              onClick={handlePickIllustration}
+              onClear={() => { setIllustrationFile(null); setIllustrationPath(null); }}
+            />
           </div>
+          <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginTop: "var(--space-8)", textAlign: "center" }}>
+            Both files are optional — you can add them later
+          </div>
+        </div>
 
-          {/* Scrollable body */}
-          <div style={{ overflowY: "auto", padding: "16px 20px" }}>
-
-            {/* FILES SECTION */}
-            <div style={{ marginBottom: 20 }}>
-              <SectionHeader>Files</SectionHeader>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <DropZone
-                  icon="🎵"
-                  title="Music file"
-                  description="Drop audio or click to browse"
-                  extensions=".mp3 .wav .ogg .flac"
-                  fileName={musicName}
-                  dragOver={dragOverMusic}
-                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverMusic(true); }}
-                  onDragLeave={() => setDragOverMusic(false)}
-                  onDrop={(e) => {
-                    e.preventDefault(); setDragOverMusic(false);
-                    const file = e.dataTransfer.files?.[0];
-                    if (file && /\.(mp3|wav|ogg|flac|m4a)$/i.test(file.name)) {
-                      setMusicFile(file); setMusicPath(null); setError(null);
-                      processAudioMetadata(file);
-                    }
-                  }}
-                  onClick={handlePickMusic}
-                  onClear={() => { setMusicFile(null); setMusicPath(null); }}
-                />
-                <DropZone
-                  icon="🖼"
-                  title="Illustration"
-                  description="Drop image or click to browse"
-                  extensions=".png .jpg .webp"
-                  fileName={illustrationName}
-                  dragOver={dragOverIllustration}
-                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverIllustration(true); }}
-                  onDragLeave={() => setDragOverIllustration(false)}
-                  onDrop={(e) => {
-                    e.preventDefault(); setDragOverIllustration(false);
-                    const file = e.dataTransfer.files?.[0];
-                    if (file && /\.(png|jpg|jpeg|webp)$/i.test(file.name)) {
-                      setIllustrationFile(file); setIllustrationPath(null); setError(null);
-                    }
-                  }}
-                  onClick={handlePickIllustration}
-                  onClear={() => { setIllustrationFile(null); setIllustrationPath(null); }}
-                />
-              </div>
-              <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 8, textAlign: "center" }}>
-                Both files are optional — you can add them later
-              </div>
-            </div>
-
-            {/* CHART INFO SECTION */}
-            <div style={{ marginBottom: 20 }}>
-              <SectionHeader>Chart info</SectionHeader>
-              <div style={{ backgroundColor: "var(--bg-active)", borderRadius: 10, overflow: "hidden" }}>
-                <CardRow label="Song name">
-                  <input
-                    style={INPUT_STYLE}
-                    value={meta.name}
-                    onChange={(e) => setMeta({ ...meta, name: e.target.value })}
-                    placeholder="e.g. Aegleseeker"
-                    onFocus={focusInput}
-                    onBlur={blurInput}
+        {/* Chart info section */}
+        <div style={{ marginBottom: "var(--space-20)" }}>
+          <SectionHeader>Chart info</SectionHeader>
+          <div style={{ backgroundColor: "var(--bg-active)", borderRadius: "var(--radius-xl)", overflow: "hidden" }}>
+            <CardRow label="Song name">
+              <input
+                style={INPUT_STYLE}
+                value={meta.name}
+                onChange={(e) => setMeta({ ...meta, name: e.target.value })}
+                placeholder="e.g. Aegleseeker"
+              />
+            </CardRow>
+            <CardRow label="Composer">
+              <input
+                style={INPUT_STYLE}
+                value={meta.composer}
+                onChange={(e) => setMeta({ ...meta, composer: e.target.value })}
+                placeholder="e.g. silentroom"
+              />
+            </CardRow>
+            <CardRow label="Charter">
+              <input
+                style={INPUT_STYLE}
+                value={meta.charter}
+                onChange={(e) => setMeta({ ...meta, charter: e.target.value })}
+                placeholder="Your name"
+              />
+            </CardRow>
+            <CardRow
+              label="Illustrator"
+              last
+              side={
+                <div>
+                  <label style={LABEL_STYLE}>Difficulty</label>
+                  <SegmentedControl
+                    value={difficulty}
+                    options={DIFFICULTY_OPTIONS}
+                    onChange={setDifficulty}
+                    tone="accent"
+                    size="sm"
+                    block
+                    label="Difficulty"
                   />
-                </CardRow>
-                <CardRow label="Composer">
-                  <input
-                    style={INPUT_STYLE}
-                    value={meta.composer}
-                    onChange={(e) => setMeta({ ...meta, composer: e.target.value })}
-                    placeholder="e.g. silentroom"
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  />
-                </CardRow>
-                <CardRow label="Charter">
-                  <input
-                    style={INPUT_STYLE}
-                    value={meta.charter}
-                    onChange={(e) => setMeta({ ...meta, charter: e.target.value })}
-                    placeholder="Your name"
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  />
-                </CardRow>
-                <CardRow
-                  label="Illustrator"
-                  last
-                  side={
-                    <div>
-                      <label style={{ fontSize: 11, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                        Difficulty
-                      </label>
-                      <SegmentedControl
-                        value={difficulty}
-                        options={[
-                          { value: "EZ", label: "EZ" },
-                          { value: "HD", label: "HD" },
-                          { value: "IN", label: "IN" },
-                          { value: "AT", label: "AT" },
-                        ]}
-                        onChange={setDifficulty}
-                      />
-                      <div className="flex items-center" style={{ gap: 6, marginTop: 8 }}>
-                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Lv.</span>
-                        <input
-                          type="number"
-                          value={levelNumber}
-                          onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setLevelNumber(Math.trunc(n)); }}
-                          style={{
-                            ...INPUT_STYLE,
-                            width: 50,
-                            textAlign: "center",
-                            padding: "5px 8px",
-                          }}
-                          onFocus={focusInput}
-                          onBlur={blurInput}
-                        />
-                      </div>
-                    </div>
-                  }
-                >
-                  <input
-                    style={INPUT_STYLE}
-                    value={meta.illustrator}
-                    onChange={(e) => setMeta({ ...meta, illustrator: e.target.value })}
-                    placeholder="Artist name"
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  />
-                </CardRow>
-              </div>
-            </div>
-
-            {/* TIMING SECTION */}
-            <div>
-              <SectionHeader>Timing</SectionHeader>
-              <div style={{ backgroundColor: "var(--bg-active)", borderRadius: 10, overflow: "hidden" }}>
-                <div
-                  className="flex items-center justify-between"
-                  style={{ padding: "12px 14px" }}
-                >
-                  <div>
-                    <div style={{ fontSize: 12, color: "var(--text-primary)" }}>Initial BPM</div>
-                    <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>
-                      You can add BPM changes later in the editor
-                    </div>
+                  <div className="flex items-center" style={{ gap: "var(--space-6)", marginTop: "var(--space-8)" }}>
+                    <span style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>Lv.</span>
+                    <input
+                      type="number"
+                      aria-label="Level"
+                      value={levelNumber}
+                      onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setLevelNumber(Math.trunc(n)); }}
+                      style={{
+                        ...INPUT_STYLE,
+                        width: 56,
+                        height: "var(--control-md)",
+                        textAlign: "center",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    />
                   </div>
-                  <NumericInput
-                    commitMode="blur"
-                    min={1}
-                    fallback={120}
-                    value={initialBpm}
-                    onChange={setInitialBpm}
-                    style={{
-                      ...INPUT_STYLE,
-                      width: 70,
-                      textAlign: "center",
-                      padding: "6px 8px",
-                    }}
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  />
+                </div>
+              }
+            >
+              <input
+                style={INPUT_STYLE}
+                value={meta.illustrator}
+                onChange={(e) => setMeta({ ...meta, illustrator: e.target.value })}
+                placeholder="Artist name"
+              />
+            </CardRow>
+          </div>
+        </div>
+
+        {/* Timing section */}
+        <div>
+          <SectionHeader>Timing</SectionHeader>
+          <div style={{ backgroundColor: "var(--bg-active)", borderRadius: "var(--radius-xl)", overflow: "hidden" }}>
+            <div
+              className="flex items-center justify-between"
+              style={{ padding: "var(--space-12) var(--space-14)", gap: "var(--space-12)" }}
+            >
+              <div>
+                <div style={{ fontSize: "var(--fs-body)", color: "var(--text-primary)" }}>Initial BPM</div>
+                <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginTop: 1 }}>
+                  You can add BPM changes later in the editor
                 </div>
               </div>
-            </div>
-
-            {/* Error */}
-            {error && (
-              <div
+              <NumericInput
+                commitMode="blur"
+                min={1}
+                fallback={120}
+                value={initialBpm}
+                onChange={setInitialBpm}
                 style={{
-                  marginTop: 12,
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  color: "#ff6b6b",
-                  backgroundColor: "rgba(255,70,70,0.1)",
+                  ...INPUT_STYLE,
+                  width: 72,
+                  textAlign: "center",
+                  fontFamily: "var(--font-mono)",
                 }}
-              >
-                {error}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div
-            className="flex items-center justify-between flex-shrink-0"
-            style={{ padding: "14px 20px", borderTop: "1px solid var(--border-color)" }}
-          >
-            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>Ctrl+N</span>
-            <div className="flex" style={{ gap: 8 }}>
-              <button
-                style={{
-                  padding: "7px 16px",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  color: "var(--text-secondary)",
-                  cursor: "pointer",
-                  border: "none",
-                  background: "transparent",
-                  transition: "background 0.1s",
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--bg-active)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                onClick={onClose}
-              >
-                Cancel
-              </button>
-              <button
-                style={{
-                  padding: "7px 20px",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  backgroundColor: creating ? "var(--bg-active)" : "var(--accent-primary)",
-                  color: creating ? "var(--text-muted)" : "#fff",
-                  cursor: creating ? "not-allowed" : "pointer",
-                  fontWeight: 500,
-                  border: "none",
-                  transition: "opacity 0.1s",
-                }}
-                disabled={creating}
-                onMouseEnter={(e) => { if (!creating) (e.currentTarget as HTMLElement).style.opacity = "0.85"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
-                onClick={handleCreate}
-              >
-                {creating ? "Creating..." : "Create chart"}
-              </button>
+              />
             </div>
           </div>
         </div>
-      </div>
+
+        {/* Error */}
+        {error && (
+          <div
+            role="alert"
+            style={{
+              marginTop: "var(--space-12)",
+              padding: "var(--space-8) var(--space-12)",
+              borderRadius: "var(--radius-lg)",
+              fontSize: "var(--fs-body)",
+              color: "var(--error)",
+              backgroundColor: "color-mix(in srgb, var(--error) 10%, transparent)",
+            }}
+          >
+            {error}
+          </div>
+        )}
+      </Dialog>
     </>
   );
 }

@@ -7,11 +7,17 @@
 // crosses the judgment line). Note position is computed as
 // elapsed time from cycleStart, so at offset=0 the visual and
 // audio are perfectly aligned.
+//
+// Look: rows are UIKit CardRows inside the Settings card, actions
+// are shared Buttons, and the canvas colours come from design
+// tokens via chromeTheme (tap-note blue, status colours for taps).
 // ============================================================
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { ActionButton } from "../common/UIKit";
+import { CardRow } from "../common/UIKit";
+import { Button } from "../common/Button";
+import { chromeTheme, withAlpha } from "../../canvas/chromeTheme";
 
 // ---- Calibration Configuration ----
 const LATENCY_MIN_MS = -300;
@@ -22,12 +28,10 @@ const LATENCY_STEP_MS = 5;
 const CANVAS_HEIGHT = 200;          // CSS pixels
 const LINE_Y_OFFSET = 30;          // judgment line distance from bottom
 const TOP_MARGIN = 20;             // note starting Y from top
-const NOTE_COLOR = "#35b5ff";      // tap note color (matches GameRenderer)
 const NOTE_WIDTH = 60;             // note visual width
 const NOTE_HEIGHT = 8;             // note visual height
 const NOTE_RADIUS = 3;             // rounded corners
 const LINE_THICKNESS = 3;          // matches GameRenderer
-const BG_COLOR = "#0c0c12";        // dark background
 
 // ---- Timing Constants ----
 const LOOP_PERIOD = 2.0;           // seconds per cycle
@@ -127,15 +131,19 @@ export function LatencyCalibration() {
     const lineY = h - LINE_Y_OFFSET;
     const travelDistance = lineY - TOP_MARGIN;
 
+    // Token colours: canvas background, tap-note blue (matches the
+    // game renderer), status colours for tap accuracy.
+    const theme = chromeTheme();
+
     ctx2d.save();
     ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // 1. Clear with dark background
-    ctx2d.fillStyle = BG_COLOR;
+    // 1. Clear with the canvas background
+    ctx2d.fillStyle = theme.canvasBg;
     ctx2d.fillRect(0, 0, w, h);
 
-    // 2. Draw judgment line (white, full width)
-    ctx2d.fillStyle = "rgba(255, 255, 255, 0.85)";
+    // 2. Draw judgment line (near-white, full width)
+    ctx2d.fillStyle = withAlpha(theme.textPrimary, 0.85);
     ctx2d.fillRect(0, lineY - LINE_THICKNESS / 2, w, LINE_THICKNESS);
 
     // 3. Compute note position relative to cycle start
@@ -151,7 +159,7 @@ export function LatencyCalibration() {
       const noteY = TOP_MARGIN + progress * travelDistance;
       const noteX = w / 2;
 
-      ctx2d.fillStyle = NOTE_COLOR;
+      ctx2d.fillStyle = theme.noteTap;
       ctx2d.beginPath();
       ctx2d.roundRect(
         noteX - NOTE_WIDTH / 2,
@@ -163,11 +171,11 @@ export function LatencyCalibration() {
       ctx2d.fill();
     }
 
-    // 5. Hit flash — brief white glow when note crosses the line
+    // 5. Hit flash — brief tap-colour glow when note crosses the line
     if (t >= FALL_DURATION && t < FALL_DURATION + FLASH_DURATION) {
       const flashProgress = (t - FALL_DURATION) / FLASH_DURATION;
       const flashAlpha = (1.0 - flashProgress) * 0.5;
-      ctx2d.fillStyle = `rgba(53, 181, 255, ${flashAlpha})`;
+      ctx2d.fillStyle = withAlpha(theme.noteTap, flashAlpha);
       ctx2d.fillRect(0, lineY - 10, w, 20);
     }
 
@@ -184,16 +192,10 @@ export function LatencyCalibration() {
       const alpha = 1.0 - age / TAP_FADE_DURATION;
       const dist = Math.abs(fb.y - lineY);
 
-      // Color by accuracy: green = perfect, yellow = close, red = far
-      let r: number, g: number, b: number;
-      if (dist < 8) {
-        r = 74; g = 255; b = 122;       // green
-      } else if (dist < 25) {
-        r = 255; g = 210; b = 74;       // yellow
-      } else {
-        r = 255; g = 74; b = 106;       // red
-      }
-      ctx2d.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      // Color by accuracy: success = perfect, warning = close, error = far
+      const accuracyColor =
+        dist < 8 ? theme.success : dist < 25 ? theme.warning : theme.error;
+      ctx2d.fillStyle = withAlpha(accuracyColor, alpha);
       ctx2d.fillRect(0, fb.y - 1, w, 2);
     }
 
@@ -292,59 +294,58 @@ export function LatencyCalibration() {
     setMode("idle");
   }, [cleanup, updateSettings]);
 
+  const offsetSlider = (label: string) => (
+    <div className="flex items-center" style={{ gap: "var(--space-8)" }}>
+      <input
+        type="range"
+        min={LATENCY_MIN_MS}
+        max={LATENCY_MAX_MS}
+        step={LATENCY_STEP_MS}
+        value={audioLatencyMs}
+        aria-label={label}
+        onChange={(e) => updateSettings({ audioLatencyMs: parseInt(e.target.value) })}
+        style={{ width: 96 }}
+      />
+      <span
+        style={{
+          fontSize: "var(--fs-control)",
+          fontFamily: "var(--font-mono)",
+          width: 52,
+          textAlign: "right",
+          color: "var(--text-secondary)",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {audioLatencyMs} ms
+      </span>
+    </div>
+  );
+
+  const actionRowStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: "var(--space-8)",
+    padding: "var(--space-10) var(--space-12)",
+  };
+
   // ---- IDLE state ----
   if (mode === "idle") {
     return (
       <div>
         {/* Manual slider row */}
-        <div
-          style={{
-            padding: "12px 14px",
-            borderBottom: "1px solid rgba(42, 42, 53, 0.55)",
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: 12, color: "var(--text-primary)" }}>Audio latency</div>
-              <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
-                Compensates for audio hardware delay
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-              <input
-                type="range"
-                min={LATENCY_MIN_MS}
-                max={LATENCY_MAX_MS}
-                step={LATENCY_STEP_MS}
-                value={audioLatencyMs}
-                onChange={(e) => updateSettings({ audioLatencyMs: parseInt(e.target.value) })}
-                className="w-24"
-                style={{ accentColor: "var(--accent-primary)" }}
-              />
-              <span
-                style={{
-                  fontSize: 11,
-                  width: 48,
-                  textAlign: "right",
-                  color: "var(--text-secondary)",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {audioLatencyMs} ms
-              </span>
-            </div>
-          </div>
-        </div>
+        <CardRow label="Audio latency" description="Compensates for audio hardware delay">
+          {offsetSlider("Audio latency")}
+        </CardRow>
 
         {/* Calibrate + Reset buttons */}
-        <div style={{ padding: "10px 14px" }} className="flex items-center gap-2">
-          <ActionButton variant="primary" onClick={startCalibration}>
+        <div style={actionRowStyle}>
+          <Button variant="primary" onClick={startCalibration}>
             Calibrate
-          </ActionButton>
+          </Button>
           {audioLatencyMs !== 0 && (
-            <ActionButton variant="default" onClick={() => updateSettings({ audioLatencyMs: 0 })}>
+            <Button onClick={() => updateSettings({ audioLatencyMs: 0 })}>
               Reset to 0
-            </ActionButton>
+            </Button>
           )}
         </div>
       </div>
@@ -358,12 +359,13 @@ export function LatencyCalibration() {
       <div ref={containerRef} style={{ lineHeight: 0 }}>
         <canvas
           ref={canvasRef}
+          aria-label="Calibration preview. Tap or press Space to check timing."
           style={{
             width: "100%",
             height: CANVAS_HEIGHT,
             cursor: "pointer",
             display: "block",
-            borderRadius: "10px 10px 0 0",
+            borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
           }}
           onPointerDown={(e) => {
             e.preventDefault();
@@ -382,9 +384,9 @@ export function LatencyCalibration() {
       {/* Instruction text */}
       <div
         style={{
-          padding: "8px 14px 4px",
-          fontSize: 10,
-          color: "var(--text-muted)",
+          padding: "var(--space-8) var(--space-12) var(--space-4)",
+          fontSize: "var(--fs-caption)",
+          color: "var(--text-secondary)",
           textAlign: "center",
         }}
       >
@@ -392,48 +394,18 @@ export function LatencyCalibration() {
       </div>
 
       {/* Live offset slider */}
-      <div
-        style={{
-          padding: "8px 14px",
-          borderBottom: "1px solid rgba(42, 42, 53, 0.55)",
-        }}
-      >
-        <div className="flex items-center justify-between">
-          <div style={{ fontSize: 12, color: "var(--text-primary)" }}>Offset</div>
-          <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-            <input
-              type="range"
-              min={LATENCY_MIN_MS}
-              max={LATENCY_MAX_MS}
-              step={LATENCY_STEP_MS}
-              value={audioLatencyMs}
-              onChange={(e) => updateSettings({ audioLatencyMs: parseInt(e.target.value) })}
-              className="w-24"
-              style={{ accentColor: "var(--accent-primary)" }}
-            />
-            <span
-              style={{
-                fontSize: 11,
-                width: 48,
-                textAlign: "right",
-                color: "var(--text-secondary)",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {audioLatencyMs} ms
-            </span>
-          </div>
-        </div>
-      </div>
+      <CardRow label="Offset">
+        {offsetSlider("Offset")}
+      </CardRow>
 
       {/* Done / Cancel buttons */}
-      <div style={{ padding: "10px 14px" }} className="flex items-center gap-2">
-        <ActionButton variant="primary" onClick={stopCalibration}>
+      <div style={actionRowStyle}>
+        <Button variant="primary" onClick={stopCalibration}>
           Done
-        </ActionButton>
-        <ActionButton variant="default" onClick={cancelCalibration}>
+        </Button>
+        <Button onClick={cancelCalibration}>
           Cancel
-        </ActionButton>
+        </Button>
       </div>
     </div>
   );

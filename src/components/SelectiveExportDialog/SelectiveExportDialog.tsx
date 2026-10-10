@@ -5,13 +5,18 @@
 //   - Selecting a beat range (start, end)
 //   - Choosing which lines to include
 //   - Picking an export format
+// Rendered in the shared Dialog chrome.
 // ============================================================
 
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { FileDown } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { beatToFloat } from "../../types/chart";
 import type { PhichainChart, Beat, Note, LineEvent } from "../../types/chart";
 import { NumericInput } from "../common/FormFields";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
+import { INPUT_STYLE, SELECT_STYLE } from "../common/UIKit";
 
 interface SelectiveExportDialogProps {
   open: boolean;
@@ -118,140 +123,143 @@ export function SelectiveExportDialog({ open, onClose }: SelectiveExportDialogPr
 
   if (!open) return null;
 
-  const inputStyle = {
-    backgroundColor: "var(--bg-active)",
-    color: "var(--text-primary)",
-    border: "1px solid var(--border-color)",
+  const inputStyle: React.CSSProperties = {
+    ...INPUT_STYLE,
+    width: "100%",
+    fontFamily: "var(--font-mono)",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    marginBottom: "var(--space-6)",
+    fontSize: "var(--fs-control)",
+    color: "var(--text-secondary)",
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
-      <div
-        className="rounded-lg p-5"
-        style={{
-          backgroundColor: "var(--bg-secondary)",
-          border: "1px solid var(--border-color)",
-          color: "var(--text-primary)",
-          width: 400,
-        }}
-      >
-        <h3 className="text-sm font-semibold mb-4">Selective Export</h3>
-
-        {/* Beat range */}
-        <div className="flex gap-3 mb-3">
-          <label className="flex-1">
-            <span className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Start Beat</span>
-            <NumericInput
-              className="w-full px-2 py-1 rounded text-xs"
-              style={inputStyle}
-              commitMode="blur"
-              min={0}
-              step={1}
-              fallback={0}
-              value={startBeat}
-              onChange={setStartBeat}
-            />
-          </label>
-          <label className="flex-1">
-            <span className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>End Beat</span>
-            <NumericInput
-              className="w-full px-2 py-1 rounded text-xs"
-              style={inputStyle}
-              commitMode="blur"
-              min={0}
-              step={1}
-              fallback={0}
-              value={endBeat}
-              onChange={setEndBeat}
-            />
-          </label>
-        </div>
-
-        {/* Line selection */}
-        <div className="mb-3">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Lines</span>
-            <div className="flex gap-2">
-              <button
-                className="text-[10px] underline"
-                style={{ color: "var(--accent-primary)" }}
-                onClick={selectAllLines}
-              >
-                All
-              </button>
-              <button
-                className="text-[10px] underline"
-                style={{ color: "var(--accent-primary)" }}
-                onClick={deselectAllLines}
-              >
-                None
-              </button>
-            </div>
-          </div>
-          <div
-            className="max-h-32 overflow-y-auto rounded p-1"
-            style={{ backgroundColor: "var(--bg-active)", border: "1px solid var(--border-color)" }}
-          >
-            {chart.lines.map((line, idx) => (
-              <label key={idx} className="flex items-center gap-2 px-1 py-0.5 text-xs cursor-pointer hover:bg-white/5 rounded">
-                <input
-                  type="checkbox"
-                  checked={selectedLines.has(idx)}
-                  onChange={() => toggleLine(idx)}
-                  style={{ accentColor: "var(--accent-primary)" }}
-                />
-                <span style={{ color: selectedLines.has(idx) ? "var(--text-primary)" : "var(--text-muted)" }}>
-                  {line.name || `Line ${idx + 1}`}
-                </span>
-                <span className="ml-auto" style={{ color: "var(--text-muted)", fontSize: "9px" }}>
-                  {line.notes.length}N
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Format selector */}
-        <label className="flex items-center gap-2 mb-3">
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>Format</span>
-          <select
-            className="px-2 py-1 rounded text-xs"
-            style={inputStyle}
-            value={format}
-            onChange={(e) => setFormat(e.target.value as "phichain" | "json")}
-          >
-            <option value="phichain">Phichain JSON</option>
-            <option value="json">Raw JSON</option>
-          </select>
-        </label>
-
-        {/* Preview stats */}
-        <div
-          className="text-xs py-2 px-3 mb-3 rounded"
-          style={{ backgroundColor: "var(--bg-active)", color: "var(--text-secondary)" }}
-        >
-          Export: {previewStats.lines} lines, {previewStats.notes} notes, {previewStats.events} events
-        </div>
-
-        {/* Buttons */}
-        <div className="flex gap-2 justify-end">
-          <button
-            className="px-3 py-1.5 rounded text-xs"
-            style={{ backgroundColor: "var(--bg-active)", color: "var(--text-secondary)", border: "1px solid var(--border-color)" }}
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            className="px-3 py-1.5 rounded text-xs font-medium"
-            style={{ backgroundColor: "var(--accent-primary)", color: "#fff" }}
-            onClick={handleExport}
-            disabled={selectedLines.size === 0}
-          >
+    <Dialog
+      title="Selective export"
+      icon={FileDown}
+      onClose={onClose}
+      width={400}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleExport} disabled={selectedLines.size === 0}>
             Export
-          </button>
+          </Button>
+        </>
+      }
+    >
+      {/* Beat range */}
+      <div style={{ display: "flex", gap: "var(--space-12)", marginBottom: "var(--space-12)" }}>
+        <label style={{ flex: 1 }}>
+          <span style={labelStyle}>Start beat</span>
+          <NumericInput
+            style={inputStyle}
+            commitMode="blur"
+            min={0}
+            step={1}
+            fallback={0}
+            value={startBeat}
+            onChange={setStartBeat}
+          />
+        </label>
+        <label style={{ flex: 1 }}>
+          <span style={labelStyle}>End beat</span>
+          <NumericInput
+            style={inputStyle}
+            commitMode="blur"
+            min={0}
+            step={1}
+            fallback={0}
+            value={endBeat}
+            onChange={setEndBeat}
+          />
+        </label>
+      </div>
+
+      {/* Line selection */}
+      <div style={{ marginBottom: "var(--space-12)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-4)" }}>
+          <span style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>Lines</span>
+          <div style={{ display: "flex", gap: "var(--space-4)" }}>
+            <Button variant="ghost" size="sm" onClick={selectAllLines}>All</Button>
+            <Button variant="ghost" size="sm" onClick={deselectAllLines}>None</Button>
+          </div>
+        </div>
+        <div
+          style={{
+            maxHeight: 128,
+            overflowY: "auto",
+            padding: "var(--space-4)",
+            borderRadius: "var(--radius-md)",
+            backgroundColor: "var(--bg-tertiary)",
+            border: "var(--hairline) solid var(--border-color)",
+          }}
+        >
+          {chart.lines.map((line, idx) => (
+            <label
+              key={idx}
+              className="ui-hover"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--space-8)",
+                padding: "var(--space-2) var(--space-6)",
+                borderRadius: "var(--radius-md)",
+                fontSize: "var(--fs-body)",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selectedLines.has(idx)}
+                onChange={() => toggleLine(idx)}
+              />
+              <span style={{ color: selectedLines.has(idx) ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                {line.name || `Line ${idx + 1}`}
+              </span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  color: "var(--text-secondary)",
+                  fontSize: "var(--fs-caption)",
+                  fontFamily: "var(--font-mono)",
+                }}
+              >
+                {line.notes.length} notes
+              </span>
+            </label>
+          ))}
         </div>
       </div>
-    </div>
+
+      {/* Format selector */}
+      <label style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", marginBottom: "var(--space-12)" }}>
+        <span style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>Format</span>
+        <select
+          style={SELECT_STYLE}
+          value={format}
+          onChange={(e) => setFormat(e.target.value as "phichain" | "json")}
+        >
+          <option value="phichain">Phichain JSON</option>
+          <option value="json">Raw JSON</option>
+        </select>
+      </label>
+
+      {/* Preview stats */}
+      <div
+        style={{
+          padding: "var(--space-8) var(--space-12)",
+          borderRadius: "var(--radius-lg)",
+          backgroundColor: "var(--bg-active)",
+          fontSize: "var(--fs-body)",
+          color: "var(--text-secondary)",
+        }}
+      >
+        Export: {previewStats.lines} lines, {previewStats.notes} notes, {previewStats.events} events
+      </div>
+    </Dialog>
   );
 }

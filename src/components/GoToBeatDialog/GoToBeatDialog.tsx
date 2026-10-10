@@ -1,21 +1,27 @@
 // ============================================================
 // Go-to-Beat Dialog
 //
-// Quick-jump modal opened with Ctrl+J. Accepts either a beat
+// Quick-jump modal opened with Ctrl+G. Accepts either a beat
 // number (e.g. "12", "4.75") or a time string ("1:30", "90")
 // and seeks the playhead to that position.
 //
 // Shows a live preview of what exists at the target beat:
 // how many lines are active and how many notes are nearby.
+// Rendered in the shared Dialog chrome.
 // ============================================================
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { LocateFixed } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { audioEngine } from "../../audio/audioEngine";
 import { BpmList } from "../../utils/bpmList";
 import { beatToFloat } from "../../types/chart";
 import type { Line } from "../../types/chart";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
+import { Kbd } from "../common/Kbd";
+import { INPUT_STYLE } from "../common/UIKit";
 
 interface GoToBeatDialogProps {
   open: boolean;
@@ -157,60 +163,30 @@ function computePreview(
 
 // ---- Styles ----
 
-const OVERLAY_STYLE: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 9999,
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "center",
-  paddingTop: 120,
-  backgroundColor: "rgba(0, 0, 0, 0.45)",
-  backdropFilter: "blur(4px)",
-};
-
-const DIALOG_STYLE: React.CSSProperties = {
-  width: 340,
-  backgroundColor: "var(--bg-secondary)",
-  border: "1px solid var(--border-color)",
-  borderRadius: 10,
-  padding: 16,
-  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
-};
-
-const INPUT_STYLE: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  borderRadius: 8,
-  fontSize: 14,
-  fontFamily: "'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace",
-  border: "1px solid var(--border-color)",
-  backgroundColor: "var(--bg-active)",
-  color: "var(--text-primary)",
-  outline: "none",
-  boxSizing: "border-box",
-  transition: "border-color 0.15s",
-};
-
 const LABEL_STYLE: React.CSSProperties = {
-  fontSize: 10,
-  textTransform: "uppercase",
-  letterSpacing: "0.5px",
-  color: "var(--text-muted)",
+  fontSize: "var(--fs-control)",
+  color: "var(--text-secondary)",
+};
+
+const CARD_STYLE: React.CSSProperties = {
+  padding: "var(--space-8) var(--space-10)",
+  borderRadius: "var(--radius-lg)",
+  backgroundColor: "var(--bg-active)",
+  marginBottom: "var(--space-12)",
 };
 
 const PREVIEW_ROW_STYLE: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  padding: "5px 0",
-  fontSize: 12,
+  padding: "var(--space-4) 0",
+  fontSize: "var(--fs-body)",
   color: "var(--text-secondary)",
 };
 
 const PREVIEW_VALUE_STYLE: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace",
-  fontSize: 12,
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--fs-body)",
   color: "var(--text-primary)",
 };
 
@@ -218,7 +194,6 @@ const PREVIEW_VALUE_STYLE: React.CSSProperties = {
 
 export function GoToBeatDialog({ open, onClose }: GoToBeatDialogProps) {
   const [input, setInput] = useState("");
-  const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const chart = useChartStore((s) => s.chart);
@@ -271,28 +246,15 @@ export function GoToBeatDialog({ open, onClose }: GoToBeatDialogProps) {
     onClose();
   }, [parsed, duration, onClose]);
 
-  // Keyboard handling
+  // Keyboard handling (Escape is handled by the shared Dialog)
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter") {
         e.preventDefault();
         handleConfirm();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
       }
     },
-    [handleConfirm, onClose],
-  );
-
-  // Click overlay to close
-  const handleOverlayClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget) {
-        onClose();
-      }
-    },
-    [onClose],
+    [handleConfirm],
   );
 
   if (!open) return null;
@@ -308,189 +270,120 @@ export function GoToBeatDialog({ open, onClose }: GoToBeatDialogProps) {
   const hasError = input.trim().length > 0 && !parsed;
 
   return (
-    <div style={OVERLAY_STYLE} onClick={handleOverlayClick}>
-      <div style={DIALOG_STYLE}>
-        {/* Header */}
-        <div
+    <Dialog
+      title="Go to beat"
+      icon={LocateFixed}
+      onClose={onClose}
+      width={360}
+      headerExtra={<Kbd>Ctrl+G</Kbd>}
+      footer={
+        <>
+          <span style={{ marginRight: "auto", fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>
+            Enter to confirm &middot; Esc to cancel
+          </span>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleConfirm} disabled={!parsed}>
+            Go
+          </Button>
+        </>
+      }
+    >
+      {/* Current position indicator */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-8)",
+          marginBottom: "var(--space-12)",
+          padding: "var(--space-6) var(--space-10)",
+          borderRadius: "var(--radius-md)",
+          backgroundColor: "var(--bg-active)",
+          fontSize: "var(--fs-control)",
+          color: "var(--text-secondary)",
+        }}
+      >
+        <span>Now:</span>
+        <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
+          Beat {currentBeat.toFixed(2)}
+        </span>
+        <span style={{ color: "var(--text-muted)" }}>&middot;</span>
+        <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
+          {formatTime(currentTime)}
+        </span>
+      </div>
+
+      {/* Input field */}
+      <div style={{ marginBottom: "var(--space-12)" }}>
+        <label htmlFor="go-to-beat-input" style={{ ...LABEL_STYLE, display: "block", marginBottom: "var(--space-6)" }}>
+          Beat number, seconds (e.g. 90s), or time (MM:SS)
+        </label>
+        <input
+          id="go-to-beat-input"
+          ref={inputRef}
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="e.g. 32, 1:15, 45s"
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 14,
+            ...INPUT_STYLE,
+            width: "100%",
+            height: "var(--control-lg)",
+            fontSize: "var(--fs-headline)",
+            fontFamily: "var(--font-mono)",
+            borderColor: hasError ? "var(--error)" : "var(--border-color)",
           }}
-        >
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
-            Go to Beat
-          </span>
-          <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-            Ctrl+J
-          </span>
-        </div>
-
-        {/* Current position indicator */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 12,
-            padding: "6px 10px",
-            borderRadius: 6,
-            backgroundColor: "var(--bg-primary)",
-            fontSize: 11,
-            color: "var(--text-secondary)",
-          }}
-        >
-          <span>Now:</span>
-          <span style={{ color: "var(--text-primary)", fontFamily: "'JetBrains Mono', monospace" }}>
-            Beat {currentBeat.toFixed(2)}
-          </span>
-          <span style={{ color: "var(--text-muted)" }}>|</span>
-          <span style={{ color: "var(--text-primary)", fontFamily: "'JetBrains Mono', monospace" }}>
-            {formatTime(currentTime)}
-          </span>
-        </div>
-
-        {/* Input field */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ ...LABEL_STYLE, marginBottom: 6 }}>
-            Beat number, seconds (e.g. 90s), or time (MM:SS)
-          </div>
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            placeholder="e.g. 32, 1:15, 45s"
-            style={{
-              ...INPUT_STYLE,
-              borderColor: hasError
-                ? "var(--error)"
-                : focused
-                  ? "var(--accent-primary)"
-                  : "var(--border-color)",
-            }}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          {hasError && (
-            <div style={{ fontSize: 10, color: "var(--error)", marginTop: 4 }}>
-              Invalid input. Use a beat number, seconds (e.g. 90s), or MM:SS format.
-            </div>
-          )}
-        </div>
-
-        {/* Preview section */}
-        {parsed && preview && (
-          <div
-            style={{
-              padding: "8px 10px",
-              borderRadius: 6,
-              backgroundColor: "var(--bg-primary)",
-              marginBottom: 12,
-              borderLeft: "2px solid var(--accent-primary)",
-            }}
-          >
-            <div style={{ ...LABEL_STYLE, marginBottom: 6 }}>Preview</div>
-
-            {/* Target position */}
-            <div style={PREVIEW_ROW_STYLE}>
-              <span>Target</span>
-              <span style={PREVIEW_VALUE_STYLE}>
-                {parsed.isTime
-                  ? `${parsed.label} (Beat ${parsed.beat.toFixed(2)})`
-                  : `${parsed.label} (${formatTime(parsed.time)})`}
-              </span>
-            </div>
-
-            {/* BPM at target */}
-            <div style={PREVIEW_ROW_STYLE}>
-              <span>BPM</span>
-              <span style={PREVIEW_VALUE_STYLE}>{preview.bpm.toFixed(1)}</span>
-            </div>
-
-            {/* Active lines */}
-            <div style={PREVIEW_ROW_STYLE}>
-              <span>Active lines</span>
-              <span style={PREVIEW_VALUE_STYLE}>{preview.activeLines}</span>
-            </div>
-
-            {/* Nearby notes */}
-            <div style={PREVIEW_ROW_STYLE}>
-              <span>Notes nearby</span>
-              <span style={{
-                ...PREVIEW_VALUE_STYLE,
-                color: preview.nearbyNotes > 0 ? "var(--accent-primary)" : "var(--text-muted)",
-              }}>
-                {preview.nearbyNotes}
-              </span>
-            </div>
+          autoComplete="off"
+          spellCheck={false}
+          aria-invalid={hasError}
+          data-autofocus
+        />
+        {hasError && (
+          <div style={{ fontSize: "var(--fs-caption)", color: "var(--error)", marginTop: "var(--space-4)" }}>
+            Invalid input. Use a beat number, seconds (e.g. 90s), or MM:SS format.
           </div>
         )}
-
-        {/* Action buttons */}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: "7px 16px",
-              borderRadius: 6,
-              fontSize: 12,
-              border: "1px solid var(--border-color)",
-              backgroundColor: "var(--bg-active)",
-              color: "var(--text-secondary)",
-              cursor: "pointer",
-              transition: "background-color 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "var(--bg-tertiary)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "var(--bg-active)";
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!parsed}
-            style={{
-              padding: "7px 16px",
-              borderRadius: 6,
-              fontSize: 12,
-              border: "1px solid var(--accent-primary)",
-              backgroundColor: parsed ? "var(--accent-primary)" : "var(--bg-active)",
-              color: parsed ? "#fff" : "var(--text-muted)",
-              cursor: parsed ? "pointer" : "not-allowed",
-              opacity: parsed ? 1 : 0.5,
-              transition: "background-color 0.15s, opacity 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              if (parsed) e.currentTarget.style.backgroundColor = "var(--accent-hover)";
-            }}
-            onMouseLeave={(e) => {
-              if (parsed) e.currentTarget.style.backgroundColor = "var(--accent-primary)";
-            }}
-          >
-            Go
-          </button>
-        </div>
-
-        {/* Footer hint */}
-        <div
-          style={{
-            marginTop: 10,
-            fontSize: 10,
-            color: "var(--text-muted)",
-            textAlign: "center",
-          }}
-        >
-          Enter to confirm &middot; Escape to cancel
-        </div>
       </div>
-    </div>
+
+      {/* Preview section */}
+      {parsed && preview && (
+        <div style={CARD_STYLE}>
+          <div style={{ ...LABEL_STYLE, marginBottom: "var(--space-4)" }}>Preview</div>
+
+          {/* Target position */}
+          <div style={PREVIEW_ROW_STYLE}>
+            <span>Target</span>
+            <span style={PREVIEW_VALUE_STYLE}>
+              {parsed.isTime
+                ? `${parsed.label} (Beat ${parsed.beat.toFixed(2)})`
+                : `${parsed.label} (${formatTime(parsed.time)})`}
+            </span>
+          </div>
+
+          {/* BPM at target */}
+          <div style={PREVIEW_ROW_STYLE}>
+            <span>BPM</span>
+            <span style={PREVIEW_VALUE_STYLE}>{preview.bpm.toFixed(1)}</span>
+          </div>
+
+          {/* Active lines */}
+          <div style={PREVIEW_ROW_STYLE}>
+            <span>Active lines</span>
+            <span style={PREVIEW_VALUE_STYLE}>{preview.activeLines}</span>
+          </div>
+
+          {/* Nearby notes */}
+          <div style={PREVIEW_ROW_STYLE}>
+            <span>Notes nearby</span>
+            <span style={{
+              ...PREVIEW_VALUE_STYLE,
+              color: preview.nearbyNotes > 0 ? "var(--accent-primary)" : "var(--text-secondary)",
+            }}>
+              {preview.nearbyNotes}
+            </span>
+          </div>
+        </div>
+      )}
+    </Dialog>
   );
 }

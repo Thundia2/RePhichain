@@ -3,9 +3,11 @@
 //
 // Paste lyrics, play audio, press Enter to mark each line's
 // start beat, then commit all text events at once.
+// Rendered in the shared Dialog chrome.
 // ============================================================
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { MicVocal, Play, Square } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { useSelectedLineIndex } from "../../stores/selection";
@@ -15,7 +17,10 @@ import { getPlayheadBeat } from "../../utils/playhead";
 import { floatToBeat } from "../../types/chart";
 import type { LineEvent } from "../../types/chart";
 import { ensureTextLine } from "../../utils/textEventHelpers";
-import { ActionButton, SectionHeader, Card } from "../common/UIKit";
+import { INPUT_STYLE } from "../common/UIKit";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
+import { Kbd } from "../common/Kbd";
 
 interface LyricsSyncDialogProps {
   open: boolean;
@@ -130,117 +135,99 @@ export function LyricsSyncDialog({ open, onClose }: LyricsSyncDialogProps) {
   const progress = lines.length > 0 ? syncedBeats.length / lines.length : 0;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 100,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <Dialog
+      title="Lyrics sync"
+      icon={MicVocal}
+      onClose={onClose}
+      width={420}
+      // While syncing, Esc only stops syncing (handled by the keydown effect above).
+      escapeToClose={!isSyncing}
+      footer={
+        !isSyncing ? (
+          <>
+            <Button variant="ghost" onClick={reset} disabled={syncedBeats.length === 0} style={{ marginRight: "auto" }}>
+              Reset
+            </Button>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button icon={Play} onClick={startSync} disabled={lines.length === 0}>
+              Start syncing
+            </Button>
+            <Button variant="primary" onClick={applyAndClose} disabled={syncedBeats.length === 0}>
+              Apply
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button icon={Square} onClick={() => setIsSyncing(false)}>Stop syncing</Button>
+          </>
+        )
+      }
     >
-      <div
-        style={{
-          width: 420,
-          backgroundColor: "var(--bg-secondary)",
-          border: "1px solid var(--border-color)",
-          borderRadius: 12,
-          padding: 16,
-          boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-        }}
-      >
-        <SectionHeader>Lyrics Sync</SectionHeader>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+        <label htmlFor="lyrics-sync-text" style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>
+          Paste lyrics (one line per event)
+        </label>
+        <textarea
+          id="lyrics-sync-text"
+          value={lyrics}
+          onChange={(e) => setLyrics(e.target.value)}
+          placeholder={"Terror\nTerror is near\nI will\nshatter you all!!"}
+          rows={8}
+          style={{
+            ...INPUT_STYLE,
+            width: "100%",
+            height: "auto",
+            padding: "var(--space-6) var(--space-8)",
+            resize: "vertical",
+          }}
+          disabled={isSyncing}
+        />
 
-        <Card>
-          <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
-              Paste lyrics (one line per event):
+        {/* Instructions */}
+        <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+          Press <Kbd>Space</Kbd> to play, then press <Kbd>Enter</Kbd> or <Kbd>Q</Kbd> each time a lyric line starts. Timing is recorded.
+        </div>
+
+        {/* Progress */}
+        {lines.length > 0 && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "var(--space-4)" }}>
+              <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>
+                Progress: <span style={{ fontFamily: "var(--font-mono)" }}>{syncedBeats.length}/{lines.length}</span> lines synced
+              </span>
             </div>
-            <textarea
-              value={lyrics}
-              onChange={(e) => setLyrics(e.target.value)}
-              placeholder={"Terror\nTerror is near\nI will\nshatter you all!!"}
-              rows={8}
-              style={{
-                width: "100%",
-                backgroundColor: "var(--bg-primary)",
-                color: "var(--text-primary)",
-                border: "1px solid var(--border-color)",
-                borderRadius: 6,
-                padding: "6px 8px",
-                fontSize: 11,
-                resize: "vertical",
-                fontFamily: "inherit",
-              }}
-              disabled={isSyncing}
-            />
-
-            {/* Instructions */}
-            <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>
-              Press <strong>Space</strong> to play, then press <strong>Enter</strong> or <strong>Q</strong> each time a lyric line starts. Timing is recorded.
+            <div style={{
+              height: 4,
+              backgroundColor: "var(--bg-active)",
+              borderRadius: "var(--radius-full)",
+              overflow: "hidden",
+            }}>
+              <div style={{
+                height: "100%",
+                width: `${progress * 100}%`,
+                backgroundColor: "var(--accent-primary)",
+                borderRadius: "var(--radius-full)",
+                transition: "width var(--dur-base)",
+              }} />
             </div>
-
-            {/* Progress */}
-            {lines.length > 0 && (
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                    Progress: {syncedBeats.length}/{lines.length} lines synced
-                  </span>
-                </div>
-                <div style={{
-                  height: 4,
-                  backgroundColor: "var(--bg-primary)",
-                  borderRadius: 2,
-                  overflow: "hidden",
-                }}>
-                  <div style={{
-                    height: "100%",
-                    width: `${progress * 100}%`,
-                    backgroundColor: "var(--accent-primary)",
-                    borderRadius: 2,
-                    transition: "width 0.2s",
-                  }} />
-                </div>
-                {isSyncing && currentLyricIndex < lines.length && (
-                  <div style={{
-                    fontSize: 12,
-                    color: "var(--accent-primary)",
-                    fontWeight: 600,
-                    marginTop: 6,
-                    textAlign: "center",
-                    padding: "4px 8px",
-                    backgroundColor: "var(--accent-primary)" + "15",
-                    borderRadius: 6,
-                  }}>
-                    "{lines[currentLyricIndex]}"
-                  </div>
-                )}
+            {isSyncing && currentLyricIndex < lines.length && (
+              <div style={{
+                fontSize: "var(--fs-body)",
+                color: "var(--accent-primary)",
+                fontWeight: 600,
+                marginTop: "var(--space-6)",
+                textAlign: "center",
+                padding: "var(--space-4) var(--space-8)",
+                backgroundColor: "var(--accent-tint)",
+                borderRadius: "var(--radius-md)",
+              }}>
+                "{lines[currentLyricIndex]}"
               </div>
             )}
           </div>
-        </Card>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-          {!isSyncing ? (
-            <>
-              <ActionButton onClick={reset} disabled={syncedBeats.length === 0}>Reset</ActionButton>
-              <ActionButton onClick={startSync} variant="primary" disabled={lines.length === 0}>
-                Start Syncing
-              </ActionButton>
-              <ActionButton onClick={applyAndClose} variant="primary" disabled={syncedBeats.length === 0}>
-                Apply & Close
-              </ActionButton>
-            </>
-          ) : (
-            <ActionButton onClick={() => setIsSyncing(false)}>Stop Syncing</ActionButton>
-          )}
-          <ActionButton onClick={onClose}>Cancel</ActionButton>
-        </div>
+        )}
       </div>
-    </div>
+    </Dialog>
   );
 }

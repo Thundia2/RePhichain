@@ -3,9 +3,14 @@
 //
 // Takes rotation count + direction + starting angle and generates
 // the correct rotation event, eliminating mental math.
+// Rendered in the shared Dialog chrome.
 // ============================================================
 
 import { useState, useCallback } from "react";
+import { RotateCw, RotateCcw } from "lucide-react";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
+import { SegmentedControl } from "../common/SegmentedControl";
 import { Field, safeParseNumber } from "../common/FormFields";
 import { EasingPicker } from "../common/EasingPicker";
 import { generateSpinEvent } from "../../utils/spinGenerator";
@@ -43,84 +48,63 @@ export function SpinGeneratorDialog({ open, onClose }: { open: boolean; onClose:
   if (!open) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 10000,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        background: "rgba(0,0,0,0.5)",
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <Dialog
+      title="Spin generator"
+      icon={RotateCw}
+      onClose={onClose}
+      width={360}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleGenerate} disabled={selectedLineIndex === null}>
+            Generate
+          </Button>
+        </>
+      }
     >
-      <div
-        style={{
-          background: "var(--bg-secondary)", border: "1px solid var(--border-color)",
-          borderRadius: 12, padding: 20, minWidth: 320,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ fontSize: 14, fontWeight: "bold", color: "var(--text-primary)", marginBottom: 16 }}>
-          Generate Spin
+      {selectedLineIndex === null && (
+        <div style={{ color: "var(--error)", fontSize: "var(--fs-control)", marginBottom: "var(--space-8)" }}>
+          Select a line first
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-8)" }}>
+          <Field label="Start beat" value={config.startBeat} onChange={(v) => {
+            const n = safeParseNumber(v); if (n !== null) update({ startBeat: n });
+          }} step="0.25" />
+          <Field label="End beat" value={config.endBeat} onChange={(v) => {
+            const n = safeParseNumber(v); if (n !== null) update({ endBeat: n });
+          }} step="0.25" />
         </div>
 
-        {selectedLineIndex === null && (
-          <div style={{ color: "#f87171", fontSize: 11, marginBottom: 8 }}>
-            Select a line first
-          </div>
-        )}
+        <Field label="Rotations" value={config.rotations} onChange={(v) => {
+          const n = safeParseNumber(v); if (n !== null) update({ rotations: Math.max(0, n) });
+        }} step="0.5" />
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <Field label="Start beat" value={config.startBeat} onChange={(v) => {
-              const n = safeParseNumber(v); if (n !== null) update({ startBeat: n });
-            }} step="0.25" />
-            <Field label="End beat" value={config.endBeat} onChange={(v) => {
-              const n = safeParseNumber(v); if (n !== null) update({ endBeat: n });
-            }} step="0.25" />
-          </div>
-
-          <Field label="Rotations" value={config.rotations} onChange={(v) => {
-            const n = safeParseNumber(v); if (n !== null) update({ rotations: Math.max(0, n) });
-          }} step="0.5" />
-
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 10, color: "var(--text-muted)", width: 64, textAlign: "right" }}>Direction</span>
-            <button onClick={() => update({ clockwise: true })} style={{
-              fontSize: 10, padding: "2px 10px", borderRadius: 3, border: "none",
-              background: config.clockwise ? "var(--accent-primary)" : "var(--bg-active)",
-              color: config.clockwise ? "#fff" : "var(--text-muted)",
-              cursor: "pointer", fontFamily: "inherit",
-            }}>CW</button>
-            <button onClick={() => update({ clockwise: false })} style={{
-              fontSize: 10, padding: "2px 10px", borderRadius: 3, border: "none",
-              background: !config.clockwise ? "var(--accent-primary)" : "var(--bg-active)",
-              color: !config.clockwise ? "#fff" : "var(--text-muted)",
-              cursor: "pointer", fontFamily: "inherit",
-            }}>CCW</button>
-          </div>
-
-          <Field label="Start angle" value={config.startAngle} onChange={(v) => {
-            const n = safeParseNumber(v); if (n !== null) update({ startAngle: n });
-          }} step="1" />
-
-          <Field label="End angle" value={Math.round(endAngle * 100) / 100} onChange={() => {}} disabled />
-
-          <EasingPicker value={typeof config.easing === "string" ? config.easing : "linear"} onChange={(v) => update({ easing: v as EasingType })} />
+        <div style={{ display: "flex", gap: "var(--space-8)", alignItems: "center" }}>
+          <span style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)", width: 64, textAlign: "right", flexShrink: 0 }}>Direction</span>
+          <SegmentedControl
+            label="Direction"
+            tone="accent"
+            size="sm"
+            value={config.clockwise ? "cw" : "ccw"}
+            onChange={(v) => update({ clockwise: v === "cw" })}
+            options={[
+              { value: "cw", label: "Clockwise", icon: RotateCw },
+              { value: "ccw", label: "Counterclockwise", icon: RotateCcw },
+            ]}
+          />
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-          <button onClick={onClose} style={{
-            padding: "6px 16px", borderRadius: 6, border: "1px solid var(--border-color)",
-            background: "transparent", color: "var(--text-muted)", cursor: "pointer",
-            fontSize: 12, fontFamily: "inherit",
-          }}>Cancel</button>
-          <button onClick={handleGenerate} disabled={selectedLineIndex === null} style={{
-            padding: "6px 16px", borderRadius: 6, border: "none",
-            background: selectedLineIndex !== null ? "var(--accent-primary)" : "#444",
-            color: "#fff", cursor: selectedLineIndex !== null ? "pointer" : "not-allowed",
-            fontSize: 12, fontFamily: "inherit",
-          }}>Generate</button>
-        </div>
+        <Field label="Start angle" value={config.startAngle} onChange={(v) => {
+          const n = safeParseNumber(v); if (n !== null) update({ startAngle: n });
+        }} step="1" />
+
+        <Field label="End angle" value={Math.round(endAngle * 100) / 100} onChange={() => {}} disabled />
+
+        <EasingPicker value={typeof config.easing === "string" ? config.easing : "linear"} onChange={(v) => update({ easing: v as EasingType })} />
       </div>
-    </div>
+    </Dialog>
   );
 }

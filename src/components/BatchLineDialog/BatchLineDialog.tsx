@@ -1,11 +1,14 @@
 // ============================================================
-// Batch Line Dialog — Create N lines with shared properties
+// Batch Line Dialog — Create N lines with shared properties.
+// Rendered in the shared Dialog chrome.
 // ============================================================
 
 import { useState } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import type { Line } from "../../types/chart";
-import { Card, ActionButton, SectionHeader } from "../common/UIKit";
+import { ListPlus } from "lucide-react";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
 import { Field, SelectField } from "../common/FormFields";
 import { LINE_CATEGORY_LABELS } from "../LineList/lineCategories";
 
@@ -77,95 +80,62 @@ export function BatchLineDialog({ open, onClose }: BatchLineDialogProps) {
   ];
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 100,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <Dialog
+      title="Batch create lines"
+      icon={ListPlus}
+      onClose={onClose}
+      width={340}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleCreate}>
+            Create {count} lines
+          </Button>
+        </>
+      }
     >
-      <div
-        style={{
-          width: 320,
-          backgroundColor: "var(--bg-secondary)",
-          border: "1px solid var(--border-color)",
-          borderRadius: 12,
-          padding: 16,
-        }}
-      >
-        <SectionHeader>Create Multiple Lines</SectionHeader>
-        <Card>
-          <div
-            style={{
-              padding: "8px 10px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-            }}
-          >
-            <Field
-              label="Count"
-              value={count}
-              onChange={(v) => setCount(Math.max(1, parseInt(v) || 1))}
-              step="1"
-              min="1"
-              max="50"
-            />
-            <Field
-              label="Prefix"
-              value={prefix}
-              onChange={(v) => setPrefix(v)}
-              type="text"
-            />
-            <SelectField
-              label="Category"
-              value={category ?? ""}
-              options={categoryOptions}
-              onChange={(v) =>
-                setCategory((v as Line["_category"]) || undefined)
-              }
-            />
-            <Field
-              label="Opacity"
-              value={opacity}
-              onChange={(v) =>
-                setOpacity(Math.max(0, Math.min(255, parseInt(v) || 0)))
-              }
-              step="1"
-              min="0"
-              max="255"
-            />
-            <SelectField
-              label="Copy from"
-              value={String(copyFromLine ?? -1)}
-              options={lineOptions}
-              onChange={(v) =>
-                setCopyFromLine(parseInt(v) === -1 ? null : parseInt(v))
-              }
-            />
-          </div>
-        </Card>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: 8,
-            marginTop: 12,
-          }}
-        >
-          <ActionButton onClick={onClose}>Cancel</ActionButton>
-          <ActionButton variant="primary" onClick={handleCreate}>
-            Create {count} Lines
-          </ActionButton>
-        </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+        <Field
+          label="Count"
+          value={count}
+          onChange={(v) => setCount(Math.max(1, parseInt(v) || 1))}
+          step="1"
+          min="1"
+          max="50"
+        />
+        <Field
+          label="Prefix"
+          value={prefix}
+          onChange={(v) => setPrefix(v)}
+          type="text"
+        />
+        <SelectField
+          label="Category"
+          value={category ?? ""}
+          options={categoryOptions}
+          onChange={(v) =>
+            setCategory((v as Line["_category"]) || undefined)
+          }
+        />
+        <Field
+          label="Opacity"
+          value={opacity}
+          onChange={(v) =>
+            setOpacity(Math.max(0, Math.min(255, parseInt(v) || 0)))
+          }
+          step="1"
+          min="0"
+          max="255"
+        />
+        <SelectField
+          label="Copy from"
+          value={String(copyFromLine ?? -1)}
+          options={lineOptions}
+          onChange={(v) =>
+            setCopyFromLine(parseInt(v) === -1 ? null : parseInt(v))
+          }
+        />
       </div>
-    </div>
+    </Dialog>
   );
 }

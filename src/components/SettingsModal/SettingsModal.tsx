@@ -1,23 +1,26 @@
 // ============================================================
 // Settings Modal — Tabbed settings for editor configuration
 //
-// Recent change: Added LatencyCalibration component to the Audio
-// tab for per-device audio latency compensation.
-//
-// Provides categorized settings (General, Audio, Game Preview,
-// Timeline, Editor, Resource Pack, Notifications) rendered in
-// a modal overlay. Each category tab renders toggle switches,
-// sliders, and inputs that read/write to settingsStore. Also
-// manages resource pack import/deletion via respackStore.
+// Provides categorized settings (General, Audio, Game preview,
+// Timeline, Editor, AI generation, Resource pack, Notifications)
+// rendered in the shared <Dialog> with a sidebar list. Each
+// category renders Card/CardRow rows with toggles, sliders,
+// segmented controls and inputs that read/write to settingsStore.
+// The Audio tab hosts LatencyCalibration for per-device audio
+// latency compensation. Also manages resource pack import/deletion
+// via respackStore.
 // ============================================================
 
 import { useState } from "react";
+import { Settings as SettingsIcon } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useBookmarkStore } from "../../stores/bookmarkStore";
 import { useRespackStore } from "../../stores/respackStore";
 import { useToastStore } from "../../stores/toastStore";
-import { ToggleSwitch } from "../Settings/ToggleSwitch";
-import { Card, SectionHeader as SH, ActionButton } from "../common/UIKit";
+import { Card, CardRow, SectionHeader, ActionButton, Toggle, INPUT_STYLE, SELECT_STYLE } from "../common/UIKit";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
+import { SegmentedControl as SharedSegmentedControl } from "../common/SegmentedControl";
 import { LatencyCalibration } from "./LatencyCalibration";
 import { AI_SYSTEM_PROMPT } from "../../utils/aiSystemPrompt";
 
@@ -26,48 +29,23 @@ type Category = "general" | "audio" | "game-preview" | "timeline" | "editor" | "
 const CATEGORIES: { id: Category; label: string }[] = [
   { id: "general", label: "General" },
   { id: "audio", label: "Audio" },
-  { id: "game-preview", label: "Game Preview" },
+  { id: "game-preview", label: "Game preview" },
   { id: "timeline", label: "Timeline" },
   { id: "editor", label: "Editor" },
-  { id: "ai", label: "AI Generation" },
-  { id: "resource-pack", label: "Resource Pack" },
+  { id: "ai", label: "AI generation" },
+  { id: "resource-pack", label: "Resource pack" },
   { id: "notifications", label: "Notifications" },
 ];
 
 /* ── Reusable sub-components ── */
 
-// Card and SectionHeader imported from UIKit
-const SectionHeader = SH;
-
-function CardRow({
-  label,
-  description,
-  children,
-  last = false,
-}: {
-  label: string;
-  description?: string;
-  children: React.ReactNode;
-  last?: boolean;
-}) {
-  return (
-    <div
-      className="flex items-center justify-between"
-      style={{
-        padding: "12px 14px",
-        borderBottom: last ? "none" : "1px solid rgba(42, 42, 53, 0.55)",
-      }}
-    >
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 12, color: "var(--text-primary)" }}>{label}</div>
-        {description && (
-          <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{description}</div>
-        )}
-      </div>
-      <div className="flex-shrink-0 ml-3">{children}</div>
-    </div>
-  );
-}
+const VALUE_TEXT_STYLE: React.CSSProperties = {
+  fontSize: "var(--fs-control)",
+  fontFamily: "var(--font-mono)",
+  color: "var(--text-secondary)",
+  textAlign: "right",
+  fontVariantNumeric: "tabular-nums",
+};
 
 function Select({
   value,
@@ -82,16 +60,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      style={{
-        padding: "4px 8px",
-        borderRadius: 5,
-        fontSize: 11,
-        border: "0.5px solid var(--border-color)",
-        backgroundColor: "var(--bg-secondary)",
-        color: "var(--text-primary)",
-        fontFamily: "inherit",
-        cursor: "pointer",
-      }}
+      style={SELECT_STYLE}
     >
       {children}
     </select>
@@ -105,6 +74,7 @@ function Slider({
   step,
   onChange,
   format,
+  label,
 }: {
   value: number;
   min: number;
@@ -112,64 +82,48 @@ function Slider({
   step: number;
   onChange: (v: number) => void;
   format?: (v: number) => string;
+  label?: string;
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center" style={{ gap: "var(--space-8)" }}>
       <input
         type="range"
         min={min}
         max={max}
         step={step}
         value={value}
+        aria-label={label}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-24"
-        style={{ accentColor: "var(--accent-primary)" }}
+        style={{ width: 96 }}
       />
-      <span style={{ fontSize: 11, width: 36, textAlign: "right", color: "var(--text-secondary)" }}>
+      <span style={{ ...VALUE_TEXT_STYLE, width: 40 }}>
         {format ? format(value) : value}
       </span>
     </div>
   );
 }
 
+/** Accent segmented control for a setting value (string options). */
 function SegmentedControl({
   value,
   options,
   onChange,
+  label,
 }: {
   value: string;
   options: { value: string; label: string }[];
   onChange: (v: string) => void;
+  label?: string;
 }) {
   return (
-    <div
-      className="flex"
-      style={{
-        gap: 2,
-        backgroundColor: "var(--bg-secondary)",
-        borderRadius: 6,
-        padding: 2,
-      }}
-    >
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          style={{
-            padding: "3px 10px",
-            borderRadius: 5,
-            fontSize: 10,
-            border: "none",
-            cursor: "pointer",
-            backgroundColor: value === opt.value ? "var(--accent-primary)" : "transparent",
-            color: value === opt.value ? "#fff" : "var(--text-secondary)",
-            transition: "all 0.12s",
-          }}
-          onClick={() => onChange(opt.value)}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
+    <SharedSegmentedControl
+      tone="accent"
+      size="sm"
+      value={value}
+      options={options}
+      onChange={onChange}
+      label={label}
+    />
   );
 }
 
@@ -197,6 +151,7 @@ function GeneralContent() {
               { value: "classic", label: "Classic" },
             ]}
             onChange={(v) => update({ defaultEditorView: v as "unified" | "classic" })}
+            label="Default editor view"
           />
         </CardRow>
       </Card>
@@ -214,6 +169,7 @@ function AudioContent() {
         <Card>
           <CardRow label="Music volume">
             <Slider
+              label="Music volume"
               value={settings.musicVolume}
               min={0} max={1} step={0.05}
               onChange={(v) => update({ musicVolume: v })}
@@ -222,6 +178,7 @@ function AudioContent() {
           </CardRow>
           <CardRow label="Hit sound volume">
             <Slider
+              label="Hit sound volume"
               value={settings.hitSoundVolume}
               min={0} max={1} step={0.05}
               onChange={(v) => update({ hitSoundVolume: v })}
@@ -229,7 +186,8 @@ function AudioContent() {
             />
           </CardRow>
           <CardRow label="Enable hit sounds" description="Play sounds when notes are hit" last>
-            <ToggleSwitch
+            <Toggle
+              label="Enable hit sounds"
               checked={settings.hitSoundEnabled}
               onChange={(v) => update({ hitSoundEnabled: v })}
             />
@@ -239,7 +197,7 @@ function AudioContent() {
 
       {/* Latency Calibration: manual slider + tap-to-calibrate flow */}
       <div>
-        <SectionHeader>Latency Calibration</SectionHeader>
+        <SectionHeader>Latency calibration</SectionHeader>
         <Card>
           <LatencyCalibration />
         </Card>
@@ -256,19 +214,22 @@ function GamePreviewContent() {
       <SectionHeader>Visuals</SectionHeader>
       <Card>
         <CardRow label="GPU renderer (experimental, on hold)" description="Use PixiJS WebGL for faster rendering on big charts. Requires restart. Still undergoing testing.">
-          <ToggleSwitch
+          <Toggle
+              label="GPU renderer (experimental, on hold)"
             checked={settings.usePixiRenderer}
             onChange={(v) => update({ usePixiRenderer: v })}
           />
         </CardRow>
         <CardRow label="Hit animations" description="Particle effects when notes are hit">
-          <ToggleSwitch
+          <Toggle
+              label="Hit animations"
             checked={settings.showHitEffects}
             onChange={(v) => update({ showHitEffects: v })}
           />
         </CardRow>
         <CardRow label="Note size">
           <Slider
+              label="Note size"
             value={settings.noteSize}
             min={0.5} max={2} step={0.1}
             onChange={(v) => update({ noteSize: v })}
@@ -277,6 +238,7 @@ function GamePreviewContent() {
         </CardRow>
         <CardRow label="Background dim">
           <Slider
+              label="Background dim"
             value={settings.backgroundDim}
             min={0} max={1} step={0.05}
             onChange={(v) => update({ backgroundDim: v })}
@@ -284,19 +246,22 @@ function GamePreviewContent() {
           />
         </CardRow>
         <CardRow label="FC/AP indicator" description="Full combo and all perfect indicators">
-          <ToggleSwitch
+          <Toggle
+              label="FC/AP indicator"
             checked={settings.showFcApIndicator}
             onChange={(v) => update({ showFcApIndicator: v })}
           />
         </CardRow>
         <CardRow label="Multi highlight" description="Highlight notes on the same beat">
-          <ToggleSwitch
+          <Toggle
+              label="Multi highlight"
             checked={settings.multiHighlight}
             onChange={(v) => update({ multiHighlight: v })}
           />
         </CardRow>
         <CardRow label="Show HUD" description="Combo, score, and chart info during playback">
-          <ToggleSwitch
+          <Toggle
+              label="Show HUD"
             checked={settings.showHud}
             onChange={(v) => update({ showHud: v })}
           />
@@ -308,7 +273,7 @@ function GamePreviewContent() {
           >
             <option value="never">Never</option>
             <option value="always">Always</option>
-            <option value="when_visible">When Visible</option>
+            <option value="when_visible">When visible</option>
           </Select>
         </CardRow>
       </Card>
@@ -324,13 +289,15 @@ function TimelineContent() {
       <SectionHeader>Behavior</SectionHeader>
       <Card>
         <CardRow label="Invert scroll direction" description="Reverse timeline scroll">
-          <ToggleSwitch
+          <Toggle
+              label="Invert scroll direction"
             checked={settings.invertScrollDirection}
             onChange={(v) => update({ invertScrollDirection: v })}
           />
         </CardRow>
         <CardRow label="Follow playback" description="Auto-scroll to keep current time in view" last>
-          <ToggleSwitch
+          <Toggle
+              label="Follow playback"
             checked={settings.timelineFollowPlayback}
             onChange={(v) => update({ timelineFollowPlayback: v })}
           />
@@ -351,10 +318,10 @@ function EditorContent() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <SectionHeader>Mark Mode</SectionHeader>
+        <SectionHeader>Mark mode</SectionHeader>
         <Card>
           <CardRow label="Latency offset" description="Shifts markers back to compensate for reaction time">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center" style={{ gap: "var(--space-6)" }}>
               <input
                 type="range"
                 min={-100}
@@ -362,15 +329,16 @@ function EditorContent() {
                 step={5}
                 value={latencyOffset}
                 onChange={(e) => setLatencyOffset(parseInt(e.target.value))}
-                style={{ width: 80 }}
+                aria-label="Latency offset"
+                style={{ width: 96 }}
               />
-              <span style={{ color: "var(--text-muted)", fontSize: 10, minWidth: 36, textAlign: "right" }}>
+              <span style={{ ...VALUE_TEXT_STYLE, minWidth: 40 }}>
                 {latencyOffset}ms
               </span>
             </div>
           </CardRow>
           <CardRow label="Visibility range" description="How far from playhead bookmarks stay visible" last>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center" style={{ gap: "var(--space-6)" }}>
               <input
                 type="range"
                 min={0.5}
@@ -378,9 +346,10 @@ function EditorContent() {
                 step={0.5}
                 value={visibilityRange}
                 onChange={(e) => setVisibilityRange(parseFloat(e.target.value))}
-                style={{ width: 80 }}
+                aria-label="Visibility range"
+                style={{ width: 96 }}
               />
-              <span style={{ color: "var(--text-muted)", fontSize: 10, minWidth: 36, textAlign: "right" }}>
+              <span style={{ ...VALUE_TEXT_STYLE, minWidth: 40 }}>
                 {visibilityRange.toFixed(1)}b
               </span>
             </div>
@@ -388,7 +357,7 @@ function EditorContent() {
         </Card>
       </div>
       <div>
-        <SectionHeader>Event Editor</SectionHeader>
+        <SectionHeader>Event editor</SectionHeader>
         <Card>
           <CardRow label="Rotation snap angle" description="Snap to fixed intervals (0 = off)" last>
             <Select
@@ -407,14 +376,15 @@ function EditorContent() {
         </Card>
       </div>
       <div>
-        <SectionHeader>Unrolled Editor</SectionHeader>
+        <SectionHeader>Unrolled editor</SectionHeader>
         <Card>
           <CardRow
             label="Event span tints"
             description="Faint colored wash between an event's start and end beats. Disable on busy charts where overlapping tints look muddy."
             last
           >
-            <ToggleSwitch
+            <Toggle
+              label="Event span tints"
               checked={settings.unrolledShowEventSpanTints}
               onChange={(v) => update({ unrolledShowEventSpanTints: v })}
             />
@@ -422,10 +392,11 @@ function EditorContent() {
         </Card>
       </div>
       <div>
-        <SectionHeader>Tab Bar</SectionHeader>
+        <SectionHeader>Tab bar</SectionHeader>
         <Card>
           <CardRow label="Tab height" description="Height of editor tab buttons in pixels">
             <Slider
+              label="Tab height"
               value={settings.tabHeight}
               min={24}
               max={48}
@@ -436,6 +407,7 @@ function EditorContent() {
           </CardRow>
           <CardRow label="Tab max width" description="Maximum width of each tab button" last>
             <Slider
+              label="Tab max width"
               value={settings.tabMaxWidth}
               min={120}
               max={400}
@@ -447,10 +419,11 @@ function EditorContent() {
         </Card>
       </div>
       <div>
-        <SectionHeader>Line Strip</SectionHeader>
+        <SectionHeader>Line strip</SectionHeader>
         <Card>
           <CardRow label="Note inactivity timeout" description="Demote lines to inactive when no note arrives within this window (0 = disabled)" last>
             <Slider
+              label="Note inactivity timeout"
               value={settings.lineInactivityTimeoutSeconds}
               min={0}
               max={30}
@@ -465,13 +438,14 @@ function EditorContent() {
         <SectionHeader>Autosave</SectionHeader>
         <Card>
           <CardRow label="Enable autosave">
-            <ToggleSwitch
+            <Toggle
+              label="Enable autosave"
               checked={settings.autosaveEnabled}
               onChange={(v) => update({ autosaveEnabled: v })}
             />
           </CardRow>
           <CardRow label="Save interval" last>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center" style={{ gap: "var(--space-6)" }}>
               <input
                 type="number"
                 value={settings.autosaveIntervalSeconds}
@@ -480,18 +454,10 @@ function EditorContent() {
                 onChange={(e) =>
                   update({ autosaveIntervalSeconds: Math.max(10, parseInt(e.target.value) || 120) })
                 }
-                style={{
-                  width: 50,
-                  padding: "3px 6px",
-                  borderRadius: 4,
-                  fontSize: 11,
-                  backgroundColor: "var(--bg-secondary)",
-                  color: "var(--text-primary)",
-                  border: "0.5px solid var(--border-color)",
-                  textAlign: "right",
-                }}
+                aria-label="Save interval in seconds"
+                style={{ ...INPUT_STYLE, width: 64, textAlign: "right", fontFamily: "var(--font-mono)" }}
               />
-              <span style={{ color: "var(--text-muted)", fontSize: 10 }}>sec</span>
+              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)" }}>sec</span>
             </div>
           </CardRow>
         </Card>
@@ -539,10 +505,11 @@ function AiContent() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <SectionHeader>AI Generation</SectionHeader>
+        <SectionHeader>AI generation</SectionHeader>
         <Card>
           <CardRow label="Enable AI generation" description="Adds an AI tab to the context panel for natural language chart generation">
-            <ToggleSwitch
+            <Toggle
+              label="Enable AI generation"
               checked={settings.aiEnabled}
               onChange={(v) => update({ aiEnabled: v })}
             />
@@ -552,16 +519,17 @@ function AiContent() {
               value={settings.aiMode}
               options={[
                 { value: "remote", label: "Remote API" },
-                { value: "local", label: "Local Server" },
+                { value: "local", label: "Local server" },
               ]}
               onChange={handleModeChange}
+              label="Server mode"
             />
           </CardRow>
         </Card>
       </div>
 
       <div>
-        <SectionHeader>{isRemote ? "Remote API" : "Local Server"}</SectionHeader>
+        <SectionHeader>{isRemote ? "Remote API" : "Local server"}</SectionHeader>
         <Card>
           <CardRow label="Endpoint URL" description={isRemote ? "OpenAI-compatible API base URL" : "Local server URL (Ollama, vLLM, llama.cpp)"}>
             <input
@@ -569,16 +537,8 @@ function AiContent() {
               value={settings.aiEndpoint}
               onChange={(e) => update({ aiEndpoint: e.target.value })}
               placeholder={isRemote ? "https://generativelanguage.googleapis.com/v1beta/openai" : "http://localhost:11434"}
-              style={{
-                width: 200,
-                padding: "4px 8px",
-                borderRadius: 5,
-                fontSize: 10,
-                backgroundColor: "var(--bg-secondary)",
-                color: "var(--text-primary)",
-                border: "0.5px solid var(--border-color)",
-                fontFamily: "monospace",
-              }}
+              aria-label="Endpoint URL"
+              style={{ ...INPUT_STYLE, width: 200, fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)" }}
             />
           </CardRow>
           <CardRow label="Model" description={isRemote ? "API model ID (e.g. gemma-3-27b-it)" : "Ollama model name (e.g. gemma4:27b)"}>
@@ -587,16 +547,8 @@ function AiContent() {
               value={settings.aiModel}
               onChange={(e) => update({ aiModel: e.target.value })}
               placeholder={isRemote ? "gemma-3-27b-it" : "gemma4:27b"}
-              style={{
-                width: 140,
-                padding: "4px 8px",
-                borderRadius: 5,
-                fontSize: 11,
-                backgroundColor: "var(--bg-secondary)",
-                color: "var(--text-primary)",
-                border: "0.5px solid var(--border-color)",
-                fontFamily: "monospace",
-              }}
+              aria-label="Model"
+              style={{ ...INPUT_STYLE, width: 140, fontFamily: "var(--font-mono)" }}
             />
           </CardRow>
           {isRemote && (
@@ -606,21 +558,19 @@ function AiContent() {
                 value={settings.aiApiKey}
                 onChange={(e) => update({ aiApiKey: e.target.value })}
                 placeholder="Paste your API key"
+                aria-label="API key"
                 style={{
+                  ...INPUT_STYLE,
                   width: 180,
-                  padding: "4px 8px",
-                  borderRadius: 5,
-                  fontSize: 11,
-                  backgroundColor: "var(--bg-secondary)",
-                  color: "var(--text-primary)",
-                  border: settings.aiApiKey ? "0.5px solid var(--border-color)" : "0.5px solid rgba(255, 74, 106, 0.4)",
-                  fontFamily: "monospace",
+                  fontFamily: "var(--font-mono)",
+                  borderColor: settings.aiApiKey ? "var(--border-color)" : "color-mix(in srgb, var(--error) 40%, transparent)",
                 }}
               />
             </CardRow>
           )}
           <CardRow label="Temperature" description="Lower = more deterministic, higher = more creative">
             <Slider
+              label="Temperature"
               value={settings.aiTemperature}
               min={0} max={1} step={0.05}
               onChange={(v) => update({ aiTemperature: v })}
@@ -635,60 +585,42 @@ function AiContent() {
               max={16384}
               step={256}
               onChange={(e) => update({ aiMaxTokens: Math.max(512, parseInt(e.target.value) || 4096) })}
-              style={{
-                width: 70,
-                padding: "3px 6px",
-                borderRadius: 4,
-                fontSize: 11,
-                backgroundColor: "var(--bg-secondary)",
-                color: "var(--text-primary)",
-                border: "0.5px solid var(--border-color)",
-                textAlign: "right",
-              }}
+              aria-label="Max tokens"
+              style={{ ...INPUT_STYLE, width: 72, textAlign: "right", fontFamily: "var(--font-mono)" }}
             />
           </CardRow>
         </Card>
       </div>
 
       <div>
-        <SectionHeader>Connection Test</SectionHeader>
+        <SectionHeader>Connection test</SectionHeader>
         <Card>
-          <div style={{ padding: "12px 14px" }}>
-            <div className="flex items-center gap-3">
-              <button
+          <div style={{ padding: "var(--space-10) var(--space-12)" }}>
+            <div className="flex items-center" style={{ gap: "var(--space-12)" }}>
+              <Button
+                variant="primary"
                 onClick={handleTestConnection}
                 disabled={testStatus === "testing"}
-                style={{
-                  padding: "5px 14px",
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 500,
-                  border: "none",
-                  cursor: testStatus === "testing" ? "wait" : "pointer",
-                  backgroundColor: "var(--accent-primary)",
-                  color: "#fff",
-                  opacity: testStatus === "testing" ? 0.6 : 1,
-                  transition: "opacity 0.15s",
-                }}
+                style={{ cursor: testStatus === "testing" ? "wait" : undefined }}
               >
-                {testStatus === "testing" ? "Testing..." : "Test Connection"}
-              </button>
+                {testStatus === "testing" ? "Testing…" : "Test connection"}
+              </Button>
               {testStatus === "success" && (
-                <span style={{ fontSize: 11, color: "#4aff7a" }}>Connected successfully</span>
+                <span style={{ fontSize: "var(--fs-control)", color: "var(--success)" }}>Connected successfully</span>
               )}
               {testStatus === "error" && (
-                <span style={{ fontSize: 11, color: "#ff4a6a" }}>Connection failed</span>
+                <span style={{ fontSize: "var(--fs-control)", color: "var(--error)" }}>Connection failed</span>
               )}
             </div>
             {testStatus === "error" && testError && (
               <div style={{
-                marginTop: 8,
-                padding: "6px 10px",
-                borderRadius: 4,
-                fontSize: 10,
-                color: "#ff4a6a",
-                backgroundColor: "rgba(255, 74, 106, 0.08)",
-                fontFamily: "monospace",
+                marginTop: "var(--space-8)",
+                padding: "var(--space-6) var(--space-10)",
+                borderRadius: "var(--radius-md)",
+                fontSize: "var(--fs-caption)",
+                color: "var(--error)",
+                backgroundColor: "color-mix(in srgb, var(--error) 8%, transparent)",
+                fontFamily: "var(--font-mono)",
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-all",
               }}>
@@ -696,7 +628,7 @@ function AiContent() {
               </div>
             )}
             {isRemote && !settings.aiApiKey && (
-              <div style={{ marginTop: 8, fontSize: 10, color: "#ffb74d", lineHeight: 1.5 }}>
+              <div style={{ marginTop: "var(--space-8)", fontSize: "var(--fs-caption)", color: "var(--warning)", lineHeight: 1.5 }}>
                 No API key set. Remote APIs require an API key to authenticate.
               </div>
             )}
@@ -718,45 +650,47 @@ function AiPromptEditor() {
 
   return (
     <div>
-      <SectionHeader>System Prompt</SectionHeader>
+      <SectionHeader>System prompt</SectionHeader>
       <Card>
         {/* Built-in prompt viewer (read-only, collapsible) */}
-        <div style={{ borderBottom: "1px solid rgba(42, 42, 53, 0.55)" }}>
+        <div style={{ borderBottom: "var(--rule) solid var(--separator)" }}>
           <button
+            type="button"
+            className="ui-hover"
+            aria-expanded={builtInExpanded}
             onClick={() => setBuiltInExpanded(!builtInExpanded)}
             style={{
               width: "100%",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              padding: "10px 14px",
-              background: "none",
+              padding: "var(--space-10) var(--space-12)",
               border: "none",
               cursor: "pointer",
               color: "var(--text-primary)",
-              fontSize: 12,
+              fontSize: "var(--fs-control)",
               fontFamily: "inherit",
             }}
           >
             <span>Built-in prompt</span>
-            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-              {builtInExpanded ? "HIDE" : "VIEW"} ({AI_SYSTEM_PROMPT.length} chars)
+            <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>
+              {builtInExpanded ? "Hide" : "View"} ({AI_SYSTEM_PROMPT.length} chars)
             </span>
           </button>
           {builtInExpanded && (
             <pre style={{
-              padding: "8px 14px 12px",
+              padding: "var(--space-8) var(--space-12) var(--space-12)",
               margin: 0,
-              fontSize: 9,
-              fontFamily: "monospace",
+              fontSize: "var(--fs-caption)",
+              fontFamily: "var(--font-mono)",
               color: "var(--text-secondary)",
               lineHeight: 1.45,
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
               maxHeight: 250,
               overflowY: "auto",
-              borderTop: "1px solid rgba(42, 42, 53, 0.55)",
-              backgroundColor: "rgba(0,0,0,0.15)",
+              borderTop: "var(--rule) solid var(--separator)",
+              backgroundColor: "var(--bg-tertiary)",
             }}>
               {AI_SYSTEM_PROMPT}
             </pre>
@@ -764,11 +698,11 @@ function AiPromptEditor() {
         </div>
 
         {/* Custom instructions textarea */}
-        <div style={{ padding: "10px 14px" }}>
-          <div style={{ fontSize: 12, color: "var(--text-primary)", marginBottom: 4 }}>
+        <div style={{ padding: "var(--space-10) var(--space-12)" }}>
+          <div style={{ fontSize: "var(--fs-control)", color: "var(--text-primary)", marginBottom: "var(--space-2)" }}>
             Additional instructions
           </div>
-          <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8, lineHeight: 1.5 }}>
+          <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginBottom: "var(--space-8)", lineHeight: 1.5 }}>
             Appended after the built-in prompt. Use this to customize AI behavior without modifying source code.
           </div>
           <textarea
@@ -776,28 +710,25 @@ function AiPromptEditor() {
             onChange={(e) => update({ aiCustomPrompt: e.target.value })}
             placeholder="e.g., Always use ease_out_cubic for opacity transitions. Prefer drag notes over tap notes for fast sections."
             rows={4}
+            aria-label="Additional instructions"
             style={{
+              ...INPUT_STYLE,
               width: "100%",
-              padding: "8px 10px",
-              borderRadius: 5,
-              fontSize: 11,
-              fontFamily: "monospace",
-              backgroundColor: "var(--bg-secondary)",
-              color: "var(--text-primary)",
-              border: "0.5px solid var(--border-color)",
+              height: "auto",
+              padding: "var(--space-8) var(--space-10)",
+              fontFamily: "var(--font-mono)",
               lineHeight: 1.5,
               resize: "vertical",
               minHeight: 60,
               maxHeight: 200,
-              outline: "none",
             }}
           />
           {settings.aiCustomPrompt && (
-            <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ marginTop: "var(--space-6)", display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
               <ActionButton variant="danger" onClick={() => update({ aiCustomPrompt: "" })}>
-                Reset to Default
+                Reset to default
               </ActionButton>
-              <span style={{ fontSize: 9, color: "var(--text-muted)" }}>
+              <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
                 {settings.aiCustomPrompt.length} chars
               </span>
             </div>
@@ -839,21 +770,25 @@ function ResourcePackContent() {
 
   const handleDelete = async (id: string, name: string) => {
     const { showConfirm } = await import("../common/ConfirmDialog");
-    if (await showConfirm(`Delete respack "${name}"?`)) {
+    if (await showConfirm("This removes it from this computer.", {
+      title: `Delete respack "${name}"?`,
+      confirmLabel: "Delete",
+      danger: true,
+    })) {
       deleteRespack(id);
     }
   };
 
   return (
     <div>
-      <SectionHeader>Resource Pack</SectionHeader>
+      <SectionHeader>Resource pack</SectionHeader>
       <Card>
         <CardRow label="Active respack" description="Note textures and hit effects" last>
           <Select
             value={selectedId ?? ""}
             onChange={(v) => selectRespack(v || null)}
           >
-            <option value="">Default (Colored)</option>
+            <option value="">Default (colored)</option>
             {respackList.map((rp) => (
               <option key={rp.id} value={rp.id}>{rp.config.name}</option>
             ))}
@@ -862,15 +797,15 @@ function ResourcePackContent() {
       </Card>
 
       {activeRespack && (
-        <div style={{ padding: "8px 2px", fontSize: 11, color: "var(--text-muted)" }}>
+        <div style={{ padding: "var(--space-8) var(--space-2)", fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>
           {activeRespack.config.author && <div>by {activeRespack.config.author}</div>}
           {activeRespack.config.description && <div>{activeRespack.config.description}</div>}
         </div>
       )}
 
-      <div className="flex items-center gap-2 mt-3">
+      <div className="flex items-center" style={{ gap: "var(--space-8)", marginTop: "var(--space-12)" }}>
         <ActionButton variant="primary" onClick={handleImport}>
-          Import Respack
+          Import respack…
         </ActionButton>
 
         {activeRespack && (
@@ -884,10 +819,10 @@ function ResourcePackContent() {
 }
 
 const TOAST_TYPE_COLORS: Record<"error" | "info" | "success" | "warning", string> = {
-  error: "#ff4a6a",
-  info: "#6c8aff",
-  success: "#4aff7a",
-  warning: "#ffb74d",
+  error: "var(--error)",
+  info: "var(--info)",
+  success: "var(--success)",
+  warning: "var(--warning)",
 };
 
 function formatTimestamp(ts: number): string {
@@ -902,11 +837,11 @@ function NotificationsContent() {
 
   return (
     <div>
-      <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
-        <SectionHeader>Notification History</SectionHeader>
+      <div className="flex items-center justify-between" style={{ marginBottom: "var(--space-2)" }}>
+        <SectionHeader>Notification history</SectionHeader>
         {history.length > 0 && (
           <ActionButton variant="danger" onClick={clearHistory}>
-            Clear History
+            Clear history
           </ActionButton>
         )}
       </div>
@@ -914,9 +849,9 @@ function NotificationsContent() {
       {reversed.length === 0 ? (
         <div style={{
           textAlign: "center",
-          padding: "32px 0",
-          color: "var(--text-muted)",
-          fontSize: 12,
+          padding: "var(--space-32) 0",
+          color: "var(--text-secondary)",
+          fontSize: "var(--fs-body)",
         }}>
           No notifications yet
         </div>
@@ -928,24 +863,27 @@ function NotificationsContent() {
               style={{
                 display: "flex",
                 alignItems: "flex-start",
-                gap: 10,
-                padding: "10px 14px",
-                borderBottom: i === reversed.length - 1 ? "none" : "1px solid rgba(42, 42, 53, 0.55)",
+                gap: "var(--space-10)",
+                padding: "var(--space-10) var(--space-12)",
+                borderBottom: i === reversed.length - 1 ? "none" : "var(--rule) solid var(--separator)",
               }}
             >
-              <div style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                backgroundColor: TOAST_TYPE_COLORS[entry.type],
-                flexShrink: 0,
-                marginTop: 4,
-              }} />
+              <div
+                aria-label={entry.type}
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "var(--radius-full)",
+                  backgroundColor: TOAST_TYPE_COLORS[entry.type],
+                  flexShrink: 0,
+                  marginTop: "var(--space-4)",
+                }}
+              />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: "1.45" }}>
+                <div style={{ fontSize: "var(--fs-body)", color: "var(--text-primary)", lineHeight: "1.45" }}>
                   {entry.message}
                 </div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
+                <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginTop: "var(--space-2)", fontFamily: "var(--font-mono)" }}>
                   {formatTimestamp(entry.timestamp)}
                 </div>
               </div>
@@ -992,137 +930,62 @@ export function SettingsModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center"
-      style={{
-        backgroundColor: "rgba(0,0,0,0.5)",
-        animation: "settingsFadeIn 0.2s ease-out",
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.stopPropagation();
-          onClose();
-        }
-      }}
+    <Dialog
+      title="Settings"
+      icon={SettingsIcon}
+      onClose={onClose}
+      width={600}
+      height="min(80vh, 640px)"
+      bodyStyle={{ display: "flex", padding: 0, overflow: "hidden", borderTop: "var(--rule) solid var(--separator)" }}
     >
-      <style>{`
-        @keyframes settingsFadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes settingsSlideIn {
-          from { opacity: 0; transform: scale(0.98); }
-          to { opacity: 1; transform: scale(1); }
-        }
-      `}</style>
-      <div
-        className="flex flex-col"
+      {/* Sidebar */}
+      <nav
+        aria-label="Settings categories"
+        className="flex flex-col flex-shrink-0"
         style={{
-          width: 560,
-          maxHeight: "80vh",
-          backgroundColor: "var(--bg-secondary)",
-          border: "1px solid var(--border-color)",
-          borderRadius: 14,
-          boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
-          overflow: "hidden",
-          animation: "settingsSlideIn 0.2s ease-out",
+          width: 148,
+          padding: "var(--space-8)",
+          borderRight: "var(--rule) solid var(--separator)",
+          gap: "var(--space-2)",
+          overflowY: "auto",
+          color: "var(--text-secondary)",
         }}
       >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between flex-shrink-0"
-          style={{
-            padding: "16px 20px",
-            borderBottom: "1px solid var(--border-color)",
-          }}
-        >
-          <span style={{ fontWeight: 500, fontSize: 15, color: "var(--text-primary)" }}>
-            Settings
-          </span>
-          <button
-            className="flex items-center justify-center"
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 6,
-              backgroundColor: "var(--bg-active)",
-              color: "var(--text-muted)",
-              fontSize: 14,
-              cursor: "pointer",
-              border: "none",
-              transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
-            }}
-            onClick={onClose}
-          >
-            ✕
-          </button>
-        </div>
+        {CATEGORIES.map((cat) => {
+          const isActive = cat.id === activeCategory;
+          return (
+            <button
+              key={cat.id}
+              type="button"
+              aria-current={isActive ? "page" : undefined}
+              className={isActive ? "flex items-center" : "flex items-center ui-hover"}
+              style={{
+                minHeight: "var(--control-lg)",
+                padding: "0 var(--space-10)",
+                borderRadius: "var(--radius-md)",
+                fontSize: "var(--fs-body)",
+                cursor: "pointer",
+                border: "none",
+                textAlign: "left",
+                // Inactive rows take their colour from the nav and their hover
+                // wash from .ui-hover (no inline colours to override it).
+                ...(isActive ? { backgroundColor: "var(--accent-selected)", color: "var(--accent-primary)" } : {}),
+              }}
+              onClick={() => setActiveCategory(cat.id)}
+            >
+              {cat.label}
+            </button>
+          );
+        })}
+      </nav>
 
-        {/* Body */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar */}
-          <div
-            className="flex flex-col flex-shrink-0"
-            style={{
-              width: 140,
-              padding: 8,
-              borderRight: "1px solid var(--border-color)",
-              gap: 1,
-            }}
-          >
-            {CATEGORIES.map((cat) => {
-              const isActive = cat.id === activeCategory;
-              return (
-                <button
-                  key={cat.id}
-                  className="flex items-center transition-colors"
-                  style={{
-                    padding: "7px 12px",
-                    borderRadius: 6,
-                    fontSize: 12,
-                    cursor: "pointer",
-                    border: "none",
-                    textAlign: "left",
-                    backgroundColor: isActive ? "rgba(108, 138, 255, 0.18)" : "transparent",
-                    color: isActive ? "var(--accent-primary)" : "var(--text-secondary)",
-                    transition: "all 0.1s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-active)";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                    }
-                  }}
-                  onClick={() => setActiveCategory(cat.id)}
-                >
-                  {cat.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Content */}
-          <div
-            className="flex-1 overflow-y-auto"
-            style={{ padding: "16px 20px" }}
-          >
-            {renderContent()}
-          </div>
-        </div>
+      {/* Content */}
+      <div
+        className="flex-1 overflow-y-auto"
+        style={{ minWidth: 0, padding: "var(--space-4) var(--space-20) var(--space-20)" }}
+      >
+        {renderContent()}
       </div>
-    </div>
+    </Dialog>
   );
 }
