@@ -6,6 +6,7 @@
 // ============================================================
 
 import { useEditorStore } from "../../stores/editorStore";
+import { useSelectedLineIndex } from "../../stores/selection";
 import { useChartStore } from "../../stores/chartStore";
 import type { LineEventKind } from "../../types/chart";
 import { EVENT_COLORS } from "../../constants/eventColors";
@@ -37,7 +38,7 @@ export function EventEditorToolbar() {
   const toggleShowAllLines = useEditorStore((s) => s.toggleEventEditorShowAllLines);
   const toggleShowNotes = useEditorStore((s) => s.toggleEventEditorShowNotes);
   const currentBeat = useEditorStore((s) => s.eventEditorCurrentBeat);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const hasLayers = useChartStore((s) => {
     if (selectedLineIndex === null) return false;
     const line = s.chart.lines[selectedLineIndex];

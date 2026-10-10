@@ -32,13 +32,17 @@ import { useEditorStore } from "../stores/editorStore";
 import { useAudioStore } from "../stores/audioStore";
 import { useGroupStore } from "../stores/groupStore";
 import { useBookmarkStore } from "../stores/bookmarkStore";
+import { getActiveChartSessionTabId } from "../stores/tabStore";
 import { audioEngine } from "../audio/audioEngine";
 import { loadStoredProject } from "./projectStorage";
 import type { PhichainChart, ProjectMeta } from "../types/chart";
 import type { EditorTool, NoteSideFilter, LineSortMode, PanelId } from "../types/editor";
-import type { EditorGroup } from "../types/group";
+import type { EditorGroup, GroupEditSettings } from "../types/group";
+import { DEFAULT_GROUP_EDIT_SETTINGS } from "../types/group";
 import type { Bookmark } from "../types/bookmark";
 import type { NoteKind, LineEventKind } from "../types/chart";
+import type { ExtraConfig } from "../types/extra";
+import { DEFAULT_EXTRA_CONFIG } from "../types/extra";
 
 // ---- Session data shape ----
 
@@ -56,10 +60,20 @@ export interface ChartSession {
   _pastSeqs: number[];
   _futureSeqs: number[];
 
+  // Chart-store per-chart extras the old hand-list leaked across tabs (L5):
+  // extraConfig (prpr/Phira effects+video), lineTextures (RPE custom images),
+  // and chartFontFamily (RPE embedded font). Snapshotted by reference — these
+  // stores replace the whole value on every mutation, never mutate in place.
+  extraConfig: ExtraConfig;
+  lineTextures: Map<string, Blob>;
+  chartFontFamily: string | null;
+
   // Editor store (subset — UI-relevant state)
-  selectedLineIndex: number | null;
-  selectedNoteIndices: number[];
-  selectedEventIndices: number[];
+  selectedLineId: string | null;
+  selectedNoteUids: string[];
+  selectedEventIds: string[];
+  // Multi-line batch selection (sibling of selectedLineId — also per-chart, L5).
+  multiSelectedLineIds: string[];
   activeTool: EditorTool;
   timelineZoom: number;
   density: number;
@@ -79,9 +93,22 @@ export interface ChartSession {
   audioCurrentTime: number;
   musicLoaded: boolean;
 
-  // Editor-only data (groups + bookmarks)
+  // Editor-only data (groups + bookmarks) — per-chart, owned by the session.
   groups: EditorGroup[];
+  /** Which group is in edit mode + overlay render settings (group state — L5). */
+  activeGroupId: string | null;
+  groupEditMode: GroupEditSettings;
   bookmarks: Bookmark[];
+  /** Bookmark selection (the explicit "bookmark selection" omission — L5). */
+  selectedBookmarkIds: string[];
+  /** Bookmark undo/redo stacks. Per-chart and sequence-interleaved with the
+   *  chart's own undo (shared nextUndoSeq counter), so they must be swapped on
+   *  tab change too — otherwise Ctrl+Z on chart B can revert chart A's
+   *  bookmarks via the global stack the old session left unswapped (L5). */
+  bookmarkPast: Bookmark[][];
+  bookmarkFuture: Bookmark[][];
+  bookmarkPastSeqs: number[];
+  bookmarkFutureSeqs: number[];
 
   // ── Bug audit #4: projectStorage key for audio rematerialization ──
   // Set by importChart/HomeScreen via setStoredProjectId() so that if
@@ -192,6 +219,21 @@ export function getAudioFormat(): string | null {
   return _lastAudioFormat;
 }
 
+/** E3: unload the current song + clear audio tracking when a project that has NO
+ *  audio is loaded over a previous one. loadFromProjectData leaves isLoaded true
+ *  on a project SWAP, so App's close-time unload effect (App.tsx, keyed on
+ *  isLoaded going false) never fires — the entry points (importChart /
+ *  HomeScreen.handleOpenRecent) must unload explicitly or the previous project's
+ *  song keeps playing under the new (song-less) chart. Clears the tracked blob
+ *  URL/format too so the next saveSession doesn't record stale audio-intent (F5).
+ *  grep clearProjectAudio. */
+export function clearProjectAudio(): void {
+  audioEngine.unload();
+  useAudioStore.getState().setMusicLoaded(false);
+  _lastAudioBlobUrl = null;
+  _lastAudioFormat = null;
+}
+
 /** Bug audit #4: Call immediately after saving/loading a project via
  *  projectStorage so that chartSessions can fall back to IndexedDB if
  *  the in-memory blob URL is revoked. Pass `null` for disk projects.
@@ -259,6 +301,8 @@ export function saveSession(tabId: string): void {
   const cs = useChartStore.getState();
   const es = useEditorStore.getState();
   const as_ = useAudioStore.getState();
+  const gs = useGroupStore.getState();
+  const bs = useBookmarkStore.getState();
 
   // Stop playback before saving
   if (as_.isPlaying) {
@@ -266,23 +310,34 @@ export function saveSession(tabId: string): void {
   }
 
   const session: ChartSession = {
-    // Chart store
-    chart: structuredClone(cs.chart),
+    // Chart store. Snapshot by REFERENCE, not structuredClone (finding L5/Z2):
+    // every chart mutation goes through Immer, which replaces cs.chart with a
+    // fresh frozen object, so the captured reference is never mutated in place.
+    // _past/_future entries are immutable current() snapshots, so a shallow
+    // array copy is enough and avoids cloning the whole undo history per switch.
+    chart: cs.chart,
     meta: { ...cs.meta },
     projectPath: cs.projectPath,
     musicPath: cs.musicPath,
     illustrationPath: cs.illustrationPath,
     illustrationImage: cs.illustrationImage, // HTMLImageElement ref (not cloneable, but that's fine)
     isDirty: cs.isDirty,
-    _past: cs._past.map((c) => structuredClone(c)),
-    _future: cs._future.map((c) => structuredClone(c)),
+    _past: [...cs._past],
+    _future: [...cs._future],
     _pastSeqs: [...cs._pastSeqs],
     _futureSeqs: [...cs._futureSeqs],
 
+    // Chart-store per-chart extras (L5). References — these stores replace the
+    // whole value on mutation, so the reference is a safe immutable snapshot.
+    extraConfig: cs.extraConfig,
+    lineTextures: cs.lineTextures,
+    chartFontFamily: cs.chartFontFamily,
+
     // Editor store
-    selectedLineIndex: es.selectedLineIndex,
-    selectedNoteIndices: [...es.selectedNoteIndices],
-    selectedEventIndices: [...es.selectedEventIndices],
+    selectedLineId: es.selectedLineId,
+    selectedNoteUids: [...es.selectedNoteUids],
+    selectedEventIds: [...es.selectedEventIds],
+    multiSelectedLineIds: [...es.multiSelectedLineIds],
     activeTool: es.activeTool,
     timelineZoom: es.timelineZoom,
     density: es.density,
@@ -301,11 +356,26 @@ export function saveSession(tabId: string): void {
     musicUrl: _lastAudioBlobUrl || cs.musicPath,
     audioFormat: _lastAudioFormat || (cs.musicPath ? cs.musicPath.split(".").pop()?.toLowerCase() ?? null : null),
     audioCurrentTime: as_.currentTime,
-    musicLoaded: as_.musicLoaded,
+    // F5: don't snapshot the transient as_.musicLoaded alone — it's false during
+    // an in-flight decode (audioEngine.load() not yet resolved), so a tab switch
+    // mid-decode would persist "no audio" and restoreSession would skip the reload,
+    // permanently losing this tab's audio. The durable signal is "does this tab
+    // have an audio SOURCE to reload?" — a tracked blob URL or a disk musicPath.
+    // The entry points publish the blob URL (setAudioBlobUrl) BEFORE awaiting the
+    // decode, so this stays true even while the decode is in flight. grep F5.
+    musicLoaded: as_.musicLoaded || !!(_lastAudioBlobUrl || cs.musicPath),
 
-    // Editor-only data
-    groups: structuredClone(useGroupStore.getState().groups),
-    bookmarks: structuredClone(useBookmarkStore.getState().bookmarks),
+    // Editor-only data — references (both stores do immutable replace). The old
+    // structuredClone here was pure overhead (finding L5/Z2).
+    groups: gs.groups,
+    activeGroupId: gs.activeGroupId,
+    groupEditMode: gs.groupEditMode,
+    bookmarks: bs.bookmarks,
+    selectedBookmarkIds: [...bs.selectedBookmarkIds],
+    bookmarkPast: [...bs._past],
+    bookmarkFuture: [...bs._future],
+    bookmarkPastSeqs: [...bs._pastSeqs],
+    bookmarkFutureSeqs: [...bs._futureSeqs],
 
     // Bug audit #4: IndexedDB fallback id.
     storedProjectId: _lastStoredProjectId,
@@ -340,6 +410,16 @@ export async function restoreSession(tabId: string): Promise<boolean> {
     _future: session._future,
     _pastSeqs: session._pastSeqs ?? [],
     _futureSeqs: session._futureSeqs ?? [],
+    // Per-chart extras (finding L5). `??` defaults cover sessions captured
+    // before this field existed (older multi-tab snapshots).
+    extraConfig: session.extraConfig ?? { ...DEFAULT_EXTRA_CONFIG },
+    lineTextures: session.lineTextures ?? new Map<string, Blob>(),
+    chartFontFamily: session.chartFontFamily ?? null,
+    // No transaction can be open across a tab switch; reset defensively so a
+    // restored tab never starts with a half-open transaction (finding L1/L5).
+    _txnDepth: 0,
+    _txnSnapshot: null,
+    _txnDidPush: false,
   });
 
   // Restore editor store.
@@ -352,9 +432,10 @@ export async function restoreSession(tabId: string): Promise<boolean> {
   const m = session.mode;
   const cur = useEditorStore.getState();
   useEditorStore.setState({
-    selectedLineIndex: session.selectedLineIndex,
-    selectedNoteIndices: session.selectedNoteIndices,
-    selectedEventIndices: session.selectedEventIndices,
+    selectedLineId: session.selectedLineId,
+    selectedNoteUids: session.selectedNoteUids,
+    selectedEventIds: session.selectedEventIds,
+    multiSelectedLineIds: session.multiSelectedLineIds ?? [],
     activeTool: session.activeTool,
     timelineZoom: session.timelineZoom,
     density: session.density,
@@ -428,9 +509,26 @@ export async function restoreSession(tabId: string): Promise<boolean> {
   // future saveSession calls record it correctly.
   _lastStoredProjectId = session.storedProjectId;
 
-  // Restore groups and bookmarks
-  useGroupStore.setState({ groups: session.groups });
-  useBookmarkStore.setState({ bookmarks: session.bookmarks });
+  // Restore groups + bookmarks (full per-chart state, finding L5). `??` defaults
+  // cover pre-refactor sessions that only captured the groups/bookmarks arrays.
+  useGroupStore.setState({
+    groups: session.groups,
+    activeGroupId: session.activeGroupId ?? null,
+    groupEditMode: session.groupEditMode ?? { ...DEFAULT_GROUP_EDIT_SETTINGS },
+  });
+  // The group note-uid resolution cache is keyed to the OUTGOING chart; rebuild
+  // it against the just-restored chart so group note-refs resolve correctly.
+  // (The chartStore subscription only auto-rebuilds on a line-count change,
+  // which a same-line-count chart swap wouldn't trigger.)
+  useGroupStore.getState().rebuildNoteUidMap();
+  useBookmarkStore.setState({
+    bookmarks: session.bookmarks,
+    selectedBookmarkIds: session.selectedBookmarkIds ?? [],
+    _past: session.bookmarkPast ?? [],
+    _future: session.bookmarkFuture ?? [],
+    _pastSeqs: session.bookmarkPastSeqs ?? [],
+    _futureSeqs: session.bookmarkFutureSeqs ?? [],
+  });
 
   // Restore audio — reload the audio if it was loaded previously
   useAudioStore.setState({
@@ -523,6 +621,23 @@ export function hasSession(tabId: string): boolean {
  */
 export function registerSession(tabId: string): void {
   saveSession(tabId);
+}
+
+/**
+ * Save the currently-loaded chart's session under its real owning tab id.
+ *
+ * Entry points (import / new-project / open-recent) call this before
+ * loadFromProjectData replaces the chart store, so switching back to the old
+ * chart's tab restores its state. It resolves the owner via the active chart
+ * session tracker (tabStore), replacing the per-entry-point "save under the
+ * positionally-last chart-like tab" guess that could overwrite a DIFFERENT
+ * chart's session (finding L5/H2/T1) and that skipped unrolled-editor tabs.
+ * No-op when no chart is loaded.
+ */
+export function saveActiveChartSession(): void {
+  if (!useChartStore.getState().isLoaded) return;
+  const owner = getActiveChartSessionTabId();
+  if (owner) saveSession(owner);
 }
 
 // ---- Skip-save flag ----

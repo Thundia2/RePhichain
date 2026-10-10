@@ -168,6 +168,23 @@ export function generateShakeEvents(config: ShakeConfig): LineEvent[] {
     });
   }
 
+  // A7: with decay "none" the oscillation never settles — the final half-cycle leaves the
+  // property parked at ±amplitude, so the line stays permanently offset after the shake.
+  // Append one more half-cycle easing back to 0 so it returns to baseline. (linear decay
+  // already ends at 0, and exponential ramps toward it, so they need no extra event.)
+  if (decay === "none" && events.length > 0) {
+    const last = events[events.length - 1];
+    const lastEnd = "transition" in last.value ? last.value.transition.end : 0;
+    const segStart = startBeat + (totalCycles * 2) * halfCycleDuration;
+    const segEnd = segStart + halfCycleDuration;
+    events.push({
+      kind: kind as LineEventKind,
+      start_beat: floatToBeat(segStart),
+      end_beat: floatToBeat(segEnd),
+      value: { transition: { start: lastEnd, end: 0, easing } },
+    });
+  }
+
   return events;
 }
 

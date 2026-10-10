@@ -21,6 +21,7 @@ import {
 import type { ShakeConfig } from "../../utils/shakeGenerator";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
+import { useSelectedLineIndex } from "../../stores/selection";
 import type { EasingType } from "../../types/chart";
 
 export function ShakeGeneratorDialog({
@@ -30,7 +31,7 @@ export function ShakeGeneratorDialog({
   open: boolean;
   onClose: () => void;
 }) {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const activeLayer = useEditorStore((s) => s.eventEditorActiveLayer);
   const batchMultiLine = useChartStore((s) => s.batchMultiLineMutations);
   const batchAddToLayer = useChartStore((s) => s.batchAddEventsToLayer);

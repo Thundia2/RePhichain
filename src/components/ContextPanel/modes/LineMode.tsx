@@ -8,6 +8,7 @@
 
 import React, { useState, useCallback } from "react";
 import { useEditorStore } from "../../../stores/editorStore";
+import { useSelectedLineIndex, setEventSelectionByIndex } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { useFavoritesStore } from "../../../stores/favoritesStore";
 import { BUILTIN_PRESETS } from "../../../presets/builtinPresets";
@@ -182,7 +183,7 @@ function PatternConfigBanner() {
 // ---- Events sub-tab ----
 
 function EventsTab() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   // xSnapEnabled and verticalLines are handled by XGridSection internally
   const lines = useChartStore((s) => s.chart.lines);
   const addEvent = useChartStore((s) => s.addEvent);
@@ -300,12 +301,11 @@ function EventGroup({ color, label, entries, onAdd }: {
   onAdd: () => void;
 }) {
   const [expanded, setExpanded] = useState(entries.length <= 5);
-  const setEventSelection = useEditorStore((s) => s.setEventSelection);
 
   // Clicking an event row selects it, which auto-switches to Event mode
   const handleEventClick = useCallback((realIndex: number) => {
-    setEventSelection([realIndex]);
-  }, [setEventSelection]);
+    setEventSelectionByIndex([realIndex]);
+  }, []);
 
   return (
     <div style={{ borderRadius: 5, border: "1px solid var(--border-color)", overflow: "hidden" }}>
@@ -395,7 +395,7 @@ function EventGroup({ color, label, entries, onAdd }: {
 // ---- Properties sub-tab ----
 
 function PropertiesTab() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const lines = useChartStore((s) => s.chart.lines);
   const editLine = useChartStore((s) => s.editLine);
   const duplicateLine = useChartStore((s) => s.duplicateLine);
@@ -598,7 +598,7 @@ function PropertiesTab() {
 // ---- Presets sub-tab ----
 
 function PresetsTab() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const [search, setSearch] = useState("");
   const favoritePresetIds = useFavoritesStore((s) => s.favoritePresetIds);
   const toggleFavoritePreset = useFavoritesStore((s) => s.toggleFavoritePreset);

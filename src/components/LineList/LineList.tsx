@@ -10,11 +10,12 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
+import { useSelectedLineIndex, selectLineByIndex } from "../../stores/selection";
 import { useAudioStore } from "../../stores/audioStore";
 import { useTabStore } from "../../stores/tabStore";
 import { useGroupStore } from "../../stores/groupStore";
 import { evaluateLineEventsWithLayers, getFirstAppearanceBeat } from "../../canvas/events";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import type { LineSortMode } from "../../types/editor";
 import { ActionButton, SELECT_STYLE } from "../common/UIKit";
 import { LINE_CATEGORY_COLORS, LINE_CATEGORY_LABELS, autoCategorize } from "./lineCategories";
@@ -32,15 +33,15 @@ function useThrottledBeat(): number {
   const offset = useChartStore((s) => s.chart.offset);
 
   useEffect(() => {
-    const bpmList = new BpmList(bpmPoints);
-
     const unsub = useAudioStore.subscribe((state) => {
       const now = performance.now();
       if (now - lastUpdate.current < 100) return;
       lastUpdate.current = now;
 
-      const adjustedTime = Math.max(0, state.currentTime - offset);
-      const currentBeat = bpmList.beatAtFloat(adjustedTime);
+      // Pass the subscription's state.currentTime so the throttled beat tracks the
+      // live clock; raw playhead (clamped ≥0). bpmPoints/offset stay as effect deps
+      // to re-subscribe if the chart's tempo map changes.
+      const currentBeat = getPlayheadBeat({ time: state.currentTime, clampNonNegative: true });
       setBeat(currentBeat);
     });
 
@@ -55,8 +56,7 @@ export function LineList() {
   const addLine = useChartStore((s) => s.addLine);
   const removeLine = useChartStore((s) => s.removeLine);
   const reorderLines = useChartStore((s) => s.reorderLines);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectLine = useEditorStore((s) => s.selectLine);
+  const selectedLineIndex = useSelectedLineIndex();
   const lineSortMode = useEditorStore((s) => s.lineSortMode);
   const setLineSortMode = useEditorStore((s) => s.setLineSortMode);
   const openLineEventEditor = useTabStore((s) => s.openLineEventEditor);
@@ -133,7 +133,7 @@ export function LineList() {
           onClick={() => {
             if (selectedLineIndex !== null) {
               removeLine(selectedLineIndex);
-              selectLine(null);
+              selectLineByIndex(null);
             }
           }}
           disabled={selectedLineIndex === null}
@@ -146,7 +146,7 @@ export function LineList() {
             variant="default"
             onClick={() => {
               reorderLines(selectedLineIndex, selectedLineIndex - 1);
-              selectLine(selectedLineIndex - 1);
+              selectLineByIndex(selectedLineIndex - 1);
             }}
             title="Move up"
           >
@@ -158,7 +158,7 @@ export function LineList() {
             variant="default"
             onClick={() => {
               reorderLines(selectedLineIndex, selectedLineIndex + 1);
-              selectLine(selectedLineIndex + 1);
+              selectLineByIndex(selectedLineIndex + 1);
             }}
             title="Move down"
           >
@@ -282,7 +282,7 @@ export function LineList() {
                       ? "2px solid var(--accent-primary)"
                       : "2px solid transparent",
                   }}
-                  onClick={() => selectLine(idx)}
+                  onClick={() => selectLineByIndex(idx)}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setContextMenu({ x: e.clientX, y: e.clientY, lineIndex: idx });

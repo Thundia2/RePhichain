@@ -4,10 +4,10 @@
 
 import { useRef, useEffect, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
-import { useAudioStore } from "../../stores/audioStore";
 import { audioEngine } from "../../audio/audioEngine";
 import { beatToFloat } from "../../types/chart";
 import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 
 export function TimelineMinimap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -15,72 +15,83 @@ export function TimelineMinimap() {
   const bpmPoints = useChartStore((s) => s.chart.bpm_list);
   const offset = useChartStore((s) => s.chart.offset);
 
-  // Render density + playhead
+  // Render density + playhead.
+  //
+  // Z4: the note-density histogram is STATIC between edits — it only changes
+  // when lines/bpm/offset change, which already re-runs this effect. The old
+  // loop recomputed the whole per-note histogram (1918 notes on a dense chart)
+  // and repainted every column at 60 Hz, even while paused. Now the histogram
+  // is built once per effect run and pre-rendered to an offscreen canvas; the
+  // rAF tick only blits it + draws the playhead, and is dirty-gated on the
+  // playhead beat so an idle minimap does ~zero work. Can't go stale: density
+  // refreshes via the deps array, the playhead via the beat compare.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let raf: number;
-    const bpmList = new BpmList(bpmPoints);
+    const width = canvas.width;
+    const height = canvas.height;
 
-    function draw() {
-      if (!canvas || !ctx) return;
-
-      const width = canvas.width;
-      const height = canvas.height;
-      ctx.clearRect(0, 0, width, height);
-
-      // Background
-      ctx.fillStyle = "rgba(12, 12, 18, 0.6)";
-      ctx.fillRect(0, 0, width, height);
-
-      // Find total beat range
-      let maxBeat = 0;
-      for (const line of lines) {
-        for (const note of line.notes) {
-          maxBeat = Math.max(maxBeat, beatToFloat(note.beat));
-        }
-        for (const event of line.events) {
-          maxBeat = Math.max(maxBeat, beatToFloat(event.end_beat));
-        }
+    // ---- Static layer: beat range + density histogram (built once) ----
+    let maxBeat = 0;
+    for (const line of lines) {
+      for (const note of line.notes) {
+        maxBeat = Math.max(maxBeat, beatToFloat(note.beat));
       }
-      if (maxBeat === 0) maxBeat = 100;
-
-      // Compute note density per pixel column
-      const density = new Float32Array(width);
-      for (const line of lines) {
-        for (const note of line.notes) {
-          const beat = beatToFloat(note.beat);
-          const x = Math.floor((beat / maxBeat) * (width - 1));
-          if (x >= 0 && x < width) density[x]++;
-        }
+      for (const event of line.events) {
+        maxBeat = Math.max(maxBeat, beatToFloat(event.end_beat));
       }
+    }
+    if (maxBeat === 0) maxBeat = 100;
 
-      // Normalize and draw
-      let maxDensity = 0;
-      for (let i = 0; i < width; i++) {
-        if (density[i] > maxDensity) maxDensity = density[i];
+    const density = new Float32Array(width);
+    for (const line of lines) {
+      for (const note of line.notes) {
+        const x = Math.floor((beatToFloat(note.beat) / maxBeat) * (width - 1));
+        if (x >= 0 && x < width) density[x]++;
       }
-      if (maxDensity === 0) maxDensity = 1;
+    }
+    let maxDensity = 0;
+    for (let i = 0; i < width; i++) {
+      if (density[i] > maxDensity) maxDensity = density[i];
+    }
+    if (maxDensity === 0) maxDensity = 1;
 
+    // Pre-render the density bars + background to an offscreen canvas so the
+    // per-frame cost is a single drawImage instead of `width` fillRects.
+    const bg = document.createElement("canvas");
+    bg.width = width;
+    bg.height = height;
+    const bgCtx = bg.getContext("2d");
+    if (bgCtx) {
+      bgCtx.fillStyle = "rgba(12, 12, 18, 0.6)";
+      bgCtx.fillRect(0, 0, width, height);
       for (let x = 0; x < width; x++) {
         const intensity = density[x] / maxDensity;
         if (intensity > 0) {
-          const alpha = Math.max(0.15, intensity);
-          ctx.fillStyle = `rgba(108, 138, 255, ${alpha})`;
-          ctx.fillRect(x, 0, 1, height);
+          bgCtx.fillStyle = `rgba(108, 138, 255, ${Math.max(0.15, intensity)})`;
+          bgCtx.fillRect(x, 0, 1, height);
         }
       }
+    }
 
-      // Playhead
-      const { currentTime } = useAudioStore.getState();
-      const currentBeat = bpmList.beatAtFloat(Math.max(0, currentTime - offset));
-      const playheadX = (currentBeat / maxBeat) * width;
-      ctx.fillStyle = "rgba(108, 138, 255, 0.9)";
-      ctx.fillRect(playheadX - 1, 0, 2, height);
-
+    // ---- Dynamic layer: playhead, dirty-gated on the beat ----
+    let raf: number;
+    let lastBeat = NaN;
+    function draw() {
+      if (!canvas || !ctx) return;
+      // Playhead — getState() inside the rAF draw tick, so raw (imperative) read.
+      const currentBeat = getPlayheadBeat({ clampNonNegative: true });
+      if (currentBeat !== lastBeat) {
+        lastBeat = currentBeat;
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(bg, 0, 0);
+        const playheadX = (currentBeat / maxBeat) * width;
+        ctx.fillStyle = "rgba(108, 138, 255, 0.9)";
+        ctx.fillRect(playheadX - 1, 0, 2, height);
+      }
       raf = requestAnimationFrame(draw);
     }
 

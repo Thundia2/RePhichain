@@ -22,6 +22,11 @@ import { useRef, useEffect, useCallback, useMemo } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  selectLineByIndex,
+} from "../../stores/selection";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useRespackStore } from "../../stores/respackStore";
 import { GameRenderer } from "../../canvas/gameRenderer";
@@ -32,6 +37,7 @@ import { PostProcessPipeline } from "../../canvas/postProcess";
 import { VideoBackgroundManager } from "../../canvas/videoBackground";
 import { HitSoundManager } from "../../audio/hitSoundManager";
 import { BpmList } from "../../utils/bpmList";
+import { playbackOffsetSeconds } from "../../utils/playhead";
 
 export function GamePreview() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -46,7 +52,11 @@ export function GamePreview() {
   const videoBackgroundRef = useRef<VideoBackgroundManager>(new VideoBackgroundManager());
   const hitSoundRef = useRef<HitSoundManager>(new HitSoundManager());
   const lastRespackIdRef = useRef<string | null>(null);
-  const loadedTexturesRef = useRef<Set<string>>(new Set());
+  // Q2/Q8: texInFlightRef = names currently decoding (in-flight guard); loadedTexBlobsRef
+  // = the Blob last successfully loaded per name, so a re-upload under the same name
+  // (new Blob) reloads + invalidates the stale cached texture instead of showing it.
+  const texInFlightRef = useRef<Set<string>>(new Set());
+  const loadedTexBlobsRef = useRef<Map<string, Blob>>(new Map());
   const textureUrlsRef = useRef<Map<string, string>>(new Map());
   const rafRef = useRef<number>(0);
   const wasPlayingRef = useRef(false);
@@ -124,6 +134,12 @@ export function GamePreview() {
     hitEffectRef.current.setHitSoundCallback((kind) => {
       hitSoundRef.current.play(kind);
     });
+    // Q7: wire hit sounds for the Pixi renderer too — its hit-effect layer has a
+    // setHitSoundCallback (mirrors the Canvas2D HitEffectManager) but nothing
+    // called it, so Pixi mode was silent. No-op when Pixi isn't the active renderer.
+    pixiRendererRef.current?.setHitSoundCallback((kind) => {
+      hitSoundRef.current.play(kind);
+    });
 
     const container = containerRef.current;
     let observer: ResizeObserver | null = null;
@@ -144,7 +160,8 @@ export function GamePreview() {
     const videoBackground = videoBackgroundRef.current;
     const hitSound = hitSoundRef.current;
     const textureUrls = textureUrlsRef.current;
-    const loadedTextures = loadedTexturesRef.current;
+    const inFlight = texInFlightRef.current;
+    const loadedBlobs = loadedTexBlobsRef.current;
     const pixiRenderer = pixiRendererRef.current;
 
     return () => {
@@ -159,7 +176,8 @@ export function GamePreview() {
         URL.revokeObjectURL(url);
       }
       textureUrls.clear();
-      loadedTextures.clear();
+      inFlight.clear();
+      loadedBlobs.clear();
     };
   }, [resizeCanvas]);
 
@@ -257,32 +275,42 @@ export function GamePreview() {
       const activeRenderer = renderer || pixiRenderer;
       const lineTextures = cs.lineTextures;
       for (const [texName, texBlob] of lineTextures) {
-        if (!loadedTexturesRef.current.has(texName) && activeRenderer && !activeRenderer.hasLineTexture(texName)) {
-          loadedTexturesRef.current.add(texName);
-          const url = URL.createObjectURL(texBlob);
-          textureUrlsRef.current.set(texName, url);
-          const img = new Image();
-          img.onload = () => {
-            if (cancelled) return;
-            // Re-resolve the renderer at callback time — the one we
-            // captured in `activeRenderer` may have been replaced.
-            const r = rendererRef.current || pixiRendererRef.current;
-            if (!r) return;
-            try {
-              r.loadLineTexture(texName, img);
-            } catch (err) {
-              // Renderer was destroyed between our guards and this call,
-              // or the texture is malformed. Don't bring down the frame loop.
-              console.warn(`Failed to load line texture "${texName}":`, err);
-            }
-          };
-          img.onerror = () => {
-            URL.revokeObjectURL(url);
-            textureUrlsRef.current.delete(texName);
-            loadedTexturesRef.current.delete(texName);
-          };
-          img.src = url;
-        }
+        if (!activeRenderer) break;
+        // Q8: skip while a decode for this name is already in flight (don't re-kick a
+        // fresh Image every frame). Q2: reload when the Blob changed (re-upload under the
+        // same name) or the renderer lost the texture (swap); invalidate the stale one.
+        if (texInFlightRef.current.has(texName)) continue;
+        const have = activeRenderer.hasLineTexture(texName);
+        const loadedBlob = loadedTexBlobsRef.current.get(texName);
+        if (have && loadedBlob === texBlob) continue;
+        if (have && loadedBlob !== texBlob) activeRenderer.invalidateLineTexture(texName);
+
+        texInFlightRef.current.add(texName);
+        const prevUrl = textureUrlsRef.current.get(texName);
+        if (prevUrl) URL.revokeObjectURL(prevUrl);
+        const url = URL.createObjectURL(texBlob);
+        textureUrlsRef.current.set(texName, url);
+        const img = new Image();
+        img.onload = () => {
+          texInFlightRef.current.delete(texName);
+          if (cancelled) return;
+          // Re-resolve the renderer at callback time — the captured one may be stale.
+          const r = rendererRef.current || pixiRendererRef.current;
+          if (!r) return;
+          try {
+            r.loadLineTexture(texName, img);
+            loadedTexBlobsRef.current.set(texName, texBlob);
+          } catch (err) {
+            // Renderer destroyed between guards and this call, or malformed texture.
+            console.warn(`Failed to load line texture "${texName}":`, err);
+          }
+        };
+        img.onerror = () => {
+          texInFlightRef.current.delete(texName);
+          URL.revokeObjectURL(url);
+          textureUrlsRef.current.delete(texName);
+        };
+        img.src = url;
       }
 
       // Rebuild BpmList if changed
@@ -294,21 +322,21 @@ export function GamePreview() {
 
       // Audio latency compensation: shift game preview visuals so notes
       // align with what the user actually hears through their hardware.
-      const effectiveOffset = cs.chart.offset + ss.audioLatencyMs / 1000;
+      const effectiveOffset = playbackOffsetSeconds(true);
 
       // Compute current beat for shader effects
       const currentBeat = bpmList.beatAtFloat(latestTime - effectiveOffset);
 
-      // Draw video background if configured (Canvas 2D mode only —
-      // Pixi mode handles video via texture in a future phase)
+      // Sync the video background each frame (Canvas 2D mode only — Pixi mode
+      // handles video via texture in a future phase). The DRAW now happens inside
+      // GameRenderer.render() right after its clearRect (finding C5): the old
+      // draw() call here ran BEFORE render(), whose clearRect then wiped it, and
+      // passed device-pixel dims into a dpr-scaled context (2× oversize). We pass
+      // the manager into renderOptions below so render() draws it at CSS dims.
       const extraConfig = cs.extraConfig;
-      if (!pixiRenderer && extraConfig.videos && extraConfig.videos.length > 0) {
-        const ctx2d = canvas.getContext("2d");
-        if (ctx2d) {
-          const dpr = window.devicePixelRatio || 1;
-          videoBackgroundRef.current.sync(currentBeat, latestTime - effectiveOffset, isPlaying);
-          videoBackgroundRef.current.draw(ctx2d, rect.width * dpr, rect.height * dpr, currentBeat);
-        }
+      const hasVideoBg = !pixiRenderer && extraConfig.videos != null && extraConfig.videos.length > 0;
+      if (hasVideoBg) {
+        videoBackgroundRef.current.sync(currentBeat, latestTime - effectiveOffset, isPlaying);
       }
 
       // Render options shared by both renderers
@@ -316,8 +344,8 @@ export function GamePreview() {
         noteSize: ss.noteSize,
         backgroundDim: ss.backgroundDim,
         illustrationImage: cs.illustrationImage,
-        selectedLineIndex: es.selectedLineIndex,
-        selectedNoteIndices: es.selectedNoteIndices,
+        selectedLineIndex: getSelectedLineIndex(),
+        selectedNoteIndices: getSelectedNoteIndices(),
         showFcApIndicator: ss.showFcApIndicator,
         isFcValid: es.isFcValid,
         multiHighlight: ss.multiHighlight,
@@ -329,9 +357,11 @@ export function GamePreview() {
         isPlaying,
         showHitEffects: ss.showHitEffects,
         pendingNote: es.pendingNote,
-        pendingLineIndex: es.selectedLineIndex,
+        pendingLineIndex: getSelectedLineIndex(),
         respack: activeRespack,
         chartFontFamily: cs.chartFontFamily,
+        // C5: GameRenderer.render() draws this right after its clearRect.
+        videoBackground: hasVideoBg ? videoBackgroundRef.current : null,
       };
 
       if (pixiRenderer && pixiRenderer.initialized) {
@@ -393,7 +423,12 @@ export function GamePreview() {
   }, []); // Empty deps — loop reads from stores directly
 
   // ---- Click to select line ----
-  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Q3: bound to the CONTAINER div, not the canvas. In Pixi mode the canvasRef
+  // canvas is never sized (resizeCanvas runs only in the Canvas 2D branch) and
+  // Pixi appends its own canvas on top, so a canvas-bound handler went dead
+  // outside the default 300×150 box. The container always fills the preview and
+  // coords are already derived from its rect.
+  const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
     const activeRenderer = rendererRef.current || pixiRendererRef.current;
@@ -409,14 +444,14 @@ export function GamePreview() {
     if (!bpmList) return;
 
     // Use effectiveOffset so click-to-select matches the latency-shifted visuals
-    const effectiveOffset = cs.chart.offset + useSettingsStore.getState().audioLatencyMs / 1000;
+    const effectiveOffset = playbackOffsetSeconds(true);
     const currentBeat = bpmList.beatAtFloat(currentTime - effectiveOffset);
     const hitIndex = activeRenderer.hitTestLine(
       cs.chart.lines, currentBeat, clickX, clickY, rect.width, rect.height,
     );
 
     if (hitIndex !== null) {
-      useEditorStore.getState().selectLine(hitIndex);
+      selectLineByIndex(hitIndex);
     }
   }, []);
 
@@ -425,11 +460,11 @@ export function GamePreview() {
       ref={containerRef}
       className="w-full h-full relative"
       style={{ backgroundColor: "#000" }}
+      onClick={handleClick}
     >
       <canvas
         ref={canvasRef}
         className="absolute inset-0"
-        onClick={handleClick}
       />
       {/* Canvas 2D overlay for hit effects when using Pixi renderer */}
       <canvas

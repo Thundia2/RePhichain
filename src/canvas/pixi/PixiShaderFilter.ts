@@ -182,15 +182,27 @@ export function updateChartFilterUniforms(
   canvasWidth: number,
   canvasHeight: number,
 ): void {
-  const uniforms = filter.resources.chartUniforms?.uniforms;
+  // X1: route uniform writes through the v8 UniformGroup accessor.
+  // In Pixi v8 the Shader constructor wraps `resources.chartUniforms` (the plain
+  // {name:{value,type}} record we passed to createChartFilter) into a UniformGroup,
+  // whose `.uniforms` is a FLATTENED map of name -> raw value (number | Float32Array)
+  // — the {value,type} wrapper is stripped (see node_modules/pixi.js .../UniformGroup.d.ts
+  // ExtractUniformObject). The old code wrote `uniforms.foo.value[i]`, but `.value` is
+  // undefined on the flattened value, so it threw a TypeError every frame and froze the
+  // preview. Correct v8 form: scalars assign directly, vectors index the Float32Array
+  // directly. grep updateChartFilterUniforms for the call site (PixiGameRenderer).
+  const uniforms = filter.resources.chartUniforms?.uniforms as
+    | Record<string, number | Float32Array>
+    | undefined;
   if (!uniforms) return;
 
-  // Standard uniforms
-  if (uniforms.screenSize) {
-    uniforms.screenSize.value[0] = canvasWidth;
-    uniforms.screenSize.value[1] = canvasHeight;
+  // Standard uniforms — screenSize is a vec2 Float32Array, written in place.
+  const screenSize = uniforms.screenSize;
+  if (screenSize instanceof Float32Array) {
+    screenSize[0] = canvasWidth;
+    screenSize[1] = canvasHeight;
   }
-  if (uniforms.time !== undefined) {
+  if (typeof uniforms.time === "number") {
     uniforms.time = currentTime;
   }
 
@@ -199,20 +211,21 @@ export function updateChartFilterUniforms(
 
   if (effect.vars) {
     for (const [name, value] of Object.entries(effect.vars)) {
-      if (uniforms[name] === undefined) continue;
+      const target = uniforms[name];
+      if (target === undefined) continue;
 
       if (typeof value === "number") {
         uniforms[name] = value;
       } else {
         const defVal = defaults[name];
-        if (Array.isArray(defVal)) {
+        if (Array.isArray(defVal) && target instanceof Float32Array) {
           const vec = evaluateAnimatedVariableVec(value, currentBeat, defVal.length);
           // Normalize RGBA colors (0-255 → 0.0-1.0)
           if (vec.length === 4 && vec.some(v => v > 1.0)) {
             for (let i = 0; i < vec.length; i++) vec[i] /= 255.0;
           }
           for (let i = 0; i < vec.length; i++) {
-            uniforms[name].value[i] = vec[i];
+            target[i] = vec[i];
           }
         } else {
           uniforms[name] = evaluateAnimatedVariable(value, currentBeat);
@@ -224,13 +237,14 @@ export function updateChartFilterUniforms(
   // Set defaults for any vars not explicitly set
   for (const [name, defaultVal] of Object.entries(defaults)) {
     if (effect.vars && name in effect.vars) continue;
-    if (uniforms[name] === undefined) continue;
+    const target = uniforms[name];
+    if (target === undefined) continue;
 
-    if (Array.isArray(defaultVal)) {
+    if (Array.isArray(defaultVal) && target instanceof Float32Array) {
       for (let i = 0; i < defaultVal.length; i++) {
-        uniforms[name].value[i] = defaultVal[i];
+        target[i] = defaultVal[i];
       }
-    } else {
+    } else if (!Array.isArray(defaultVal)) {
       uniforms[name] = defaultVal;
     }
   }

@@ -164,19 +164,22 @@ export const useTabStore = create<TabState>()((set, get) => ({
   openUnifiedEditor: () => {
     const { tabs, activeTabId } = get();
     const activeTab = tabs.find((t) => t.id === activeTabId);
-    let chartId = "current";
+    let chartId: string | null = null;
     let label = "Unified Editor";
-    // Extract chartId from any chart-like tab (including unrolled_editor)
-    if (
-      activeTab?.type === "chart" ||
-      activeTab?.type === "unified_editor" ||
-      activeTab?.type === "unrolled_editor"
-    ) {
-      chartId = activeTab.id.split(":").slice(1).join(":") || "current";
+    // Resolve the real chart id (finding L5 — no "current" sentinel). A
+    // chart-session tab carries the id in its own tab id; a satellite/home tab
+    // inherits the active chart session's id so the view binds to the loaded
+    // chart. Using isChartSessionTabId (not the type field) correctly excludes
+    // per-line unrolled tabs, whose ":<n>" suffix is a line index, not a chart.
+    if (activeTab && isChartSessionTabId(activeTab.id)) {
+      chartId = chartGroupKey(activeTab.id);
       label = activeTab.label;
+    } else {
+      const owner = getActiveChartSessionTabId();
+      if (owner) chartId = chartGroupKey(owner);
     }
     get().openTab({
-      id: `unified:${chartId}`,
+      id: `unified:${chartId ?? "current"}`,
       type: "unified_editor",
       label,
       closable: true,
@@ -186,19 +189,18 @@ export const useTabStore = create<TabState>()((set, get) => ({
   openUnrolledEditor: () => {
     const { tabs, activeTabId } = get();
     const activeTab = tabs.find((t) => t.id === activeTabId);
-    let chartId = "current";
+    let chartId: string | null = null;
     let label = "Unrolled Editor";
-    // Extract chartId from any chart-like tab (including itself)
-    if (
-      activeTab?.type === "chart" ||
-      activeTab?.type === "unified_editor" ||
-      activeTab?.type === "unrolled_editor"
-    ) {
-      chartId = activeTab.id.split(":").slice(1).join(":") || "current";
+    // Resolve the real chart id (finding L5 — see openUnifiedEditor).
+    if (activeTab && isChartSessionTabId(activeTab.id)) {
+      chartId = chartGroupKey(activeTab.id);
       label = activeTab.label;
+    } else {
+      const owner = getActiveChartSessionTabId();
+      if (owner) chartId = chartGroupKey(owner);
     }
     get().openTab({
-      id: `unrolled:${chartId}`,
+      id: `unrolled:${chartId ?? "current"}`,
       type: "unrolled_editor",
       label,
       closable: true,
@@ -243,29 +245,80 @@ export const useTabStore = create<TabState>()((set, get) => ({
 }));
 
 // ============================================================
-// Chart group key — used by App.tsx to detect when two tab IDs
-// reference the same underlying chart, so it can skip saving and
-// restoring sessions on view switches that don't change the chart.
+// Active-chart session routing (finding L5)
 //
-// Tab IDs follow patterns set by openChart / openUnifiedEditor /
-// openUnrolledEditor / openUnrolledLineEditor / openLineEventEditor /
-// openPanel. Stripping the type prefix yields the chart identifier
-// (or "current" for tabs that always reference the loaded chart —
-// per-line unrolled tabs, line-events tabs, and panel tabs).
+// Multiple charts can be open at once: every chart:/unified:/unrolled: tab owns
+// a ChartSession (chartSessions.ts), and the singleton chart store is swapped on
+// tab switch. "Satellite" tabs — panels, the line-event editor, and per-line
+// unrolled tabs — are VIEWS of whichever chart is currently loaded, not charts
+// of their own. They used to resolve to a literal "current" sentinel, which
+// collided across charts and made the panel-tab session save overwrite the
+// wrong chart's session (finding H2 — data loss).
 //
-// Returns null for tabs that aren't tied to any chart (only "home"
-// today, but new system tabs would also fall here).
+// `_lastChartTabId` tracks the most recently ACTIVATED real-chart tab. It is set
+// from App.tsx's tab-switch effect AFTER that effect saves the outgoing session,
+// so a satellite's owner still resolves to the chart currently in the store at
+// save time (setting it eagerly in setActiveTab would race the save and clobber
+// the outgoing chart). grep getActiveChartSessionTabId / sessionOwnerTabId.
+// ============================================================
+
+let _lastChartTabId: string | null = null;
+
+/** True for tabs that OWN a chart session (carry a real chart id in their id). */
+export function isChartSessionTabId(tabId: string): boolean {
+  return (
+    tabId.startsWith("chart:") ||
+    tabId.startsWith("unified:") ||
+    tabId.startsWith("unrolled:")
+  );
+}
+
+/** Record the active real-chart tab. Called from the App tab-switch effect. */
+export function setActiveChartSessionTabId(tabId: string): void {
+  _lastChartTabId = tabId;
+}
+
+/** The real-chart tab whose session the loaded chart belongs to: the tracked
+ *  last-active chart tab if it still exists, else the first chart-session tab,
+ *  else null (no chart open). The existence check guards a stale id left after
+ *  the tracked tab was closed. */
+export function getActiveChartSessionTabId(): string | null {
+  const { tabs } = useTabStore.getState();
+  if (_lastChartTabId && tabs.some((t) => t.id === _lastChartTabId)) {
+    return _lastChartTabId;
+  }
+  const found = tabs.find((t) => isChartSessionTabId(t.id));
+  return found ? found.id : null;
+}
+
+/** The tab id under which `tabId`'s session is stored. Chart-session tabs own
+ *  their session; satellite tabs (panel / line-events / per-line unrolled)
+ *  resolve to the active chart session. Returns null for tabs tied to no chart
+ *  (home). */
+export function sessionOwnerTabId(tabId: string): string | null {
+  if (isChartSessionTabId(tabId)) return tabId;
+  if (
+    tabId.startsWith("unrolled-line:") ||
+    tabId.startsWith("line-events:") ||
+    tabId.startsWith("panel:")
+  ) {
+    return getActiveChartSessionTabId();
+  }
+  return null;
+}
+
+// ============================================================
+// Chart group key — used by App.tsx to detect when two tab IDs reference the
+// same underlying chart, so it can skip saving/restoring sessions on view
+// switches that don't change the chart. Resolves through sessionOwnerTabId, so
+// satellites map to their owning chart's id (no "current" sentinel — L5).
+// Returns null for tabs tied to no chart (only "home" today).
 // ============================================================
 export function chartGroupKey(tabId: string): string | null {
-  if (tabId.startsWith("chart:")) return tabId.slice("chart:".length);
-  if (tabId.startsWith("unified:")) return tabId.slice("unified:".length);
-  if (tabId.startsWith("unrolled:")) return tabId.slice("unrolled:".length);
-  // Per-line unrolled, line-events, and panel tabs reference whatever
-  // chart is currently loaded. Treat them as part of the "current"
-  // group, matching the default chartId used by openUnified/openUnrolled
-  // when the active tab isn't chart-like (see openUnifiedEditor above).
-  if (tabId.startsWith("unrolled-line:")) return "current";
-  if (tabId.startsWith("line-events:")) return "current";
-  if (tabId.startsWith("panel:")) return "current";
+  const owner = sessionOwnerTabId(tabId);
+  if (!owner) return null;
+  if (owner.startsWith("chart:")) return owner.slice("chart:".length);
+  if (owner.startsWith("unified:")) return owner.slice("unified:".length);
+  if (owner.startsWith("unrolled:")) return owner.slice("unrolled:".length);
   return null;
 }

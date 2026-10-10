@@ -20,6 +20,8 @@
 // ============================================================
 
 import { useChartStore } from "../../stores/chartStore";
+import { useEditorStore } from "../../stores/editorStore";
+import { resolveActiveKindEvents } from "../../utils/eventRouting";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, beatToFloat, floatToBeat } from "../../types/chart";
 import type { LineEvent, LineEventKind, Beat, Note } from "../../types/chart";
 
@@ -37,6 +39,9 @@ export interface TranslateDragState {
   currentCanvasX: number;
   currentCanvasY: number;
   startRotationDeg: number; // Initial rotation in degrees (for ghost preview)
+  /** UC6: parent line's world rotation (radians); the screen delta is un-rotated by
+   *  this before becoming a LOCAL x/y delta. 0 for root lines (no parent). */
+  parentWorldRotation: number;
 }
 
 export interface RotateDragState {
@@ -48,6 +53,9 @@ export interface RotateDragState {
   startCanvasY: number;
   startRotationDeg: number;
   currentRotationDeg: number;
+  /** UC6: parent's world rotation (radians) to subtract from the committed value so a
+   *  rotate-with-father child stores LOCAL rotation. 0 for roots / non-inheriting children. */
+  parentWorldRotation: number;
 }
 
 export interface PanDragState {
@@ -178,13 +186,21 @@ export function commitValue(
   const line = cs.chart.lines[lineIndex];
   if (!line) return;
 
-  const activeIdx = findActiveEventIndex(line.events, kind, currentBeat);
+  // Route flat<->layer (finding L3): on a layered chart the evaluator reads core
+  // kinds from event_layers, so we must find the active event in — and write to —
+  // the active layer's kind-array, not flat line.events (where a write would be
+  // invisible in preview and dropped on RPE export). resolveActiveKindEvents
+  // returns the SAME array routeEventTarget/addEventRouted writes to, keyed off
+  // editorStore.eventEditorActiveLayer (-1 = Flat pill, default 0).
+  const activeLayer = useEditorStore.getState().eventEditorActiveLayer;
+  const kindEvents = resolveActiveKindEvents(line, kind, activeLayer);
+  const activeIdx = findActiveEventIndex(kindEvents, kind, currentBeat);
+  const event = activeIdx >= 0 ? kindEvents[activeIdx] : null;
 
-  if (activeIdx >= 0) {
-    const event = line.events[activeIdx];
+  if (event && event.id) {
     if ("constant" in event.value) {
       // Case 1: Update the constant value
-      cs.editEvent(lineIndex, activeIdx, { value: { constant: newValue } });
+      cs.editEventById(lineIndex, event.id, { value: { constant: newValue } });
     } else if ("transition" in event.value) {
       // Case 2: Split the transition event at the current beat
       const splitBeat = floatToBeat(currentBeat);
@@ -208,18 +224,20 @@ export function commitValue(
           value: { constant: newValue },
         },
       ];
-      cs.replaceEvent(lineIndex, activeIdx, newEvents);
+      cs.replaceEventById(lineIndex, event.id, newEvents);
     }
   } else {
-    // Case 3: No active event — create a new constant event
+    // Case 3: No active event — create a short constant in the routed target. A
+    // constant holds via inheritance for all later beats, so no [1000] far-end
+    // is needed; a far-end would compete as "affecting" across the whole chart
+    // and shadow later events under the value-tiebreak (finding L4).
     const snappedBeat = floatToBeat(currentBeat);
-    const farBeat: Beat = [1000, 0, 1];
-    cs.addEvent(lineIndex, {
+    cs.addEventRouted(lineIndex, {
       kind,
       start_beat: snappedBeat,
-      end_beat: farBeat,
+      end_beat: floatToBeat(currentBeat + 1),
       value: { constant: newValue },
-    });
+    }, activeLayer);
   }
 }
 
@@ -279,6 +297,7 @@ export function startTranslateDrag(
   canvasX: number,
   canvasY: number,
   rotationDeg: number,
+  parentWorldRotation: number = 0,
 ): TranslateDragState {
   return {
     type: "translate",
@@ -290,6 +309,7 @@ export function startTranslateDrag(
     currentCanvasX: canvasX,
     currentCanvasY: canvasY,
     startRotationDeg: rotationDeg,
+    parentWorldRotation,
   };
 }
 
@@ -303,12 +323,22 @@ export function updateTranslateDrag(
   canvasWidth: number,
   canvasHeight: number,
 ): TranslateDragState {
-  const { dx, dy } = screenDeltaToCanvasDelta(
-    mouseX - drag.startMouseX,
-    mouseY - drag.startMouseY,
-    canvasWidth,
-    canvasHeight,
-  );
+  // UC6: rotate the world-space screen delta into the parent's local frame before
+  // converting to RPE units. computeWorldTransforms maps a child's local offset to world
+  // via R(-parentWorldRotation), so the inverse here is R(+parentWorldRotation). No-op
+  // for root lines (parentWorldRotation === 0).
+  let sdx = mouseX - drag.startMouseX;
+  let sdy = mouseY - drag.startMouseY;
+  const p = drag.parentWorldRotation;
+  if (p) {
+    const cos = Math.cos(p);
+    const sin = Math.sin(p);
+    const rx = sdx * cos - sdy * sin;
+    const ry = sdx * sin + sdy * cos;
+    sdx = rx;
+    sdy = ry;
+  }
+  const { dx, dy } = screenDeltaToCanvasDelta(sdx, sdy, canvasWidth, canvasHeight);
   return {
     ...drag,
     currentCanvasX: drag.startCanvasX + dx,
@@ -356,6 +386,7 @@ export function startRotateDrag(
   canvasX: number,
   canvasY: number,
   rotationDeg: number,
+  parentWorldRotation: number = 0,
 ): RotateDragState {
   return {
     type: "rotate",
@@ -366,6 +397,7 @@ export function startRotateDrag(
     startCanvasY: canvasY,
     startRotationDeg: rotationDeg,
     currentRotationDeg: rotationDeg,
+    parentWorldRotation,
   };
 }
 
@@ -404,9 +436,14 @@ export function finishRotateDrag(
   const threshold = 0.5;
 
   if (Math.abs(drag.currentRotationDeg - drag.startRotationDeg) > threshold) {
+    // UC6: currentRotationDeg is the desired WORLD rotation; the line stores LOCAL
+    // rotation, so subtract the parent's world rotation (already 0 unless this is a
+    // rotate-with-father child — see tryHandleDrag). The threshold above stays in
+    // world space — the difference is parent-invariant.
+    const parentDeg = (drag.parentWorldRotation * 180) / Math.PI;
     commitValue(
       drag.lineIndex, "rotation",
-      Math.round(drag.currentRotationDeg * 10) / 10,
+      Math.round((drag.currentRotationDeg - parentDeg) * 10) / 10,
       currentBeat,
     );
   }

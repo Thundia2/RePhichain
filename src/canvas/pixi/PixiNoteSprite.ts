@@ -95,7 +95,11 @@ export function configureNoteSprite(
   // Position at center (anchor 0.5, 0.5)
   sprite.anchor.set(0.5, 0.5);
   sprite.position.set(noteX, noteY);
-  sprite.tint = color;
+  // X7: tint ONLY the fallback white-pixel shape — a real respack texture carries its
+  // own colors and must not be recolored (matches gameRenderer.ts, which tints
+  // drawNoteShape but never drawNoteTexture). Selected respack notes stay un-greened,
+  // same as Canvas2D; a pooled sprite reused from a fallback note also gets reset.
+  sprite.tint = useTexture ? 0xffffff : color;
   sprite.alpha = alpha;
 }
 

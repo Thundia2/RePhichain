@@ -64,9 +64,14 @@ export class PixiTextureManager {
   getTexture(image: HTMLImageElement): Texture {
     let tex = this.cache.get(image);
     if (!tex) {
-      // Use Texture.from() which handles ImageSource creation internally.
-      // This is the recommended Pixi v8 approach for HTMLImageElement.
-      tex = Texture.from(image);
+      // X8: skipCache=true so this manager owns its own Texture/source.
+      // Texture.from(image) (skipCache=false) returns the GLOBALLY shared Texture
+      // keyed by the image; when this manager's destroy() calls tex.destroy(true)
+      // it would tear down the shared GPU source another manager/renderer still
+      // uses (and remove the global cache entry). With skipCache we get a private
+      // Texture+source, keyed locally by `cache` (the HTMLImageElement map above).
+      // Signature: Texture.from(id, skipCache?) — node_modules/pixi.js .../Texture.d.ts.
+      tex = Texture.from(image, true);
       this.cache.set(image, tex);
     }
     return tex;
@@ -136,6 +141,15 @@ export class PixiTextureManager {
    */
   hasLineTexture(path: string): boolean {
     return this.lineTextureCache.has(path);
+  }
+
+  /**
+   * Drop the cached GPU texture for a line-texture path so a re-uploaded image under
+   * the same name reloads instead of showing the stale one (finding Q2). The underlying
+   * Texture stays in `cache` (keyed by its HTMLImageElement) and is freed on destroy().
+   */
+  invalidateLineTexture(path: string): void {
+    this.lineTextureCache.delete(path);
   }
 
   /**

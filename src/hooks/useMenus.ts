@@ -13,18 +13,21 @@
 
 import { useChartStore } from "../stores/chartStore";
 import { useTabStore } from "../stores/tabStore";
-import { useAudioStore } from "../stores/audioStore";
 import { saveProject } from "../utils/ipc";
 import type { ExtraConfig } from "../types/extra";
 import type { PanelId } from "../types/editor";
 import { useEditorStore } from "../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedEventIndices,
+  getMultiSelectedLineIndices,
+} from "../stores/selection";
 import { useGroupStore } from "../stores/groupStore";
 import { useBookmarkStore } from "../stores/bookmarkStore";
 import { useToastStore } from "../stores/toastStore";
 import { showConfirm } from "../components/common/ConfirmDialog";
 import { beatToFloat, floatToBeat } from "../types/chart";
-import { BpmList } from "../utils/bpmList";
-import { evaluateEasing } from "../canvas/easings";
+import { splitSelectedEventsAtPlayhead } from "../utils/eventSplit";
 import { triggerImportChart } from "../utils/importChart";
 
 /** Helper to pick a file via a temporary input element. Returns null if cancelled. */
@@ -77,7 +80,8 @@ export function useMenus(
 ): Menu[] {
   const projectPath = useChartStore((s) => s.projectPath);
   const getChartJson = useChartStore((s) => s.getChartJson);
-  const markClean = useChartStore((s) => s.markClean);
+  // F2: the Save action now uses markCleanIf(token) via getState() (race-safe),
+  // so the markClean selector is no longer needed here.
   const closeProject = useChartStore((s) => s.closeProject);
   const canUndo = useChartStore((s) => s.canUndo);
   const canRedo = useChartStore((s) => s.canRedo);
@@ -97,9 +101,12 @@ export function useMenus(
           disabled: !isLoaded,
           action: async () => {
             if (!projectPath) return;
+            // F2: capture the dirty token before the async write (see markCleanIf).
+            const cs = useChartStore.getState();
+            const token = cs._dirtySeq;
             try {
-              await saveProject(projectPath, getChartJson());
-              markClean();
+              await saveProject(projectPath, getChartJson(), JSON.stringify(cs.meta));
+              cs.markCleanIf(token);
             } catch (e) {
               console.error("Save failed:", e);
             }
@@ -185,11 +192,12 @@ export function useMenus(
           shortcut: "Ctrl+Shift+G",
           disabled: !isLoaded,
           action: () => {
-            const es = useEditorStore.getState();
             const gs = useGroupStore.getState();
-            const linesToAdd = es.multiSelectedLineIndices.length > 0
-              ? es.multiSelectedLineIndices
-              : es.selectedLineIndex !== null ? [es.selectedLineIndex] : [];
+            const multiLineIndices = getMultiSelectedLineIndices();
+            const selectedLineIndex = getSelectedLineIndex();
+            const linesToAdd = multiLineIndices.length > 0
+              ? multiLineIndices
+              : selectedLineIndex !== null ? [selectedLineIndex] : [];
             if (linesToAdd.length === 0) return;
             const groupId = gs.createLineGroup(`Group ${gs.groups.length + 1}`, [0, 0, 1], [999, 0, 1]);
             for (const li of linesToAdd) gs.addLineToGroup(groupId, li);
@@ -251,7 +259,7 @@ export function useMenus(
         },
         {
           label: "Go to Beat...",
-          shortcut: "Ctrl+J",
+          shortcut: "Ctrl+G", // L7: go_to_beat moved ctrl+j → ctrl+g (registry default)
           disabled: !isLoaded,
           action: () => onShowGoToBeat?.(),
         },
@@ -265,57 +273,22 @@ export function useMenus(
         {
           label: "Split Event at Playhead",
           disabled: !isLoaded,
-          action: () => {
-            // Split all selected events at the current playhead beat
-            const es = useEditorStore.getState();
-            const cs = useChartStore.getState();
-            const as_ = useAudioStore.getState();
-            if (es.selectedLineIndex === null || es.selectedEventIndices.length === 0) return;
-            const line = cs.chart.lines[es.selectedLineIndex];
-            if (!line) return;
-
-            const bpmList = new BpmList(cs.chart.bpm_list);
-            const splitBeat = bpmList.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
-
-            // Process in reverse order to preserve indices during replaceEvent calls
-            const sorted = [...es.selectedEventIndices].sort((a, b) => b - a);
-            for (const idx of sorted) {
-              const event = line.events[idx];
-              if (!event) continue;
-              const startB = beatToFloat(event.start_beat);
-              const endB = beatToFloat(event.end_beat);
-              if (splitBeat <= startB || splitBeat >= endB) continue;
-
-              const t = (splitBeat - startB) / (endB - startB);
-
-              if ("transition" in event.value) {
-                const { start, end, easing } = event.value.transition;
-                const mid = start + (end - start) * evaluateEasing(easing, t);
-                cs.replaceEvent(es.selectedLineIndex!, idx, [
-                  { ...structuredClone(event), end_beat: floatToBeat(splitBeat), value: { transition: { start, end: mid, easing } } },
-                  { ...structuredClone(event), start_beat: floatToBeat(splitBeat), value: { transition: { start: mid, end, easing } } },
-                ]);
-              } else if ("constant" in event.value) {
-                cs.replaceEvent(es.selectedLineIndex!, idx, [
-                  { ...structuredClone(event), end_beat: floatToBeat(splitBeat) },
-                  { ...structuredClone(event), start_beat: floatToBeat(splitBeat) },
-                ]);
-              }
-            }
-          },
+          // Shared with the split_event hotkey (L7). grep splitSelectedEventsAtPlayhead.
+          action: () => splitSelectedEventsAtPlayhead(),
         },
         {
           label: "Duplicate Event After",
           disabled: !isLoaded,
           action: () => {
             // Clone selected events and place immediately after their end beat
-            const es = useEditorStore.getState();
             const cs = useChartStore.getState();
-            if (es.selectedLineIndex === null || es.selectedEventIndices.length === 0) return;
-            const line = cs.chart.lines[es.selectedLineIndex];
+            const lineIndex = getSelectedLineIndex();
+            const eventIndices = getSelectedEventIndices();
+            if (lineIndex === null || eventIndices.length === 0) return;
+            const line = cs.chart.lines[lineIndex];
             if (!line) return;
 
-            const newEvents = es.selectedEventIndices.map((idx) => {
+            const newEvents = eventIndices.map((idx) => {
               const event = line.events[idx];
               const duration = beatToFloat(event.end_beat) - beatToFloat(event.start_beat);
               return {
@@ -325,7 +298,7 @@ export function useMenus(
               };
             });
 
-            cs.batchMultiLineMutations([{ lineIndex: es.selectedLineIndex, newEvents }]);
+            cs.batchMultiLineMutations([{ lineIndex, newEvents }]);
           },
         },
       ],

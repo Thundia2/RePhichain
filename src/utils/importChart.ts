@@ -27,12 +27,13 @@ import { useRecentProjectsStore } from "../stores/recentProjectsStore";
 import { useToastStore } from "../stores/toastStore";
 import { saveStoredProject } from "./projectStorage";
 import {
-  saveSession,
+  saveActiveChartSession,
   registerSession,
   setSkipNextSave,
   setSkipNextRestore,
   setAudioBlobUrl,
   setStoredProjectId,
+  clearProjectAudio,
 } from "./chartSessions";
 import type { ExtraConfig } from "../types/extra";
 import type { ProjectMeta, PhichainChart } from "../types/chart";
@@ -391,16 +392,10 @@ export function triggerImportChart() {
       // ── Load chart into editor ──────────────────────────────
       const cs = useChartStore.getState();
 
-      // Save the old chart's session before replacing it
-      const tabState = useTabStore.getState();
-      const currentTab = tabState.tabs.find((t) => t.id === tabState.activeTabId);
-      if (
-        currentTab &&
-        (currentTab.type === "chart" || currentTab.type === "unified_editor") &&
-        cs.isLoaded
-      ) {
-        saveSession(currentTab.id);
-      }
+      // Save the outgoing chart's session under its real owning tab id before
+      // loadFromProjectData replaces the chart store (finding L5: the old
+      // type-gated check skipped unrolled-editor tabs and mis-routed satellites).
+      saveActiveChartSession();
       setSkipNextSave();
 
       cs.loadFromProjectData({
@@ -417,10 +412,19 @@ export function triggerImportChart() {
         if (_trackedMusicUrl) URL.revokeObjectURL(_trackedMusicUrl);
         const musicUrl = URL.createObjectURL(musicBlob);
         _trackedMusicUrl = musicUrl;
+        // F5: publish the blob URL + format BEFORE awaiting the decode so a tab
+        // switch mid-decode still snapshots this tab's audio source (saveSession
+        // treats a tracked URL as loaded-intent). setMusicLoaded(true) still waits
+        // for the decode to actually finish.
+        setAudioBlobUrl(musicUrl, musicExt);
         await audioEngine.load(musicUrl, musicExt);
         useAudioStore.getState().setMusicLoaded(true);
-        // Track the blob URL + format so tab session restore can reuse it
-        setAudioBlobUrl(musicUrl, musicExt);
+      } else {
+        // E3: the imported chart has no audio — unload the previous project's song
+        // so it doesn't keep playing under the new chart (loadFromProjectData
+        // leaves isLoaded true on a swap, so App's close-time unload never fires).
+        if (_trackedMusicUrl) { URL.revokeObjectURL(_trackedMusicUrl); _trackedMusicUrl = null; }
+        clearProjectAudio();
       }
 
       // ── Load illustration ───────────────────────────────────

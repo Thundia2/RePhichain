@@ -29,6 +29,16 @@ class AudioEngine {
   /** URL of the currently loaded audio file (for onset detection) */
   private _currentUrl: string | null = null;
 
+  /**
+   * Monotonic load generation (finding Q1 — the "ghost song" bug). Every load()
+   * call claims a new generation. Any Howl callback (onload/onloaderror) or
+   * alternate-mode retry from an OLDER generation is stale and must NOT mutate
+   * engine state — otherwise a slow-decoding previous song resurrects itself
+   * (sets _loaded/_currentUrl/duration) over the song the user actually loaded.
+   * grep _loadGen.
+   */
+  private _loadGen = 0;
+
   /** For timer-based playback when no audio is loaded */
   private lastFrameTime = 0;
 
@@ -44,40 +54,76 @@ class AudioEngine {
    *                 since they have no file extension for Howler to detect from.
    */
   load(src: string, format?: string): Promise<void> {
+    // Q1: claim a new load generation up front. Any older in-flight load's
+    // callbacks/retry below are now stale and self-cancel via the gen check.
+    const gen = ++this._loadGen;
     // Blob URLs (from zip/pez imports) have the entire file in memory.
     // Use Web Audio API (html5: false) for these — it fully decodes the
     // audio buffer, so duration is always accurate. HTML5 audio elements
     // may report a truncated duration before metadata finishes loading,
     // causing playback to stop prematurely.
     const preferHtml5 = !src.startsWith("blob:");
-    return this._loadWithMode(src, format, preferHtml5).catch(() => {
+    return this._loadWithMode(src, format, preferHtml5, gen).catch((err) => {
+      // Q1: only retry the alternate mode if THIS load is still current. If a
+      // newer load() bumped _loadGen, retrying would reload the stale src over
+      // the song the user just switched to (the "ghost song").
+      if (gen !== this._loadGen) throw err;
       console.warn("[AudioEngine] Audio load failed, retrying with alternate mode…");
-      return this._loadWithMode(src, format, !preferHtml5);
+      return this._loadWithMode(src, format, !preferHtml5, gen);
     });
   }
 
-  /** Internal: attempt to load with the given html5 mode. */
-  private _loadWithMode(src: string, format: string | undefined, html5: boolean): Promise<void> {
+  /** Internal: attempt to load with the given html5 mode. `gen` is the load
+   *  generation claimed by load(); a callback whose gen no longer matches
+   *  this._loadGen has been superseded and must not touch engine state (Q1). */
+  private _loadWithMode(src: string, format: string | undefined, html5: boolean, gen: number): Promise<void> {
     return new Promise((resolve, reject) => {
       this.unload();
+
+      // A newer load() may have superseded us between the ++_loadGen and here
+      // (e.g. unload() side effects). Bail before constructing a Howl at all.
+      if (gen !== this._loadGen) {
+        reject(new Error("Audio load superseded"));
+        return;
+      }
 
       // Read current music volume from settings
       this._volume = useSettingsStore.getState().musicVolume;
 
-      this.howl = new Howl({
+      // Bind the new Howl to a LOCAL ref so the callbacks act on THIS instance,
+      // not whatever this.howl points at after a later supersede.
+      const howl = new Howl({
         src: [src],
         ...(format ? { format: [format] } : {}),
         html5, // true = stream via <audio>; false = full decode via Web Audio API
         preload: true,
         volume: this._volume * this._volume * this._volume,
         onload: () => {
+          // Q1: ignore a stale onload — a newer load() has taken over, so
+          // resurrecting this old song's loaded-state + duration is the bug.
+          if (gen !== this._loadGen) { howl.unload(); return; }
           this._loaded = true;
           this._currentUrl = src; // Set after successful load (not before unload() clears it)
-          const duration = this.howl?.duration() ?? 0;
-          useAudioStore.getState().setDuration(duration);
+          const duration = howl.duration() ?? 0;
+          const store = useAudioStore.getState();
+          store.setDuration(duration);
+          // O1: publish the loaded source so useOnsetDetection re-detects on a song
+          // CHANGE even when musicLoaded never toggled (project swap).
+          store.setMusicUrl(src);
+          // H8: if the user pressed play WHILE this was still decoding, play()
+          // skipped the howl (_loaded was still false) and only ran the timer.
+          // Start the howl now at the timer-advanced position so audio catches up,
+          // instead of the tick snapping back to the howl's 0 position (the freeze).
+          if (store.isPlaying) {
+            const id = howl.play();
+            this._soundId = id;
+            howl.rate(store.playbackRate, id);
+            howl.seek(store.currentTime, id);
+          }
           resolve();
         },
         onloaderror: (_id, err) => {
+          if (gen !== this._loadGen) { howl.unload(); reject(new Error("Audio load superseded")); return; }
           this._loaded = false;
           reject(new Error(`Failed to load audio: ${err}`));
         },
@@ -86,6 +132,7 @@ class AudioEngine {
           this.stopTimeSync();
         },
       });
+      this.howl = howl;
     });
   }
 
@@ -103,6 +150,7 @@ class AudioEngine {
     store.setDuration(0);
     store.setCurrentTime(0);
     store.pause();
+    store.setMusicUrl(null); // O1: no source loaded (cleared before each reload + on real unload)
   }
 
   /** Start or resume playback */
@@ -227,7 +275,16 @@ class AudioEngine {
       }
 
       // ---- Loop region: seek back to loop start when we reach loop end ----
-      if (store.loopEnabled && store.loopStartBeat !== null && store.loopEndBeat !== null) {
+      // H7: require a strictly forward region (start < end). An inverted or
+      // zero-length loop would seek back to a point at/after loopEnd and
+      // re-trigger every frame, freezing playback. Markers are also normalized
+      // to ordered on set (audioStore.setLoopStart/setLoopEnd).
+      if (
+        store.loopEnabled &&
+        store.loopStartBeat !== null &&
+        store.loopEndBeat !== null &&
+        store.loopStartBeat < store.loopEndBeat
+      ) {
         try {
           const cs = useChartStore.getState();
           // Use cached BpmList — avoids O(n) construction 60x/sec in loop mode

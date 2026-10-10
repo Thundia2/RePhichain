@@ -12,7 +12,7 @@ import { useMenus } from "../../hooks/useMenus";
 import type { Menu } from "../../hooks/useMenus";
 import { BUILTIN_PRESETS } from "../../presets/builtinPresets";
 import { applyPresetAtPlayhead } from "../../utils/applyPreset";
-import { useEditorStore } from "../../stores/editorStore";
+import { getSelectedLineIndex } from "../../stores/selection";
 import { useFavoritesStore } from "../../stores/favoritesStore";
 import type { PanelId } from "../../types/editor";
 
@@ -106,11 +106,11 @@ export function CommandPalette({
       section: "Event Presets",
       shortcut: undefined,
       action: () => {
-        const es = useEditorStore.getState();
-        if (es.selectedLineIndex === null) return;
-        applyPresetAtPlayhead(es.selectedLineIndex, preset);
+        const lineIndex = getSelectedLineIndex();
+        if (lineIndex === null) return;
+        applyPresetAtPlayhead(lineIndex, preset);
       },
-      disabled: useEditorStore.getState().selectedLineIndex === null,
+      disabled: getSelectedLineIndex() === null,
     }));
   }, []);
   const favoritesCommands = useMemo((): CommandItem[] => [

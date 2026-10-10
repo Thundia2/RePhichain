@@ -13,12 +13,11 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useAudioStore } from "../../stores/audioStore";
-import { useChartStore } from "../../stores/chartStore";
 import type { AnimationEvent, AnimatedVariable } from "../../types/extra";
 import type { Beat } from "../../types/chart";
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import { SHADER_DEFAULTS } from "../../canvas/shaders";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { safeParseNumber } from "../common/FormFields";
 import { ActionButton, INPUT_STYLE, SELECT_STYLE } from "../common/UIKit";
 import { RPE_EASING_MAP } from "../../utils/rpeImport";
@@ -255,10 +254,11 @@ function MiniKeyframeStrip({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const currentTime = useAudioStore((s) => s.currentTime);
-  const bpmListRaw = useChartStore((s) => s.chart.bpm_list);
 
-  const bpmCalc = useMemo(() => new BpmList(bpmListRaw), [bpmListRaw]);
-  const currentBeat = bpmCalc.beatAtFloat(currentTime);
+  // Playhead beat via the central helper (includes chart.offset). The old inline
+  // form dropped the offset, so the "add at current beat" / playhead landed
+  // `offset` beats off from the animation events (finding T3 / L6).
+  const currentBeat = getPlayheadBeat({ time: currentTime });
 
   // Compute beat range from events
   const { minBeat, maxBeat } = useMemo(() => {
@@ -440,9 +440,22 @@ function KeyframeEditor({
   onChange: (events: AnimationEvent[]) => void;
 }) {
   const currentTime = useAudioStore((s) => s.currentTime);
-  const bpmListRaw = useChartStore((s) => s.chart.bpm_list);
-  const bpmCalc = useMemo(() => new BpmList(bpmListRaw), [bpmListRaw]);
-  const currentBeat = bpmCalc.beatAtFloat(currentTime);
+  // Playhead beat via the central helper (includes chart.offset — was dropped
+  // before, finding T3 / L6).
+  const currentBeat = getPlayheadBeat({ time: currentTime });
+
+  // E5: stable React keys. updateEvent re-sorts on every keystroke; with index keys that
+  // rebinds the focused input to a different event when the edit reorders the list (the
+  // edit then lands on the wrong keyframe). Give each event object a persistent id via a
+  // WeakMap and carry it onto the edited event's new object so React follows the row
+  // through the sort. The data stays sorted (export-safe) — only the React keys are stable.
+  const keyMap = useRef(new WeakMap<AnimationEvent, string>());
+  const keySeq = useRef(0);
+  const keyFor = (ev: AnimationEvent): string => {
+    let k = keyMap.current.get(ev);
+    if (!k) { k = `kf${keySeq.current++}`; keyMap.current.set(ev, k); }
+    return k;
+  };
 
   const addAtCurrentBeat = useCallback(() => {
     // Find what value to use at the current beat
@@ -486,9 +499,13 @@ function KeyframeEditor({
 
   const updateEvent = useCallback(
     (index: number, changes: Partial<AnimationEvent>) => {
-      const updated = events.map((ev, i) =>
-        i === index ? { ...ev, ...changes } : ev,
-      );
+      const updated = events.map((ev, i) => {
+        if (i !== index) return ev;
+        const next = { ...ev, ...changes };
+        const id = keyMap.current.get(ev); // E5: carry the stable id onto the new object
+        if (id) keyMap.current.set(next, id);
+        return next;
+      });
       onChange(updated.sort(
         (a, b) => beatToFloat(a.startTime) - beatToFloat(b.startTime),
       ));
@@ -516,7 +533,7 @@ function KeyframeEditor({
       {/* Event list */}
       {events.map((ev, i) => (
         <KeyframeEventRow
-          key={i}
+          key={keyFor(ev)}
           event={ev}
           index={i}
           onUpdate={(changes) => updateEvent(i, changes)}

@@ -1,6 +1,6 @@
 import { useChartStore } from "../../stores/chartStore";
 import { Card, CardRow, SectionHeader, INPUT_STYLE, SELECT_STYLE } from "../common/UIKit";
-import { safeParseNumber } from "../common/FormFields";
+import { NumericInput } from "../common/FormFields";
 
 export function ChartSettings() {
   const offset = useChartStore((s) => s.chart.offset);
@@ -15,12 +15,12 @@ export function ChartSettings() {
       {/* Offset */}
       <Card>
         <CardRow label="Offset" description="Audio offset in seconds" last>
-          <input
+          <NumericInput
             style={{ ...INPUT_STYLE, width: 100 }}
-            type="number"
+            commitMode="blur"
             step="0.001"
             value={offset}
-            onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setOffset(n); }}
+            onChange={setOffset}
           />
         </CardRow>
       </Card>
@@ -76,55 +76,65 @@ export function ChartSettings() {
       {/* Phira Extended Fields */}
       <Card>
         <CardRow label="Preview start">
-          <input
+          <NumericInput
             style={{ ...INPUT_STYLE, width: 100 }}
-            type="number"
+            commitMode="blur"
+            optional
             step="0.1"
             placeholder="0"
-            value={meta.preview_start ?? ""}
-            onChange={(e) => setMeta({ preview_start: e.target.value ? parseFloat(e.target.value) : undefined })}
+            value={meta.preview_start}
+            onChange={(v) => setMeta({ preview_start: v })}
+            onEmpty={() => setMeta({ preview_start: undefined })}
           />
         </CardRow>
         <CardRow label="Preview end">
-          <input
+          <NumericInput
             style={{ ...INPUT_STYLE, width: 100 }}
-            type="number"
+            commitMode="blur"
+            optional
             step="0.1"
             placeholder="auto (+15s)"
-            value={meta.preview_end ?? ""}
-            onChange={(e) => setMeta({ preview_end: e.target.value ? parseFloat(e.target.value) : undefined })}
+            value={meta.preview_end}
+            onChange={(v) => setMeta({ preview_end: v })}
+            onEmpty={() => setMeta({ preview_end: undefined })}
           />
         </CardRow>
         <CardRow label="Aspect ratio">
-          <input
+          <NumericInput
             style={{ ...INPUT_STYLE, width: 100 }}
-            type="number"
+            commitMode="blur"
+            optional
             step="0.01"
             placeholder="1.778 (16:9)"
-            value={meta.aspect_ratio ?? ""}
-            onChange={(e) => setMeta({ aspect_ratio: e.target.value ? parseFloat(e.target.value) : undefined })}
+            value={meta.aspect_ratio}
+            onChange={(v) => setMeta({ aspect_ratio: v })}
+            onEmpty={() => setMeta({ aspect_ratio: undefined })}
           />
         </CardRow>
         <CardRow label="BG dim">
-          <input
+          <NumericInput
             style={{ ...INPUT_STYLE, width: 100 }}
-            type="number"
+            commitMode="blur"
+            optional
             step="0.05"
-            min="0"
-            max="1"
+            min={0}
+            max={1}
             placeholder="0.6"
-            value={meta.background_dim ?? ""}
-            onChange={(e) => setMeta({ background_dim: e.target.value ? parseFloat(e.target.value) : undefined })}
+            value={meta.background_dim}
+            onChange={(v) => setMeta({ background_dim: v })}
+            onEmpty={() => setMeta({ background_dim: undefined })}
           />
         </CardRow>
         <CardRow label="Line length">
-          <input
+          <NumericInput
             style={{ ...INPUT_STYLE, width: 100 }}
-            type="number"
+            commitMode="blur"
+            optional
             step="0.5"
             placeholder="6.0"
-            value={meta.line_length ?? ""}
-            onChange={(e) => setMeta({ line_length: e.target.value ? parseFloat(e.target.value) : undefined })}
+            value={meta.line_length}
+            onChange={(v) => setMeta({ line_length: v })}
+            onEmpty={() => setMeta({ line_length: undefined })}
           />
         </CardRow>
         <CardRow label="Tip">

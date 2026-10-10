@@ -6,9 +6,8 @@ import type { EventPreset } from "../types/preset";
 import type { LineEvent, LineEventKind } from "../types/chart";
 import { floatToBeat } from "../types/chart";
 import { useChartStore } from "../stores/chartStore";
-import { useAudioStore } from "../stores/audioStore";
 import { evaluateLineEventsWithLayers } from "../canvas/events";
-import { BpmList } from "./bpmList";
+import { getPlayheadBeat } from "./playhead";
 
 function resolveToken(
   token: string | number,
@@ -38,9 +37,7 @@ export function applyPresetAtPlayhead(
   const line = cs.chart.lines[lineIndex];
   if (!line) return;
 
-  const { currentTime } = useAudioStore.getState();
-  const bpmList = new BpmList(cs.chart.bpm_list);
-  const insertBeat = bpmList.beatAtFloat(Math.max(0, currentTime - cs.chart.offset));
+  const insertBeat = getPlayheadBeat({ clampNonNegative: true });
 
   const state = evaluateLineEventsWithLayers(line.events, line.event_layers, insertBeat);
 
@@ -101,6 +98,16 @@ export function applyPresetAtPlayhead(
   }
 
   if (newEvents.length > 0) {
-    cs.batchMultiLineMutations([{ lineIndex, newEvents }]);
+    // Route each event flat<->layer (finding L3) so presets applied to a
+    // layered (RPE-imported) line land in the active layer the evaluator reads,
+    // not flat where they'd be invisible + dropped on export. One transaction
+    // (finding L1) keeps the whole preset a single undo entry, matching the old
+    // batchMultiLineMutations behavior. addEventRouted with no layer = auto
+    // (layer 0 on a layered line); extended kinds always route to flat.
+    cs.transaction(() => {
+      for (const ev of newEvents) {
+        cs.addEventRouted(lineIndex, ev);
+      }
+    });
   }
 }

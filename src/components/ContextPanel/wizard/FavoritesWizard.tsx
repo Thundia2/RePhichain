@@ -38,12 +38,19 @@ export function FavoritesWizard() {
     setStep(0);
   };
 
+  // I8: reset to the first step on close. The component stays mounted (it returns null
+  // when hidden), so without this a reopen would resume on whatever step was last viewed.
+  const handleClose = () => {
+    setStep(0);
+    closeWizard();
+  };
+
   return (
     <div
       className="fixed inset-0 z-[120] flex items-center justify-center"
       style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) closeWizard();
+        if (e.target === e.currentTarget) handleClose();
       }}
     >
       <div
@@ -84,7 +91,7 @@ export function FavoritesWizard() {
               </div>
             </div>
             <button
-              onClick={closeWizard}
+              onClick={handleClose}
               style={{
                 background: "none",
                 border: "none",

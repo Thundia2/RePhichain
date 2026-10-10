@@ -9,7 +9,12 @@
 import { useState, useCallback } from "react";
 import { useContextPanelStore } from "../../stores/contextPanelStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { useEditorStore } from "../../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  getSelectedEventIndices,
+  getMultiSelectedLineIndices,
+} from "../../stores/selection";
 
 // ---- Tool definitions ----
 
@@ -185,13 +190,12 @@ export function MiscToolsTab(props: MiscToolsTabProps) {
           <button
             onClick={() => {
               if (!aiEnabled) return;
-              // Determine current mode from store state
-              const es = useEditorStore.getState();
+              // Determine current mode from store state (resolved to indices via selection.ts)
               let mode: string;
-              if (es.multiSelectedLineIndices.length > 1) mode = "multi";
-              else if (es.selectedEventIndices.length > 0) mode = "event";
-              else if (es.selectedNoteIndices.length > 0) mode = "note";
-              else if (es.selectedLineIndex !== null) mode = "line";
+              if (getMultiSelectedLineIndices().length > 1) mode = "multi";
+              else if (getSelectedEventIndices().length > 0) mode = "event";
+              else if (getSelectedNoteIndices().length > 0) mode = "note";
+              else if (getSelectedLineIndex() !== null) mode = "line";
               else mode = "global";
               setActiveTab(mode, "ai");
             }}

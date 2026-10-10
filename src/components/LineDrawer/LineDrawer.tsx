@@ -11,6 +11,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
+import { useSelectedLineIndex, selectLineByIndex } from "../../stores/selection";
 
 // ---- Context menu state ----
 interface ContextMenu {
@@ -35,8 +36,7 @@ function getDepth(lines: { father_index?: number }[], index: number): number {
 
 export function LineDrawer() {
   const lines = useChartStore((s) => s.chart.lines);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectLine = useEditorStore((s) => s.selectLine);
+  const selectedLineIndex = useSelectedLineIndex();
   const drawerOpen = useEditorStore((s) => s.lineDrawerOpen);
   const toggleVisibility = useEditorStore((s) => s.toggleLineVisibility);
   const toggleLocked = useEditorStore((s) => s.toggleLineLocked);
@@ -171,7 +171,7 @@ export function LineDrawer() {
           return (
             <div
               key={i}
-              onClick={() => selectLine(i)}
+              onClick={() => selectLineByIndex(i)}
               onContextMenu={(e) => handleContextMenu(e, i)}
               onDoubleClick={(e) => handleDoubleClick(e, i)}
               style={{

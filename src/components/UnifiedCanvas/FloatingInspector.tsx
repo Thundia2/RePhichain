@@ -10,6 +10,11 @@
 
 import { useEffect, useRef } from "react";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  useSelectedLineIndex,
+  useSelectedNoteIndices,
+  useSelectedEventIndices,
+} from "../../stores/selection";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { Field, SelectField, safeParseNumber } from "../common/FormFields";
@@ -25,9 +30,9 @@ const NOTE_KIND_OPTIONS = [
 export function FloatingInspector() {
   const inspector = useEditorStore((s) => s.floatingInspector);
   const hide = useEditorStore((s) => s.hideFloatingInspector);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectedNoteIndices = useEditorStore((s) => s.selectedNoteIndices);
-  const selectedEventIndices = useEditorStore((s) => s.selectedEventIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const selectedNoteIndices = useSelectedNoteIndices();
+  const selectedEventIndices = useSelectedEventIndices();
   const editNote = useChartStore((s) => s.editNote);
   const editNotes = useChartStore((s) => s.editNotes);
   const editEvent = useChartStore((s) => s.editEvent);

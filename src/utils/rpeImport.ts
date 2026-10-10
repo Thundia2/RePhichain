@@ -478,8 +478,6 @@ export function convertRpeToPhichain(rpeJson: string): PhichainChart {
 
     // Also build flat events array for backward compat and single-layer charts
     const events: LineEvent[] = [];
-    const defaultBeat: Beat = [0, 0, 1];
-    const farBeat: Beat = [1000, 0, 1];
 
     // Flatten all layers into flat events (for existing code that reads line.events)
     for (const layer of rawLayers) {
@@ -544,19 +542,10 @@ export function convertRpeToPhichain(rpeJson: string): PhichainChart {
       }
     }
 
-    // If no events for a core kind, add a default
-    const coreKinds: LineEventKind[] = ["x", "y", "rotation", "opacity", "speed"];
-    for (const kind of coreKinds) {
-      if (!events.some((e) => e.kind === kind)) {
-        const defaultVal = kind === "opacity" ? 255 : kind === "speed" ? 1 : 0;
-        events.push({
-          kind,
-          start_beat: defaultBeat,
-          end_beat: farBeat,
-          value: { constant: defaultVal },
-        });
-      }
-    }
+    // No baseline fill (finding L4): a core kind with no events anywhere now
+    // falls back to DEFAULT_LINE_STATE in the evaluator. Real RPE charts carry
+    // all five core kinds in layer 0 anyway, so this loop only ever fired for
+    // degenerate lines — and a [0,1000] sentinel there did more harm than good.
 
     const line: Line = {
       name: rLine.Name ?? "Unnamed",

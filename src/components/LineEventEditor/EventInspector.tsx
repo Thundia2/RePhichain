@@ -9,10 +9,12 @@
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { evaluateLineEventsWithLayers } from "../../canvas/events";
+import { resolveActiveKindEvents } from "../../utils/eventRouting";
 import { Field, SelectField, BeatField, EASING_OPTIONS } from "../common/FormFields";
 import { beatToFloat, floatToBeat } from "../../types/chart";
-import type { LineEvent, LineEventKind, Beat, EasingType } from "../../types/chart";
+import type { LineEvent, LineEventKind, EasingType } from "../../types/chart";
 import { EVENT_COLORS } from "../../constants/eventColors";
+import { defaultEventValue, defaultEventTransition } from "../../constants/eventConfig";
 
 const KIND_LABELS: Record<LineEventKind, string> = {
   x: "X Position",
@@ -33,28 +35,26 @@ interface EventInspectorProps {
 }
 
 /**
- * Find the event of a given kind that is active at the given beat.
+ * Find the active event at the given beat within an already kind-filtered array
+ * (the caller passes resolveActiveKindEvents, so flat-vs-layer is handled —
+ * finding L3). Returns the event itself; edits go through editEventById, so no
+ * array index is needed.
  */
-function findActiveEvent(
-  events: LineEvent[],
-  kind: LineEventKind,
-  beat: number,
-): { event: LineEvent; index: number } | null {
-  for (let i = 0; i < events.length; i++) {
-    const e = events[i];
-    if (e.kind !== kind) continue;
+function findActiveEvent(events: LineEvent[], beat: number): LineEvent | null {
+  for (const e of events) {
     const start = beatToFloat(e.start_beat);
     const end = beatToFloat(e.end_beat);
-    if (beat >= start && beat <= end) return { event: e, index: i };
+    if (beat >= start && beat <= end) return e;
   }
   return null;
 }
 
 export function EventInspector({ lineIndex }: EventInspectorProps) {
   const chart = useChartStore((s) => s.chart);
-  const addEvent = useChartStore((s) => s.addEvent);
+  const addEventRouted = useChartStore((s) => s.addEventRouted);
   const currentBeat = useEditorStore((s) => s.eventEditorCurrentBeat);
   const activeProperty = useEditorStore((s) => s.eventEditorActiveProperty);
+  const activeLayer = useEditorStore((s) => s.eventEditorActiveLayer);
 
   const line = chart.lines[lineIndex];
   if (!line) {
@@ -68,8 +68,12 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
   // Evaluate all properties at current beat
   const state = evaluateLineEventsWithLayers(line.events, line.event_layers, currentBeat);
 
-  // Find the active event for the selected property
-  const activeEventInfo = findActiveEvent(line.events, activeProperty, currentBeat);
+  // Find the active event for the selected property — in the array the evaluator
+  // reads (active layer on a layered chart, else flat). finding L3.
+  const activeEvent = findActiveEvent(
+    resolveActiveKindEvents(line, activeProperty, activeLayer),
+    currentBeat,
+  );
 
   const rotDeg = (state.rotation * 180) / Math.PI;
   const opacityVal = Math.round(state.opacity * 255);
@@ -119,10 +123,10 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
           {KIND_LABELS[activeProperty]}
         </div>
 
-        {activeEventInfo ? (
+        {activeEvent && activeEvent.id ? (
           <ActiveEventEditor
-            event={activeEventInfo.event}
-            eventIndex={activeEventInfo.index}
+            event={activeEvent}
+            eventId={activeEvent.id}
             lineIndex={lineIndex}
           />
         ) : (
@@ -143,14 +147,16 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
           }}
           onClick={() => {
             const snappedBeat = floatToBeat(currentBeat);
-            const farBeat: Beat = [1000, 0, 1];
-            const defaultValue = activeProperty === "opacity" ? 255 : activeProperty === "speed" ? 1 : 0;
-            addEvent(lineIndex, {
+            // Short span, not [1000]: a constant holds via inheritance, so the far-end
+            // baseline is unnecessary and would shadow later events under the value-
+            // tiebreak (finding L4). M6: defaultEventValue produces a valid shape for
+            // color/text too, not a bare { constant: 0 }.
+            addEventRouted(lineIndex, {
               kind: activeProperty,
               start_beat: snappedBeat,
-              end_beat: farBeat,
-              value: { constant: defaultValue },
-            });
+              end_beat: floatToBeat(currentBeat + 1),
+              value: defaultEventValue(activeProperty),
+            }, activeLayer);
           }}
         >
           + Add Constant
@@ -165,15 +171,14 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
           onClick={() => {
             const startBeat = floatToBeat(currentBeat);
             const endBeat = floatToBeat(currentBeat + 4); // 4 beats long
-            const defaultValue = activeProperty === "opacity" ? 255 : activeProperty === "speed" ? 1 : 0;
-            addEvent(lineIndex, {
+            // M6: defaultEventTransition gives a valid color_transition/text_transition
+            // shape for those kinds, not a numeric { transition } with a 0 value.
+            addEventRouted(lineIndex, {
               kind: activeProperty,
               start_beat: startBeat,
               end_beat: endBeat,
-              value: {
-                transition: { start: defaultValue, end: defaultValue, easing: "linear" },
-              },
-            });
+              value: defaultEventTransition(activeProperty),
+            }, activeLayer);
           }}
         >
           + Add Transition
@@ -186,14 +191,16 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
 /** Editor for the currently active event */
 function ActiveEventEditor({
   event,
-  eventIndex,
+  eventId,
   lineIndex,
 }: {
   event: LineEvent;
-  eventIndex: number;
+  eventId: string;
   lineIndex: number;
 }) {
-  const editEvent = useChartStore((s) => s.editEvent);
+  // Edit by stable id (finding L3) so the inspector works whether the active
+  // event lives in flat line.events or an event layer's kind-array.
+  const editEventById = useChartStore((s) => s.editEventById);
   const isTransition = "transition" in event.value;
   const tv = isTransition ? (event.value as { transition: { start: number; end: number; easing: EasingType } }).transition : null;
   const cv = !isTransition ? (event.value as { constant: number }).constant : null;
@@ -205,12 +212,12 @@ function ActiveEventEditor({
       <BeatField
         label="Start"
         beat={event.start_beat}
-        onChange={(b) => editEvent(lineIndex, eventIndex, { start_beat: b })}
+        onChange={(b) => editEventById(lineIndex, eventId, { start_beat: b })}
       />
       <BeatField
         label="End"
         beat={event.end_beat}
-        onChange={(b) => editEvent(lineIndex, eventIndex, { end_beat: b })}
+        onChange={(b) => editEventById(lineIndex, eventId, { end_beat: b })}
       />
       <SelectField
         label="Type"
@@ -221,9 +228,9 @@ function ActiveEventEditor({
         ]}
         onChange={(v) => {
           if (v === "constant") {
-            editEvent(lineIndex, eventIndex, { value: { constant: startVal } });
+            editEventById(lineIndex, eventId, { value: { constant: startVal } });
           } else {
-            editEvent(lineIndex, eventIndex, {
+            editEventById(lineIndex, eventId, {
               value: { transition: { start: startVal, end: endVal, easing: "linear" } },
             });
           }
@@ -235,7 +242,7 @@ function ActiveEventEditor({
             label="Start val"
             value={startVal}
             onChange={(v) =>
-              editEvent(lineIndex, eventIndex, {
+              editEventById(lineIndex, eventId, {
                 value: {
                   transition: {
                     start: parseFloat(v),
@@ -251,7 +258,7 @@ function ActiveEventEditor({
             label="End val"
             value={endVal}
             onChange={(v) =>
-              editEvent(lineIndex, eventIndex, {
+              editEventById(lineIndex, eventId, {
                 value: {
                   transition: {
                     start: tv.start,
@@ -268,7 +275,7 @@ function ActiveEventEditor({
             value={typeof tv.easing === "string" ? tv.easing : "linear"}
             options={EASING_OPTIONS}
             onChange={(v) =>
-              editEvent(lineIndex, eventIndex, {
+              editEventById(lineIndex, eventId, {
                 value: {
                   transition: {
                     start: tv.start,
@@ -285,7 +292,7 @@ function ActiveEventEditor({
           label="Value"
           value={startVal}
           onChange={(v) =>
-            editEvent(lineIndex, eventIndex, { value: { constant: parseFloat(v) } })
+            editEventById(lineIndex, eventId, { value: { constant: parseFloat(v) } })
           }
           step="0.1"
         />

@@ -10,16 +10,14 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import type { Line, LineEvent, Beat } from "../../types/chart";
 
-function defaultEventsWithOpacity(opacity: number): LineEvent[] {
+// A baseline-free line defaults to VISIBLE (DEFAULT_LINE_STATE.opacity=1), so a
+// template that wants an INVISIBLE line (text/lyrics, visual helper) needs one
+// explicit opacity-0 event. It holds via inheritance (finding L4); x/y/rotation/
+// speed fall back to their defaults — no [0,1000] baseline span required.
+function invisibleLineEvents(): LineEvent[] {
   const start: Beat = [0, 0, 1];
-  const end: Beat = [1000, 0, 1];
-  return [
-    { kind: "x", start_beat: start, end_beat: end, value: { constant: 0 } },
-    { kind: "y", start_beat: start, end_beat: end, value: { constant: 0 } },
-    { kind: "rotation", start_beat: start, end_beat: end, value: { constant: 0 } },
-    { kind: "opacity", start_beat: start, end_beat: end, value: { constant: opacity } },
-    { kind: "speed", start_beat: start, end_beat: end, value: { constant: 1 } },
-  ];
+  const end: Beat = [1, 0, 1];
+  return [{ kind: "opacity", start_beat: start, end_beat: end, value: { constant: 0 } }];
 }
 
 interface LineTemplate {
@@ -43,7 +41,7 @@ const LINE_TEMPLATES: LineTemplate[] = [
     description: "Invisible line for text events",
     create: () => ({
       _category: "text", name: "Lyrics",
-      events: defaultEventsWithOpacity(0),
+      events: invisibleLineEvents(),
     }),
   },
   {
@@ -85,7 +83,7 @@ const LINE_TEMPLATES: LineTemplate[] = [
     description: "Invisible line for visual effects",
     create: () => ({
       _category: "helper", name: "Helper",
-      events: defaultEventsWithOpacity(0),
+      events: invisibleLineEvents(),
     }),
   },
   {

@@ -16,10 +16,14 @@
 import { useRef, useEffect, useMemo } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
-import { useEditorStore } from "../../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+} from "../../stores/selection";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { GameRenderer } from "../../canvas/gameRenderer";
 import { BpmList } from "../../utils/bpmList";
+import { playbackOffsetSeconds } from "../../utils/playhead";
 
 // ============================================================
 // Configurable dimensions for the mini preview
@@ -57,7 +61,6 @@ export function MiniGamePreview() {
       if (!renderer) { rafRef.current = requestAnimationFrame(animate); return; }
 
       const cs = useChartStore.getState();
-      const es = useEditorStore.getState();
       const as_ = useAudioStore.getState();
       const ss = useSettingsStore.getState();
 
@@ -70,7 +73,7 @@ export function MiniGamePreview() {
       const currentTime = as_.currentTime;
 
       // Audio latency compensation for game preview visuals
-      const effectiveOffset = cs.chart.offset + ss.audioLatencyMs / 1000;
+      const effectiveOffset = playbackOffsetSeconds(true);
 
       renderer.render(
         cs.chart.lines,
@@ -83,8 +86,8 @@ export function MiniGamePreview() {
           noteSize: ss.noteSize,
           backgroundDim: ss.backgroundDim,
           illustrationImage: cs.illustrationImage,
-          selectedLineIndex: es.selectedLineIndex,
-          selectedNoteIndices: es.selectedNoteIndices,
+          selectedLineIndex: getSelectedLineIndex(),
+          selectedNoteIndices: getSelectedNoteIndices(),
           showFcApIndicator: false,
           isFcValid: false,
           multiHighlight: false,

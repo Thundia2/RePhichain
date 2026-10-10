@@ -306,6 +306,31 @@ export class PixiLineContainer extends Container {
       const noteBeatF = beatToFloat(note.beat);
       const noteTime = bpmTimeAt(note.beat);
 
+      // C1: spawn the hit effect + sound BEFORE the head-beat cull below
+      // (mirrors gameRenderer.ts — grep "C1:" there). trySpawnEffect dedupes via
+      // processedKeys and self-skips until noteBeat <= currentBeat, so calling it
+      // every frame is idempotent. The old call sites sat AFTER the cull (inside
+      // the per-note draw branches) and were unreachable: a note is culled the
+      // first frame it passes the line, so effects/sounds never fired. The anchor
+      // is note.x along the line (no distanceAt), so culled notes still skip the
+      // expensive distance math via the cull just below. Fake notes have no
+      // effect/sound; y_offset shifts the anchor along the line normal.
+      if (!note.fake && isPlaying && showHitEffects && (pixiHitEffectLayer || hitEffectManager)) {
+        const heCos = Math.cos(-worldRotation);
+        const heSin = Math.sin(-worldRotation);
+        const hitNoteX = (note.x / CANVAS_WIDTH) * canvasWidth;
+        const noteYOff = (note.y_offset ?? 0) * 2 / CANVAS_HEIGHT * note.speed * distanceScale;
+        const localHitY = (note.above ? -1 : 1) * noteYOff;
+        const hitX = screenX + hitNoteX * heCos - localHitY * heSin;
+        const hitY = screenY + hitNoteX * heSin + localHitY * heCos;
+        const spawner = pixiHitEffectLayer || hitEffectManager!;
+        spawner.trySpawnEffect(
+          `${this.lineIndex}-${noteIdx}`, noteBeatF, currentBeat,
+          hitX, hitY, currentTime,
+          note.kind, state.color,
+        );
+      }
+
       const holdBeatF = note.hold_beat ? beatToFloat(note.hold_beat) : 0;
       if (noteBeatF + holdBeatF < currentBeat) continue;
 
@@ -394,23 +419,7 @@ export class PixiLineContainer extends Container {
           above: note.above,
           beat: noteBeatF,
         });
-
-        // Hit effect spawning for hold notes
-        if (!note.fake && isPlaying && showHitEffects && (pixiHitEffectLayer || hitEffectManager)) {
-          const heCos = Math.cos(-worldRotation);
-          const heSin = Math.sin(-worldRotation);
-          const noteYOff = (note.y_offset ?? 0) * 2 / CANVAS_HEIGHT * note.speed * distanceScale;
-          const localHitY = (note.above ? -1 : 1) * noteYOff;
-          const hitX = screenX + noteX * heCos - localHitY * heSin;
-          const hitY = screenY + noteX * heSin + localHitY * heCos;
-          // Prefer Pixi-native hit effects, fall back to Canvas 2D manager
-          const spawner = pixiHitEffectLayer || hitEffectManager!;
-          spawner.trySpawnEffect(
-            `${this.lineIndex}-${noteIdx}`, noteBeatF, currentBeat,
-            hitX, hitY, currentTime,
-            note.kind, state.color,
-          );
-        }
+        // C1: hit-effect spawn moved to the top of the loop (before the cull).
       } else {
         // Regular note (tap, drag, flick)
         if (rawY < 0 && line.is_cover !== false) continue;
@@ -450,23 +459,7 @@ export class PixiLineContainer extends Container {
           above: note.above,
           beat: noteBeatF,
         });
-
-        // Hit effect spawning (same logic as gameRenderer.ts)
-        if (!note.fake && isPlaying && showHitEffects && (pixiHitEffectLayer || hitEffectManager)) {
-          const heCos = Math.cos(-worldRotation);
-          const heSin = Math.sin(-worldRotation);
-          const noteYOff = (note.y_offset ?? 0) * 2 / CANVAS_HEIGHT * note.speed * distanceScale;
-          const localHitY = (note.above ? -1 : 1) * noteYOff;
-          const hitX = screenX + noteX * heCos - localHitY * heSin;
-          const hitY = screenY + noteX * heSin + localHitY * heCos;
-          // Prefer Pixi-native hit effects, fall back to Canvas 2D manager
-          const spawner = pixiHitEffectLayer || hitEffectManager!;
-          spawner.trySpawnEffect(
-            `${this.lineIndex}-${noteIdx}`, noteBeatF, currentBeat,
-            hitX, hitY, currentTime,
-            note.kind, state.color,
-          );
-        }
+        // C1: hit-effect spawn moved to the top of the loop (before the cull).
       }
     }
   }
@@ -569,11 +562,19 @@ export class PixiLineContainer extends Container {
       this.lineVisual.visible = false;
       this.lineTextureSprite.visible = false;
       this.textDisplay.visible = false;
-      this.alpha = 0;
+      // X2: do NOT touch this.alpha — that fades the child notesContainer too. The
+      // notes were already drawn above (the alpha-0 "invisible line" technique relies
+      // on state.opacity >= 0 still rendering notes); only the line visuals hide here.
       return;
     }
 
-    this.alpha = state.opacity;
+    // X2: opacity applies to the line visual + text ONLY, never the container — notes
+    // carry their own per-note alpha (matches gameRenderer.ts, which resets globalAlpha
+    // before drawing notes). Container stays opaque so notes + anchor/select overlays
+    // are unaffected by line fades.
+    this.lineVisual.alpha = state.opacity;
+    this.lineTextureSprite.alpha = state.opacity;
+    this.textDisplay.alpha = state.opacity;
 
     // Check if line has text events (hides the line rect per RPE spec)
     const lineHasTextEvents = line.events.some((e) => e.kind === "text");

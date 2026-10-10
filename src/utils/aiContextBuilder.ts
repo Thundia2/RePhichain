@@ -14,7 +14,7 @@
 // ============================================================
 
 import { useChartStore, getCachedBpmList } from "../stores/chartStore";
-import { useEditorStore } from "../stores/editorStore";
+import { getSelectedLineIndex, getSelectedNoteIndices, getSelectedEventIndices } from "../stores/selection";
 import { useAudioStore } from "../stores/audioStore";
 import { beatToFloat } from "../types/chart";
 import type { LineEvent, LineEventValue, Note, EventLayer, EasingType } from "../types/chart";
@@ -35,6 +35,10 @@ const LOOKAHEAD_BEATS = 8;
 const MAX_EVENT_DETAILS_PER_KIND = 6;
 /** Max selected notes/events to show individually */
 const MAX_SELECTED_DETAIL = 8;
+/** A6: max per-note lines in the context-window dump. The events dump is capped
+ *  (MAX_EVENT_DETAILS_PER_KIND) but the note dump used to be unbounded — a dense
+ *  line could emit hundreds of lines and blow the model's context. */
+const MAX_WINDOW_NOTES = 30;
 
 // ---- BPM-scaled context window ----
 
@@ -185,25 +189,18 @@ function extractBeatsFromPrompt(prompt: string, contextWindowBeats: number): { c
 
 // ---- Event value formatting helpers ----
 
-/** Default baseline values for numeric event kinds */
-const DEFAULT_VALUES: Record<string, number> = { x: 0, y: 0, rotation: 0, opacity: 255, speed: 1 };
-
 /**
  * Format a single event into a readable string showing its actual values.
- * E.g., "0→300 ease_out_cubic (0.0-8.0)" or "constant 255 (0.0-999.0)"
+ * E.g., "0→300 ease_out_cubic (0.0-8.0)" or "constant 255 (0.0-2.0)"
  */
-function formatEventDetail(evt: LineEvent, kind: string): string {
+function formatEventDetail(evt: LineEvent): string {
   const sb = beatToFloat(evt.start_beat).toFixed(1);
   const eb = beatToFloat(evt.end_beat).toFixed(1);
 
   if ("constant" in evt.value) {
+    // No baseline special-casing anymore (finding L4): baselines aren't created,
+    // so every constant is real chart content described by its span.
     const val = (evt.value as { constant: number }).constant;
-    // Check if this is a default baseline constant
-    const spanStart = beatToFloat(evt.start_beat);
-    const spanEnd = beatToFloat(evt.end_beat);
-    if (kind in DEFAULT_VALUES && val === DEFAULT_VALUES[kind] && spanStart <= 0 && spanEnd >= 999) {
-      return `constant ${val} (default, safe to override)`;
-    }
     return `constant ${val} (${sb}-${eb})`;
   }
   if ("transition" in evt.value) {
@@ -268,7 +265,9 @@ function formatLinePositionCompact(state: LineState): string {
  */
 export function buildAiContext(userMessage?: string): string {
   const cs = useChartStore.getState();
-  const es = useEditorStore.getState();
+  const selectedLineIndex = getSelectedLineIndex();
+  const selectedNoteIndices = getSelectedNoteIndices();
+  const selectedEventIndices = getSelectedEventIndices();
   const chart = cs.chart;
   const bpmList = getCachedBpmList();
   const audioDuration = useAudioStore.getState().duration;
@@ -305,7 +304,7 @@ export function buildAiContext(userMessage?: string): string {
     const activity = classifyLineActivity(line.events, line.event_layers, contextCenter, line.notes, bpmList);
     lineActivities.push(activity);
     // Cache computed state for active and coming-soon lines (and selected)
-    if (activity !== "inactive" || i === es.selectedLineIndex) {
+    if (activity !== "inactive" || i === selectedLineIndex) {
       lineStateCache.set(i, evaluateLineEventsWithLayers(line.events, line.event_layers, contextCenter));
     }
   }
@@ -346,17 +345,17 @@ export function buildAiContext(userMessage?: string): string {
   }
 
   // ---- Selected line ----
-  if (es.selectedLineIndex !== null && es.selectedLineIndex < chart.lines.length) {
-    sections.push(`Selected line index: ${es.selectedLineIndex}`);
-    sections.push(`Selected line name: "${chart.lines[es.selectedLineIndex].name}"`);
+  if (selectedLineIndex !== null && selectedLineIndex < chart.lines.length) {
+    sections.push(`Selected line index: ${selectedLineIndex}`);
+    sections.push(`Selected line name: "${chart.lines[selectedLineIndex].name}"`);
   } else {
     sections.push(`No line selected.`);
   }
 
   // ---- Selected note details (B4) ----
-  if (es.selectedNoteIndices.length > 0 && es.selectedLineIndex !== null && es.selectedLineIndex < chart.lines.length) {
-    const line = chart.lines[es.selectedLineIndex];
-    const selectedNotes = es.selectedNoteIndices
+  if (selectedNoteIndices.length > 0 && selectedLineIndex !== null && selectedLineIndex < chart.lines.length) {
+    const line = chart.lines[selectedLineIndex];
+    const selectedNotes = selectedNoteIndices
       .filter(i => i < line.notes.length)
       .map(i => line.notes[i]);
     if (selectedNotes.length <= MAX_SELECTED_DETAIL) {
@@ -374,20 +373,20 @@ export function buildAiContext(userMessage?: string): string {
   }
 
   // ---- Selected event details (B4) ----
-  if (es.selectedEventIndices.length > 0 && es.selectedLineIndex !== null && es.selectedLineIndex < chart.lines.length) {
-    const line = chart.lines[es.selectedLineIndex];
-    const selectedEvents = es.selectedEventIndices
+  if (selectedEventIndices.length > 0 && selectedLineIndex !== null && selectedLineIndex < chart.lines.length) {
+    const line = chart.lines[selectedLineIndex];
+    const selectedEvents = selectedEventIndices
       .filter(i => i < line.events.length)
       .map(i => line.events[i]);
     if (selectedEvents.length <= MAX_SELECTED_DETAIL) {
       sections.push(`Selected events (${selectedEvents.length}):`);
       for (const e of selectedEvents) {
-        sections.push(`  ${e.kind}: ${formatEventDetail(e, e.kind)}`);
+        sections.push(`  ${e.kind}: ${formatEventDetail(e)}`);
       }
     } else {
       sections.push(`Selected events: ${selectedEvents.length} event(s)`);
       for (const e of selectedEvents.slice(0, 5)) {
-        sections.push(`  ${e.kind}: ${formatEventDetail(e, e.kind)}`);
+        sections.push(`  ${e.kind}: ${formatEventDetail(e)}`);
       }
       sections.push(`  ... +${selectedEvents.length - 5} more`);
     }
@@ -402,7 +401,7 @@ export function buildAiContext(userMessage?: string): string {
   for (let i = 0; i < chart.lines.length; i++) {
     const line = chart.lines[i];
     const activity = lineActivities[i];
-    const isSelected = i === es.selectedLineIndex;
+    const isSelected = i === selectedLineIndex;
 
     // Show: active lines, coming-soon lines, and the selected line
     // Skip: inactive unselected lines (summarized at end)
@@ -471,14 +470,14 @@ export function buildAiContext(userMessage?: string): string {
   }
 
   // ---- Selected line detail (filtered to context window) ----
-  if (es.selectedLineIndex !== null && es.selectedLineIndex < chart.lines.length) {
-    const line = chart.lines[es.selectedLineIndex];
-    const selectedActivity = lineActivities[es.selectedLineIndex];
-    sections.push(`\n## Selected Line Detail (Line ${es.selectedLineIndex})`);
+  if (selectedLineIndex !== null && selectedLineIndex < chart.lines.length) {
+    const line = chart.lines[selectedLineIndex];
+    const selectedActivity = lineActivities[selectedLineIndex];
+    sections.push(`\n## Selected Line Detail (Line ${selectedLineIndex})`);
     sections.push(`  Activity: ${selectedActivity.toUpperCase()}${selectedActivity === "active" ? " (visible or notes approaching)" : selectedActivity === "coming-soon" ? " (will become visible soon)" : " (invisible, no notes nearby)"}`);
 
     // Computed position at context beat (B2)
-    const cachedState = lineStateCache.get(es.selectedLineIndex);
+    const cachedState = lineStateCache.get(selectedLineIndex);
     if (cachedState) {
       sections.push(`  ${formatLineState(cachedState, contextCenter)}`);
     }
@@ -500,7 +499,7 @@ export function buildAiContext(userMessage?: string): string {
         // Format each event with actual values, capped to avoid bloat
         const details: string[] = [];
         for (const evt of events) {
-          details.push(formatEventDetail(evt, kind));
+          details.push(formatEventDetail(evt));
         }
         if (details.length <= MAX_EVENT_DETAILS_PER_KIND) {
           sections.push(`    ${kind}: ${details.join(", ")}`);
@@ -521,8 +520,13 @@ export function buildAiContext(userMessage?: string): string {
     });
     if (windowNotes.length > 0) {
       sections.push(`  Notes in window (${windowNotes.length}):`);
-      for (const note of windowNotes) {
+      // A6: cap the dump like the events dump above; show the first N + a count.
+      const shownNotes = windowNotes.slice(0, MAX_WINDOW_NOTES);
+      for (const note of shownNotes) {
         sections.push(`    ${formatNote(note)}`);
+      }
+      if (windowNotes.length > shownNotes.length) {
+        sections.push(`    ... +${windowNotes.length - shownNotes.length} more`);
       }
     }
     if (line.notes.length > windowNotes.length) {

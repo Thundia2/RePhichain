@@ -11,6 +11,14 @@ import { useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useEditorStore } from "../stores/editorStore";
 import { useChartStore } from "../stores/chartStore";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  getSelectedEventIndices,
+  getMultiSelectedLineIndices,
+  setNoteSelectionByIndex,
+  selectLineByIndex,
+} from "../stores/selection";
 import { useAudioStore } from "../stores/audioStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useGroupStore } from "../stores/groupStore";
@@ -20,7 +28,9 @@ import { audioEngine } from "../audio/audioEngine";
 import { CANVAS_WIDTH } from "../types/chart";
 import type { BookmarkPreset } from "../types/bookmark";
 import { addBeats, subtractBeats, minimumBeat, snapBeat, beatToFloat, floatToBeat } from "../utils/beat";
-import { BpmList } from "../utils/bpmList";
+import { getPlayheadBeat } from "../utils/playhead";
+import { resolveHotkey } from "../utils/resolveHotkey";
+import { splitSelectedEventsAtPlayhead } from "../utils/eventSplit";
 import { addMarkerAtCurrentBeat, seekToPrevBookmark, seekToNextBookmark } from "../utils/bookmarkNavigation";
 import type { EditorTool } from "../types/editor";
 import { useToastStore } from "../stores/toastStore";
@@ -34,38 +44,48 @@ export function useGlobalHotkeys(callbacks: {
   onShowPasteSpecial?: () => void;
   onShowOnsetCalibration?: () => void;
 }) {
+  // ---- Hotkey resolution (L7) ----
+  // Subscribe to overrides so a rebind in HotkeySettings re-renders this hook and
+  // react-hotkeys-hook swaps the listener to the new key. hk(id) = override ?? registry
+  // default. Every registry-backed binding below passes hk("action_id") as its key, so
+  // the settings panel + conflict checker + persisted overrides are finally live.
+  // grep resolveHotkey. Modal/secondary combos (CapsLock event tools, panel toggles,
+  // improv number keys, escape) stay hardcoded — intentionally not rebindable.
+  const overrides = useSettingsStore((s) => s.hotkeyOverrides);
+  const hk = (id: string) => resolveHotkey(overrides, id);
+
   // ---- Tool shortcuts ----
   const setTool = (tool: EditorTool) => () => useEditorStore.getState().setTool(tool);
 
-  useHotkeys("v", setTool("select"), { preventDefault: true });
-  useHotkeys("x", setTool("eraser"), { preventDefault: true });
+  useHotkeys(hk("select_tool"), setTool("select"), { preventDefault: true });
+  useHotkeys(hk("eraser_tool"), setTool("eraser"), { preventDefault: true });
 
   // Q/W/E/R: CapsLock = event tool; else mark / step record / note tool.
   // CapsLock takes priority — see plan tingly-napping-crayon.md §4.
   // event.getModifierState("CapsLock") reads the OS state and works
   // in Tauri's webview the same as in the browser.
-  useHotkeys("q", (event) => {
+  useHotkeys(hk("place_tap"), (event) => {
     const es = useEditorStore.getState();
     if (event.getModifierState("CapsLock")) { es.setTool("place_event_x"); return; }
     if (es.improvisationMode) { improvPlace("tap"); return; }
     if (es.stepRecordActive) { es.setStepRecordNoteKind("tap"); return; }
     es.setTool("place_tap");
   }, { preventDefault: true });
-  useHotkeys("w", (event) => {
+  useHotkeys(hk("place_drag"), (event) => {
     const es = useEditorStore.getState();
     if (event.getModifierState("CapsLock")) { es.setTool("place_event_y"); return; }
     if (es.improvisationMode) { improvPlace("drag"); return; }
     if (es.stepRecordActive) { es.setStepRecordNoteKind("drag"); return; }
     es.setTool("place_drag");
   }, { preventDefault: true });
-  useHotkeys("e", (event) => {
+  useHotkeys(hk("place_flick"), (event) => {
     const es = useEditorStore.getState();
     if (event.getModifierState("CapsLock")) { es.setTool("place_event_rotation"); return; }
     if (es.improvisationMode) { improvPlace("flick"); return; }
     if (es.stepRecordActive) { es.setStepRecordNoteKind("flick"); return; }
     es.setTool("place_flick");
   }, { preventDefault: true });
-  useHotkeys("r", (event) => {
+  useHotkeys(hk("place_hold"), (event) => {
     const es = useEditorStore.getState();
     if (event.getModifierState("CapsLock")) { es.setTool("place_event_opacity"); return; }
     if (es.improvisationMode) { improvPlace("hold"); return; }
@@ -102,14 +122,14 @@ export function useGlobalHotkeys(callbacks: {
   useHotkeys("alt+r", () => useEditorStore.getState().toggleRecordMode(), { preventDefault: true });
 
   // ---- Onset Detection toggle ----
-  useHotkeys("shift+o", () => {
+  useHotkeys(hk("toggle_onset_detection"), () => {
     const ss = useSettingsStore.getState();
     ss.updateSettings({ onsetDetectionEnabled: !ss.onsetDetectionEnabled });
   }, { preventDefault: true });
 
   // ---- Undo / Redo ----
   // Interleaved: compare sequence numbers to decide which store (chart vs bookmark) to undo/redo
-  useHotkeys("ctrl+z, meta+z", () => {
+  useHotkeys(hk("undo"), () => {
     const cs = useChartStore.getState();
     const bs = useBookmarkStore.getState();
     const es = useEditorStore.getState();
@@ -129,7 +149,7 @@ export function useGlobalHotkeys(callbacks: {
     }
   }, { preventDefault: true });
   // Redo — Ctrl+Y added as alias alongside Ctrl+Shift+Z
-  useHotkeys("ctrl+shift+z, meta+shift+z, ctrl+y", () => {
+  useHotkeys(hk("redo"), () => {
     const cs = useChartStore.getState();
     const bs = useBookmarkStore.getState();
 
@@ -144,7 +164,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Delete selected ----
-  useHotkeys("delete, backspace", () => {
+  useHotkeys(hk("delete"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
     const bs = useBookmarkStore.getState();
@@ -156,17 +176,21 @@ export function useGlobalHotkeys(callbacks: {
       return;
     }
 
-    if (es.selectedLineIndex === null) return;
+    const lineIndex = getSelectedLineIndex();
+    if (lineIndex === null) return;
+    const noteIndices = getSelectedNoteIndices();
+    const eventIndices = getSelectedEventIndices();
+    const multiLineIndices = getMultiSelectedLineIndices();
 
-    if (es.selectedNoteIndices.length > 0) {
-      cs.removeNotes(es.selectedLineIndex, es.selectedNoteIndices);
+    if (noteIndices.length > 0) {
+      cs.removeNotes(lineIndex, noteIndices);
       es.clearSelection();
-    } else if (es.selectedEventIndices.length > 0) {
-      cs.removeEvents(es.selectedLineIndex, es.selectedEventIndices);
+    } else if (eventIndices.length > 0) {
+      cs.removeEvents(lineIndex, eventIndices);
       es.clearSelection();
-    } else if (es.multiSelectedLineIndices.length > 0) {
+    } else if (multiLineIndices.length > 0) {
       // Delete multi-selected lines (in reverse order to preserve indices)
-      const sorted = [...es.multiSelectedLineIndices].sort((a, b) => b - a);
+      const sorted = [...multiLineIndices].sort((a, b) => b - a);
       for (const idx of sorted) {
         cs.removeLine(idx);
       }
@@ -174,13 +198,13 @@ export function useGlobalHotkeys(callbacks: {
       es.selectLine(null);
     } else if (cs.chart.lines.length > 0) {
       // Delete the currently selected line
-      cs.removeLine(es.selectedLineIndex);
+      cs.removeLine(lineIndex);
       // Select an adjacent line, or deselect if none left
       const remaining = cs.chart.lines.length; // already removed
       if (remaining === 0) {
         es.selectLine(null);
       } else {
-        es.selectLine(Math.min(es.selectedLineIndex, remaining - 1));
+        selectLineByIndex(Math.min(lineIndex, remaining - 1));
       }
     }
   }, { preventDefault: true });
@@ -189,51 +213,53 @@ export function useGlobalHotkeys(callbacks: {
   // Must be registered BEFORE ctrl+a so the modifier check takes priority
   useHotkeys("ctrl+shift+a, meta+shift+a", () => {
     if (!useSettingsStore.getState().aiEnabled) return;
-    const es = useEditorStore.getState();
-    const multiLen = es.multiSelectedLineIndices.length;
+    const multiLen = getMultiSelectedLineIndices().length;
     let mode: string;
     if (multiLen > 1) mode = "multi";
-    else if (es.selectedEventIndices.length > 0) mode = "event";
-    else if (es.selectedNoteIndices.length > 0) mode = "note";
-    else if (es.selectedLineIndex !== null) mode = "line";
+    else if (getSelectedEventIndices().length > 0) mode = "event";
+    else if (getSelectedNoteIndices().length > 0) mode = "note";
+    else if (getSelectedLineIndex() !== null) mode = "line";
     else mode = "global";
     useContextPanelStore.getState().setActiveTab(mode, "ai");
     useContextPanelStore.getState().setCollapsed(false);
   }, { preventDefault: true });
 
   // ---- Select all notes on current line ----
-  useHotkeys("ctrl+a, meta+a", () => {
-    const es = useEditorStore.getState();
+  useHotkeys(hk("select_all"), () => {
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    if (lineIndex === null) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
-    es.setNoteSelection(line.notes.map((_, i) => i));
+    setNoteSelectionByIndex(line.notes.map((_, i) => i));
   }, { preventDefault: true });
 
   // ---- Move selected notes/events with arrow keys ----
 
   // ArrowUp: Move selected notes/events forward in time by one grid step
-  useHotkeys("up", () => {
+  useHotkeys(hk("move_up"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null) return;
+    const lineIndex = getSelectedLineIndex();
+    if (lineIndex === null) return;
     const step = minimumBeat(es.density);
+    const noteIndices = getSelectedNoteIndices();
+    const eventIndices = getSelectedEventIndices();
 
-    if (es.selectedNoteIndices.length > 0) {
-      const line = cs.chart.lines[es.selectedLineIndex];
+    if (noteIndices.length > 0) {
+      const line = cs.chart.lines[lineIndex];
       if (!line) return;
-      cs.batchEditNotes(es.selectedLineIndex,
-        es.selectedNoteIndices.map((idx) => ({
+      cs.batchEditNotes(lineIndex,
+        noteIndices.map((idx) => ({
           noteIndex: idx,
           changes: { beat: addBeats(line.notes[idx].beat, step) },
         })),
       );
-    } else if (es.selectedEventIndices.length > 0) {
-      const line = cs.chart.lines[es.selectedLineIndex];
+    } else if (eventIndices.length > 0) {
+      const line = cs.chart.lines[lineIndex];
       if (!line) return;
-      cs.batchEditEvents(es.selectedLineIndex,
-        es.selectedEventIndices.map((idx) => ({
+      cs.batchEditEvents(lineIndex,
+        eventIndices.map((idx) => ({
           eventIndex: idx,
           changes: {
             start_beat: addBeats(line.events[idx].start_beat, step),
@@ -245,26 +271,29 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ArrowDown: Move selected notes/events backward in time
-  useHotkeys("down", () => {
+  useHotkeys(hk("move_down"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null) return;
+    const lineIndex = getSelectedLineIndex();
+    if (lineIndex === null) return;
     const step = minimumBeat(es.density);
+    const noteIndices = getSelectedNoteIndices();
+    const eventIndices = getSelectedEventIndices();
 
-    if (es.selectedNoteIndices.length > 0) {
-      const line = cs.chart.lines[es.selectedLineIndex];
+    if (noteIndices.length > 0) {
+      const line = cs.chart.lines[lineIndex];
       if (!line) return;
-      cs.batchEditNotes(es.selectedLineIndex,
-        es.selectedNoteIndices.map((idx) => ({
+      cs.batchEditNotes(lineIndex,
+        noteIndices.map((idx) => ({
           noteIndex: idx,
           changes: { beat: subtractBeats(line.notes[idx].beat, step) },
         })),
       );
-    } else if (es.selectedEventIndices.length > 0) {
-      const line = cs.chart.lines[es.selectedLineIndex];
+    } else if (eventIndices.length > 0) {
+      const line = cs.chart.lines[lineIndex];
       if (!line) return;
-      cs.batchEditEvents(es.selectedLineIndex,
-        es.selectedEventIndices.map((idx) => ({
+      cs.batchEditEvents(lineIndex,
+        eventIndices.map((idx) => ({
           eventIndex: idx,
           changes: {
             start_beat: subtractBeats(line.events[idx].start_beat, step),
@@ -276,17 +305,19 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ArrowRight: Move selected notes right in X position
-  useHotkeys("right", () => {
+  useHotkeys(hk("move_right"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length === 0) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length === 0) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
     const xStep = es.verticalLines >= 2 ? Math.round(CANVAS_WIDTH / (es.verticalLines - 1)) : 0;
     if (xStep === 0) return;
-    cs.batchEditNotes(es.selectedLineIndex,
-      es.selectedNoteIndices.map((idx) => ({
+    cs.batchEditNotes(lineIndex,
+      noteIndices.map((idx) => ({
         noteIndex: idx,
         changes: { x: line.notes[idx].x + xStep },
       })),
@@ -294,17 +325,19 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ArrowLeft: Move selected notes left in X position
-  useHotkeys("left", () => {
+  useHotkeys(hk("move_left"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length === 0) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length === 0) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
     const xStep = es.verticalLines >= 2 ? Math.round(CANVAS_WIDTH / (es.verticalLines - 1)) : 0;
     if (xStep === 0) return;
-    cs.batchEditNotes(es.selectedLineIndex,
-      es.selectedNoteIndices.map((idx) => ({
+    cs.batchEditNotes(lineIndex,
+      noteIndices.map((idx) => ({
         noteIndex: idx,
         changes: { x: line.notes[idx].x - xStep },
       })),
@@ -312,46 +345,60 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Playback ----
-  useHotkeys("space", () => {
+  useHotkeys(hk("toggle_playback"), () => {
     audioEngine.togglePlayPause();
   }, { preventDefault: true });
 
   // ---- Loop region markers ----
   // [ — set loop start at current playhead beat
-  useHotkeys("[", () => {
+  // useKey:true — punctuation matches via event.key; without it react-hotkeys-hook
+  // compares event.code ("BracketLeft") and "[" never fires (the old dead binding).
+  useHotkeys(hk("loop_start"), () => {
     const as_ = useAudioStore.getState();
     const cs = useChartStore.getState();
     if (!cs.isLoaded) return;
-    const bpmList = new BpmList(cs.chart.bpm_list);
-    const currentBeat = bpmList.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
+    const currentBeat = getPlayheadBeat({ clampNonNegative: true });
     as_.setLoopStart(currentBeat);
-  }, { preventDefault: true });
+  }, { preventDefault: true, useKey: true });
 
   // ] — set loop end at current playhead beat
-  useHotkeys("]", () => {
+  useHotkeys(hk("loop_end"), () => {
     const as_ = useAudioStore.getState();
     const cs = useChartStore.getState();
     if (!cs.isLoaded) return;
-    const bpmList = new BpmList(cs.chart.bpm_list);
-    const currentBeat = bpmList.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
+    const currentBeat = getPlayheadBeat({ clampNonNegative: true });
     as_.setLoopEnd(currentBeat);
-  }, { preventDefault: true });
+  }, { preventDefault: true, useKey: true });
 
-  // \ — toggle loop on/off
-  useHotkeys("\\", () => {
+  // \ — toggle loop on/off (useKey:true, same punctuation reason as the loop brackets)
+  useHotkeys(hk("toggle_loop"), () => {
     useAudioStore.getState().toggleLoop();
-  }, { preventDefault: true });
+  }, { preventDefault: true, useKey: true });
 
   // ---- Save ----
-  useHotkeys("ctrl+s, meta+s", async () => {
+  useHotkeys(hk("save"), async () => {
     const cs = useChartStore.getState();
     if (!cs.isLoaded) return;
+    // H1 (critical): a projectless chart (freshly imported / never saved to a folder)
+    // has no disk target. The old code still ran markClean()+"saved" toast in that
+    // case → a fake save that made the user believe edits were persisted, then lost
+    // them. Mirror the useMenus "Save Project" guard (useMenus.ts), but surface WHY
+    // nothing was written (there is no save-as-to-folder flow — Export is the path)
+    // rather than a silent no-op. markClean()+success now run ONLY after a real
+    // saveProject() resolves.
+    if (!cs.projectPath) {
+      useToastStore.getState().addToast({
+        message: "No project folder — use Export (PEZ/RPE/Official) to save this chart.",
+        type: "info",
+        duration: 2500,
+      });
+      return;
+    }
+    const token = cs._dirtySeq; // F2: capture before the async write (see markCleanIf)
     try {
-      if (cs.projectPath) {
-        const { saveProject } = await import("../utils/ipc");
-        await saveProject(cs.projectPath, cs.getChartJson());
-      }
-      cs.markClean();
+      const { saveProject } = await import("../utils/ipc");
+      await saveProject(cs.projectPath, cs.getChartJson(), JSON.stringify(cs.meta));
+      cs.markCleanIf(token);
       useToastStore.getState().addToast({ message: "Project saved", type: "success", duration: 1500 });
     } catch (e) {
       console.error("Save failed:", e);
@@ -360,7 +407,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- New chart ----
-  useHotkeys("ctrl+n, meta+n", () => {
+  useHotkeys(hk("new_chart"), () => {
     callbacks.onNewChart?.();
   }, { preventDefault: true });
 
@@ -380,7 +427,9 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Go to Beat dialog ----
-  useHotkeys("ctrl+j, meta+j", () => {
+  // L7 drift fix: registry default is now ctrl+g (was bound to ctrl+j in code; the
+  // pattern tool vacated ctrl+g → moved to "p"). grep go_to_beat / pattern_tool.
+  useHotkeys(hk("go_to_beat"), () => {
     callbacks.onShowGoToBeat?.();
   }, { preventDefault: true });
 
@@ -390,20 +439,21 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Paste Special dialog ----
-  useHotkeys("ctrl+alt+v, meta+alt+v", () => {
+  useHotkeys(hk("paste_special"), () => {
     callbacks.onShowPasteSpecial?.();
   }, { preventDefault: true });
 
   // ---- Flip selected notes above/below ----
-  useHotkeys("f", () => {
-    const es = useEditorStore.getState();
+  useHotkeys(hk("flip_notes"), () => {
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length === 0) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length === 0) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
-    cs.batchEditNotes(es.selectedLineIndex,
-      es.selectedNoteIndices.map((idx) => ({
+    cs.batchEditNotes(lineIndex,
+      noteIndices.map((idx) => ({
         noteIndex: idx,
         changes: { above: !line.notes[idx].above },
       })),
@@ -411,15 +461,16 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Mirror selected notes horizontally (negate X) ----
-  useHotkeys("m", () => {
-    const es = useEditorStore.getState();
+  useHotkeys(hk("mirror_notes"), () => {
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length === 0) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length === 0) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
-    cs.batchEditNotes(es.selectedLineIndex,
-      es.selectedNoteIndices.map((idx) => ({
+    cs.batchEditNotes(lineIndex,
+      noteIndices.map((idx) => ({
         noteIndex: idx,
         changes: { x: -line.notes[idx].x },
       })),
@@ -427,15 +478,17 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Quantize selected notes to beat grid ----
-  useHotkeys("ctrl+q, meta+q", () => {
+  useHotkeys(hk("quantize_notes"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length === 0) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length === 0) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
-    cs.batchEditNotes(es.selectedLineIndex,
-      es.selectedNoteIndices.map((idx) => ({
+    cs.batchEditNotes(lineIndex,
+      noteIndices.map((idx) => ({
         noteIndex: idx,
         changes: { beat: snapBeat(beatToFloat(line.notes[idx].beat), es.density) },
       })),
@@ -443,15 +496,16 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Distribute selected notes evenly in time ----
-  useHotkeys("ctrl+d, meta+d", () => {
-    const es = useEditorStore.getState();
+  useHotkeys(hk("distribute_notes"), () => {
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length < 3) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length < 3) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
     // Sort selected notes by beat to find the range
-    const sorted = [...es.selectedNoteIndices]
+    const sorted = [...noteIndices]
       .map((idx) => ({ idx, beat: beatToFloat(line.notes[idx].beat) }))
       .sort((a, b) => a.beat - b.beat);
 
@@ -460,7 +514,7 @@ export function useGlobalHotkeys(callbacks: {
     if (lastBeat <= firstBeat) return; // All at same beat — nothing to distribute
     const step = (lastBeat - firstBeat) / (sorted.length - 1);
 
-    cs.batchEditNotes(es.selectedLineIndex,
+    cs.batchEditNotes(lineIndex,
       sorted.map((entry, i) => ({
         noteIndex: entry.idx,
         changes: { beat: floatToBeat(firstBeat + i * step) },
@@ -469,21 +523,23 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: true });
 
   // ---- Strum/stagger selected notes (spread beats by X position order) ----
-  useHotkeys("ctrl+shift+s, meta+shift+s", () => {
+  useHotkeys(hk("strum_notes"), () => {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null || es.selectedNoteIndices.length < 2) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    if (lineIndex === null || noteIndices.length < 2) return;
+    const line = cs.chart.lines[lineIndex];
     if (!line) return;
 
     // Sort selected notes by X position (left to right)
-    const sorted = [...es.selectedNoteIndices]
+    const sorted = [...noteIndices]
       .map((idx) => ({ idx, x: line.notes[idx].x, beat: beatToFloat(line.notes[idx].beat) }))
       .sort((a, b) => a.x - b.x);
 
     // Apply incremental beat offset: each note gets +i * (1/density) beats
     const strumStep = 1 / es.density;
-    cs.batchEditNotes(es.selectedLineIndex,
+    cs.batchEditNotes(lineIndex,
       sorted.map((entry, i) => ({
         noteIndex: entry.idx,
         changes: { beat: floatToBeat(entry.beat + i * strumStep) },
@@ -521,9 +577,16 @@ export function useGlobalHotkeys(callbacks: {
     useEditorStore.getState().setTool("place_event_text");
   }, { preventDefault: true });
 
-  // ---- Step Record toggle ----
-  useHotkeys("s", () => {
+  // ---- Step Record toggle (L7: moved off "s" → registry step_record default "b";
+  //      "s" now belongs to split_event, registered below) ----
+  useHotkeys(hk("step_record"), () => {
     useEditorStore.getState().toggleStepRecord();
+  }, { preventDefault: true, enableOnFormTags: false });
+
+  // ---- Split Event at playhead (L7: registry split_event, default "s") ----
+  // Shares splitSelectedEventsAtPlayhead with the Edit-menu item (useMenus.ts).
+  useHotkeys(hk("split_event"), () => {
+    splitSelectedEventsAtPlayhead();
   }, { preventDefault: true, enableOnFormTags: false });
 
   // ---- X Snap toggle ----
@@ -544,27 +607,30 @@ export function useGlobalHotkeys(callbacks: {
 
   // ---- Group editing ----
 
-  // Ctrl+G: Toggle pattern tool
-  useHotkeys("ctrl+g, meta+g", () => {
+  // Toggle pattern tool (L7: moved off ctrl+g → registry pattern_tool default "p";
+  // ctrl+g now opens Go to Beat).
+  useHotkeys(hk("pattern_tool"), () => {
     const es = useEditorStore.getState();
     es.setTool(es.activeTool === "place_pattern" ? "select" : "place_pattern");
   }, { preventDefault: true });
 
   // Ctrl+Shift+G: Create group from currently selected lines or notes
   useHotkeys("ctrl+shift+g, meta+shift+g", () => {
-    const es = useEditorStore.getState();
     const cs = useChartStore.getState();
     const gs = useGroupStore.getState();
+    const lineIndex = getSelectedLineIndex();
+    const noteIndices = getSelectedNoteIndices();
+    const multiLineIndices = getMultiSelectedLineIndices();
 
     // Collect selected notes (from current line)
     const notesToAdd: Array<{ uid: string; lineIndex: number }> = [];
-    if (es.selectedLineIndex !== null && es.selectedNoteIndices.length > 0) {
-      const line = cs.chart.lines[es.selectedLineIndex];
+    if (lineIndex !== null && noteIndices.length > 0) {
+      const line = cs.chart.lines[lineIndex];
       if (line) {
-        for (const ni of es.selectedNoteIndices) {
+        for (const ni of noteIndices) {
           const note = line.notes[ni];
           if (note?.uid) {
-            notesToAdd.push({ uid: note.uid, lineIndex: es.selectedLineIndex });
+            notesToAdd.push({ uid: note.uid, lineIndex });
           }
         }
       }
@@ -586,9 +652,9 @@ export function useGlobalHotkeys(callbacks: {
     }
 
     // Otherwise, create a Line Group from selected lines
-    const linesToAdd = es.multiSelectedLineIndices.length > 0
-      ? es.multiSelectedLineIndices
-      : es.selectedLineIndex !== null ? [es.selectedLineIndex] : [];
+    const linesToAdd = multiLineIndices.length > 0
+      ? multiLineIndices
+      : lineIndex !== null ? [lineIndex] : [];
 
     if (linesToAdd.length === 0) return;
 
@@ -618,7 +684,7 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: false });
 
   // G: Context-aware — toggle mini preview in unrolled editor, else enter group edit mode
-  useHotkeys("g", () => {
+  useHotkeys(hk("enter_group_edit"), () => {
     // Check which tab type is active to decide behavior
     const activeTab = useTabStore.getState().tabs.find(
       (t) => t.id === useTabStore.getState().activeTabId
@@ -631,21 +697,21 @@ export function useGlobalHotkeys(callbacks: {
     }
 
     // Elsewhere: existing group edit mode behavior
-    const es = useEditorStore.getState();
     const gs = useGroupStore.getState();
 
     // If already in group mode, ignore
     if (gs.activeGroupId) return;
 
-    if (es.selectedLineIndex === null) return;
-    const lineGroups = gs.getGroupsForLine(es.selectedLineIndex);
+    const lineIndex = getSelectedLineIndex();
+    if (lineIndex === null) return;
+    const lineGroups = gs.getGroupsForLine(lineIndex);
     if (lineGroups.length > 0) {
       gs.enterGroupEditMode(lineGroups[0].id);
     }
   }, { preventDefault: true, enableOnFormTags: false });
 
   // Ctrl+Shift+U: Open/focus the unrolled editor tab
-  useHotkeys("ctrl+shift+u, meta+shift+u", () => {
+  useHotkeys(hk("open_unrolled"), () => {
     useTabStore.getState().openUnrolledEditor();
   }, { preventDefault: true });
 
@@ -658,21 +724,22 @@ export function useGlobalHotkeys(callbacks: {
   const improvPlace = (preset: BookmarkPreset) => {
     const es = useEditorStore.getState();
     const as_ = useAudioStore.getState();
-    const cs = useChartStore.getState();
 
     if (!es.improvisationMode || !as_.isPlaying) return;
-    if (es.selectedLineIndex === null) return;
+    const lineIndex = getSelectedLineIndex();
+    if (lineIndex === null) return;
 
-    const bpmList = new BpmList(cs.chart.bpm_list);
     const bs = useBookmarkStore.getState();
 
-    // Latency compensation: shift time back so the marker lands
-    // where the sound was, not where the playhead is when your finger hits the key
+    // INPUT-latency compensation: shift the TIME back (bookmarkStore.latencyOffset)
+    // so the marker lands where the sound was, not where the playhead is when your
+    // finger hits the key. This is distinct from render latency (audioLatencyMs) —
+    // we apply it via the helper's `time` override; the offset+bpm policy is shared.
     const compensatedTime = as_.currentTime + (bs.latencyOffset / 1000);
-    const currentBeat = bpmList.beatAtFloat(compensatedTime - cs.chart.offset);
+    const currentBeat = getPlayheadBeat({ time: compensatedTime });
     const beat = snapBeat(currentBeat, es.density);
 
-    bs.addBookmark(beat, 0, true, es.selectedLineIndex, preset);
+    bs.addBookmark(beat, 0, true, lineIndex, preset);
   };
 
   // Misc markers (1-3) — only fire in mark mode
@@ -687,8 +754,25 @@ export function useGlobalHotkeys(callbacks: {
   }, { preventDefault: false, enableOnFormTags: false });
 
   // ---- Section marker hotkey (Ctrl+B) — add marker at current beat ----
-  useHotkeys("ctrl+b, meta+b", () => {
+  useHotkeys(hk("add_section_marker"), () => {
     addMarkerAtCurrentBeat();
+  }, { preventDefault: true });
+
+  // ---- Bookmark marker navigation (L7: registry prev/next_marker, ctrl+up/down).
+  // These ops already existed (Ctrl+Shift+Scroll wheel below); now keyboard-bound too. ----
+  useHotkeys(hk("prev_marker"), () => {
+    if (!useChartStore.getState().isLoaded) return;
+    seekToPrevBookmark();
+  }, { preventDefault: true });
+  useHotkeys(hk("next_marker"), () => {
+    if (!useChartStore.getState().isLoaded) return;
+    seekToNextBookmark();
+  }, { preventDefault: true });
+
+  // ---- Toggle in-app DevTools panel (L7: registry toggle_devtools, "f12").
+  // Note: native webview devtools may swallow F12 in `tauri dev`; works in prod. ----
+  useHotkeys(hk("toggle_devtools"), () => {
+    useEditorStore.getState().toggleDevTools();
   }, { preventDefault: true });
 
   // ---- Ctrl+Shift+Scroll for bookmark navigation ----

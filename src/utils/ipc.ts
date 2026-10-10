@@ -57,13 +57,19 @@ export async function loadProject(path: string): Promise<ProjectData> {
 }
 
 /**
- * Save the chart to disk.
+ * Save the chart (and metadata) to disk.
+ *
+ * R1: meta.json is now written alongside chart.json, so meta edits (song name,
+ * charter, Phira info.yml fields…) survive a restart instead of being silently
+ * dropped. Pass `JSON.stringify(cs.meta)` — the backend writes it verbatim so
+ * round-trip-only fields (rpe_song, tags, …) are preserved (see commands.rs).
  *
  * @param projectPath - Absolute path to the project directory
  * @param chartJson - The full chart as a JSON string
+ * @param metaJson - The project metadata as a JSON string
  */
-export async function saveProject(projectPath: string, chartJson: string): Promise<void> {
-  return invoke<void>("save_project", { projectPath, chartJson });
+export async function saveProject(projectPath: string, chartJson: string, metaJson: string): Promise<void> {
+  return invoke<void>("save_project", { projectPath, chartJson, metaJson });
 }
 
 /**
@@ -141,6 +147,10 @@ export async function generateAi(request: AiGenerateRequest): Promise<AiGenerate
 
 /** Payload for each streaming chunk emitted by the Rust backend */
 export interface AiStreamChunk {
+  /** M4: the request that emitted this chunk. The "ai-stream-chunk" event is
+   *  global, so the listener drops chunks whose id isn't the current request's —
+   *  otherwise a superseded stream's late tokens cross-wire into a new one. */
+  requestId: string;
   content: string;
   done: boolean;
   finishReason?: string;
@@ -148,6 +158,9 @@ export interface AiStreamChunk {
   completionTokens?: number;
   error?: string;
 }
+
+// M4: monotonic id source for stream requests (see generateAiStream).
+let _aiStreamSeq = 0;
 
 /**
  * Streaming AI generation — tokens arrive via Tauri events as they generate.
@@ -162,6 +175,7 @@ export interface AiStreamChunk {
 export async function generateAiStream(
   request: AiGenerateRequest,
   onChunk: (chunk: AiStreamChunk) => void,
+  signal?: AbortSignal,
 ): Promise<AiGenerateResponse> {
   if (!isTauri()) {
     throw new Error(
@@ -173,17 +187,33 @@ export async function generateAiStream(
   // Dynamic import to match the project's existing pattern
   const { listen } = await import("@tauri-apps/api/event");
 
+  // M4: tag this request so a superseded stream's late chunks can't cross-wire
+  // into a newer generation (the "ai-stream-chunk" event fires for EVERY
+  // in-flight stream). The listener drops any chunk whose id isn't ours.
+  const requestId = `ai-stream-${++_aiStreamSeq}`;
+
+  // M4 (hard cancel): forward an abort to the Rust side (ai_cancel_stream) so the
+  // upstream request is actually stopped, not just ignored. Fire-and-forget; the
+  // command no-ops if the stream already finished.
+  const onAbort = () => { void invoke("ai_cancel_stream", { requestId }); };
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  }
+
   // Start listening BEFORE invoking — guarantees no chunks are missed
   const unlisten = await listen<AiStreamChunk>("ai-stream-chunk", (event) => {
+    if (event.payload.requestId !== requestId || signal?.aborted) return;
     onChunk(event.payload);
   });
 
   try {
-    const result = await invoke<AiGenerateResponse>("ai_generate_stream", { request });
+    const result = await invoke<AiGenerateResponse>("ai_generate_stream", { request: { ...request, requestId } });
     return result;
   } finally {
-    // Always clean up the listener
+    // Always clean up the listener + the abort hook
     unlisten();
+    signal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -270,8 +300,10 @@ export interface OnsetBundle {
 
 /** The frontend's compiled-in expectation of the Rust pipeline version.
  *  Bump this alongside `ONSET_PIPELINE_VERSION` on the Rust side; mismatch
- *  surfaces a dev-mode warning + clears the cached results. */
-export const EXPECTED_ONSET_PIPELINE_VERSION = 2;
+ *  surfaces a dev-mode warning + clears the cached results.
+ *  v3 (2026-06-14): O3 gapless decode + O7 resampler delay compensation shifted
+ *  onset times earlier — stale v2 salience must be re-detected. */
+export const EXPECTED_ONSET_PIPELINE_VERSION = 3;
 
 /** Run ML onset detection on an audio file. musicPath must be absolute.
  *  Returns the whole song's per-frame salience plus a version stamp. */

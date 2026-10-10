@@ -19,11 +19,18 @@
 import { useMemo, useRef, useEffect, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  useSelectedLineIndex,
+  useMultiSelectedLineIndices,
+  selectLineByIndex,
+  toggleMultiSelectedLineByIndex,
+} from "../../stores/selection";
 import { useAudioStore } from "../../stores/audioStore";
 import { useGroupStore } from "../../stores/groupStore";
 import { useTabStore } from "../../stores/tabStore";
 import { evaluateLineEventsWithLayers } from "../../canvas/events";
 import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { beatToFloat } from "../../utils/beat";
 import type { LineEvent, LineEventValue, EventLayer, Note } from "../../types/chart";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -270,10 +277,8 @@ export function LineStrip() {
   const lines = useChartStore((s) => s.chart.lines);
   const bpmPoints = useChartStore((s) => s.chart.bpm_list);
   const offset = useChartStore((s) => s.chart.offset);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectLine = useEditorStore((s) => s.selectLine);
-  const toggleMultiSelectedLine = useEditorStore((s) => s.toggleMultiSelectedLine);
-  const multiSelectedLineIndices = useEditorStore((s) => s.multiSelectedLineIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const multiSelectedLineIndices = useMultiSelectedLineIndices();
   const addLine = useChartStore((s) => s.addLine);
   const groups = useGroupStore((s) => s.groups);
   const openUnrolledLineEditor = useTabStore((s) => s.openUnrolledLineEditor);
@@ -300,18 +305,23 @@ export function LineStrip() {
   // BpmList for time-to-beat conversion
   const bpmList = useMemo(() => new BpmList(bpmPoints), [bpmPoints]);
   const currentBeat = useMemo(() => bpmList.beatAtFloat(currentTime - offset), [bpmList, currentTime, offset]);
+  // Z3: quantize to half-beats for classification. The activity tiers only change at beat
+  // granularity (coming-soon within 8 beats, etc.), so classifyBeat stays a stable number
+  // for ~half a beat — that drops lineData's classifyLine sweep (opacity-range scans +
+  // note binary-searches, for every line) from 60Hz during playback to ~2-4Hz.
+  const classifyBeat = Math.floor(currentBeat * 2) / 2;
 
   // Classify all lines and compute sort order (considers both opacity and note proximity)
   const lineData = useMemo(() => {
     return lines.map((line, i) => {
       const classification = classifyLine(
-        line.events, line.event_layers, currentBeat,
+        line.events, line.event_layers, classifyBeat,
         line.notes, bpmList, inactivityTimeoutSeconds,
       );
       const category = line._category ?? autoCategorize(line);
       return { index: i, line, category, ...classification };
     });
-  }, [lines, currentBeat, bpmList, inactivityTimeoutSeconds]);
+  }, [lines, classifyBeat, bpmList, inactivityTimeoutSeconds]);
 
   // Sort: active first, then coming-soon, just-passed, long-passed, inactive
   const sortedLines = useMemo(() => {
@@ -339,15 +349,21 @@ export function LineStrip() {
     }
   }, [toggleLineStripSearch]);
 
-  // Horizontal wheel scroll — converts vertical scroll to horizontal on the chip bar.
-  // stopPropagation prevents the event from reaching the canvas scroll handler.
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (scrollRef.current) {
-      // Use deltaY (vertical scroll) as primary, fall back to deltaX for trackpads
-      scrollRef.current.scrollLeft += e.deltaY !== 0 ? e.deltaY : e.deltaX;
-    }
+  // W8: attach the horizontal-scroll wheel handler NATIVELY with { passive: false }.
+  // React's onWheel is registered passively, so e.preventDefault() there is a no-op (and
+  // logs an "Unable to preventDefault inside passive event listener" warning) — the chip
+  // bar couldn't swallow the canvas's vertical-scroll seek. deltaY drives the horizontal
+  // scroll (deltaX fallback for trackpads); stopPropagation keeps it off the canvas.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.scrollLeft += e.deltaY !== 0 ? e.deltaY : e.deltaX;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
   // Auto-scroll selected line into view
@@ -362,7 +378,6 @@ export function LineStrip() {
   return (
     <div
       ref={scrollRef}
-      onWheel={handleWheel}
       style={{
         height: 30,
         display: "flex",
@@ -446,18 +461,15 @@ export function LineStrip() {
             data-line-index={index}
             onClick={(e) => {
               if (e.ctrlKey || e.metaKey) {
-                toggleMultiSelectedLine(index);
+                toggleMultiSelectedLineByIndex(index);
               } else {
-                selectLine(isSelected ? null : index);
+                selectLineByIndex(isSelected ? null : index);
               }
             }}
             onDoubleClick={() => {
-              selectLine(index);
-              // Compute current beat from audio position and open per-line unrolled editor
-              const as_ = useAudioStore.getState();
-              const cs = useChartStore.getState();
-              const bl = new BpmList(cs.chart.bpm_list);
-              const currentBeat = bl.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
+              selectLineByIndex(index);
+              // Imperative read in a click handler → raw playhead beat (clamped to ≥0).
+              const currentBeat = getPlayheadBeat({ clampNonNegative: true });
               openUnrolledLineEditor(index, line.name || `Line ${index + 1}`, currentBeat);
             }}
             style={{

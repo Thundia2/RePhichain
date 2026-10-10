@@ -40,6 +40,11 @@ build/
 /*.ogg
 /*.m4a
 
+# Local chart fixtures for the render smoke test (scripts/render-smoke.js).
+# Binaries (audio/video/illustration); the harness + README are committed,
+# the charts are user-supplied. Drop chart folders here as public/test-charts/<name>/.
+/public/test-charts/
+
 # Local research / experimentation scripts (not part of the build).
 # Only the root-level `test/` directory — `src/__tests__/` (real tests) is unaffected.
 /test/

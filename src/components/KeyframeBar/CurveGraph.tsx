@@ -14,7 +14,13 @@ import { useRef, useEffect, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useAudioStore } from "../../stores/audioStore";
-import { BpmList } from "../../utils/bpmList";
+import {
+  getSelectedLineIndex,
+  getSelectedEventIndices,
+  useSelectedEventIndices,
+  setEventSelectionByIndex,
+} from "../../stores/selection";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import { renderCurveGraph, type OverlayLine } from "./CurveGraphRenderer";
 import {
@@ -38,13 +44,19 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
     valueMin: -100,
     valueMax: 100,
   });
+  // K7: the beat (X) window is PERSISTENT — only seeded once, then mutated by the
+  // wheel handler (manual zoom) or playback auto-follow. Without this latch the
+  // frame loop recomputed beatStart/beatEnd from the playhead every tick, so a
+  // paused user could never hold a manual view. Per-instance ref → inline and
+  // popout graphs keep independent windows.
+  const viewportSeededRef = useRef(false);
 
   const height = useEditorStore((s) => isPopout ? 400 : s.curveEditorHeight);
   // Subscribe to trigger re-renders when these values change (used in render loop via getState)
   useEditorStore((s) => s.curveEditorVisibleLanes);
   useEditorStore((s) => s.curveEditorNormalized);
   const hoveredKeyframe = useEditorStore((s) => s.curveEditorHoveredKeyframe);
-  useEditorStore((s) => s.selectedEventIndices);
+  useSelectedEventIndices(); // subscribe so a selection change re-renders; value read via getState in the loop
 
   // Animation loop
   useEffect(() => {
@@ -83,11 +95,10 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
       // Get data
       const cs = useChartStore.getState();
       const es = useEditorStore.getState();
-      const { currentTime } = useAudioStore.getState();
-      const bpmList = new BpmList(cs.chart.bpm_list);
-      const currentBeat = bpmList.beatAtFloat(Math.max(0, currentTime - cs.chart.offset));
+      // rAF render loop reads the live clock imperatively → raw playhead beat (clamped ≥0).
+      const currentBeat = getPlayheadBeat({ clampNonNegative: true });
 
-      const lineIndex = es.selectedLineIndex;
+      const lineIndex = getSelectedLineIndex();
       const line = lineIndex !== null ? cs.chart.lines[lineIndex] : null;
       const events = line ? line.events : [];
 
@@ -95,25 +106,47 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
       const autoRange = computeAutoRange(events, es.curveEditorVisibleLanes);
       const vr = es.curveEditorValueRange ?? autoRange;
 
-      // Sync beat range with the KeyframeBar viewport
-      // For now, use a sensible default based on the chart
+      // Furthest beat of interest — used to seed the default window and to clamp
+      // the right edge so the view can't scroll past the chart's content.
       let maxBeat = 32;
       for (const e of events) {
         maxBeat = Math.max(maxBeat, beatToFloat(e.end_beat) + 4);
       }
 
-      viewportRef.current = {
-        beatStart: Math.max(0, currentBeat - maxBeat * 0.1),
-        beatEnd: Math.min(maxBeat, currentBeat + maxBeat * 0.9),
-        valueMin: vr.min,
-        valueMax: vr.max,
-      };
-
-      // If playing, auto-scroll to keep playhead visible
+      // K7: mutate the PERSISTENT viewport in place — never reassign it from the
+      // playhead each frame (that was the bug: a paused view kept snapping back).
       const vp = viewportRef.current;
+
+      // Value (Y) axis tracks the stored range (wheel Y-zoom persists it) or auto.
+      vp.valueMin = vr.min;
+      vp.valueMax = vr.max;
+
+      // Seed the beat (X) window ONCE, centered on the playhead. After this the
+      // window is owned by the user (wheel zoom) and the playback follower below.
+      if (!viewportSeededRef.current) {
+        const initWindow = Math.min(maxBeat, 32);
+        vp.beatStart = Math.max(0, currentBeat - initWindow * 0.1);
+        vp.beatEnd = vp.beatStart + initWindow;
+        viewportSeededRef.current = true;
+      }
+
+      // Auto-follow the playhead ONLY while audio is playing — so a paused user can
+      // hold a manual pan/zoom. When playing and the head leaves the window, scroll
+      // the window (keeping its width) to bring it back into view.
+      const isPlaying = useAudioStore.getState().isPlaying;
       const beatWindow = vp.beatEnd - vp.beatStart;
-      if (currentBeat < vp.beatStart || currentBeat > vp.beatEnd) {
-        vp.beatStart = Math.max(0, currentBeat - beatWindow * 0.2);
+      if (isPlaying && (currentBeat < vp.beatStart || currentBeat > vp.beatEnd)) {
+        vp.beatStart = currentBeat - beatWindow * 0.2;
+        vp.beatEnd = vp.beatStart + beatWindow;
+      }
+
+      // Clamp to the valid range, preserving window width: never start below 0, and
+      // never scroll the left edge past the chart end.
+      if (vp.beatStart < 0) {
+        vp.beatStart = 0;
+        vp.beatEnd = beatWindow;
+      } else if (vp.beatStart > maxBeat) {
+        vp.beatStart = Math.max(0, maxBeat - beatWindow);
         vp.beatEnd = vp.beatStart + beatWindow;
       }
 
@@ -137,6 +170,13 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
         }
       }
 
+      // Convert the id-based hovered keyframe (editorStore stores eventId so the
+      // hover survives event re-sorts) back to the array index the renderer wants.
+      const hk = es.curveEditorHoveredKeyframe;
+      const hoveredKeyframeForRender = hk
+        ? { eventIndex: events.findIndex((ev) => ev.id === hk.eventId), kind: hk.kind, handle: hk.handle }
+        : null;
+
       renderCurveGraph(ctx, {
         events,
         visibleLanes: es.curveEditorVisibleLanes,
@@ -144,8 +184,8 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
         canvasWidth: w,
         canvasHeight: h,
         currentBeat,
-        selectedEventIndices: es.selectedEventIndices,
-        hoveredKeyframe: es.curveEditorHoveredKeyframe,
+        selectedEventIndices: getSelectedEventIndices(),
+        hoveredKeyframe: hoveredKeyframeForRender,
         normalized: es.curveEditorNormalized,
         overlayLines: overlayData.length > 0 ? overlayData : undefined,
         overlayOpacity: es.timelineOverlayOpacity,
@@ -170,32 +210,36 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
 
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    const lineIndex = es.selectedLineIndex;
+    const lineIndex = getSelectedLineIndex();
     const line = lineIndex !== null ? cs.chart.lines[lineIndex] : null;
     if (!line) return;
 
     const dragState = es.curveEditorDragState;
     if (dragState) {
-      // Dragging a keyframe
+      // Dragging a keyframe. dragState holds the event's stable id (L2); resolve
+      // it to the current array index each move so a value-edit re-sort can't make
+      // us write to the wrong event.
       const vp = viewportRef.current;
       const h = isPopout ? 400 : es.curveEditorHeight;
       const newValue = yToValue(mouseY, vp, h);
 
-      const event = line.events[dragState.eventIndex];
+      const eventIndex = line.events.findIndex((ev) => ev.id === dragState.eventId);
+      if (eventIndex < 0) return;
+      const event = line.events[eventIndex];
       if (!event) return;
 
       if ("constant" in event.value) {
-        cs.editEvent(lineIndex!, dragState.eventIndex, {
+        cs.editEvent(lineIndex!, eventIndex, {
           value: { constant: newValue },
         });
       } else if ("transition" in event.value) {
         const tv = event.value.transition;
         if (dragState.handle === "start") {
-          cs.editEvent(lineIndex!, dragState.eventIndex, {
+          cs.editEvent(lineIndex!, eventIndex, {
             value: { transition: { start: newValue, end: tv.end, easing: tv.easing } },
           });
         } else {
-          cs.editEvent(lineIndex!, dragState.eventIndex, {
+          cs.editEvent(lineIndex!, eventIndex, {
             value: { transition: { start: tv.start, end: newValue, easing: tv.easing } },
           });
         }
@@ -210,7 +254,10 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
       mouseX, mouseY, line.events, es.curveEditorVisibleLanes,
       viewportRef.current, w, h,
     );
-    es.setCurveEditorHoveredKeyframe(hit);
+    const hoverId = hit ? line.events[hit.eventIndex]?.id : undefined;
+    es.setCurveEditorHoveredKeyframe(
+      hit && hoverId ? { eventId: hoverId, kind: hit.kind, handle: hit.handle } : null,
+    );
   }, [isPopout]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -224,7 +271,7 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
 
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    const lineIndex = es.selectedLineIndex;
+    const lineIndex = getSelectedLineIndex();
     const line = lineIndex !== null ? cs.chart.lines[lineIndex] : null;
     if (!line) return;
 
@@ -237,11 +284,14 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
     );
 
     if (hit) {
-      // Select the event
-      es.setEventSelection([hit.eventIndex]);
-
-      // Start drag
       const event = line.events[hit.eventIndex];
+      const eventId = event?.id;
+      if (!event || !eventId) return;
+
+      // Select the event
+      setEventSelectionByIndex([hit.eventIndex]);
+
+      // Start drag — store the event's stable id so the drag survives re-sorts.
       let startValue = 0;
       if ("constant" in event.value) startValue = event.value.constant;
       else if ("transition" in event.value) {
@@ -249,7 +299,7 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
       }
 
       es.setCurveEditorDragState({
-        eventIndex: hit.eventIndex,
+        eventId,
         kind: hit.kind,
         handle: hit.handle,
         startMouseX: mouseX,
@@ -273,7 +323,7 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
 
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    const lineIndex = es.selectedLineIndex;
+    const lineIndex = getSelectedLineIndex();
     if (lineIndex === null) return;
 
     const h = isPopout ? 400 : es.curveEditorHeight;

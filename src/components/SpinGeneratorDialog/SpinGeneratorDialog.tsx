@@ -10,12 +10,12 @@ import { Field, safeParseNumber } from "../common/FormFields";
 import { EasingPicker } from "../common/EasingPicker";
 import { generateSpinEvent } from "../../utils/spinGenerator";
 import { useChartStore } from "../../stores/chartStore";
-import { useEditorStore } from "../../stores/editorStore";
+import { useSelectedLineIndex } from "../../stores/selection";
 import type { SpinConfig } from "../../utils/spinGenerator";
 import type { EasingType } from "../../types/chart";
 
 export function SpinGeneratorDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const addEvent = useChartStore((s) => s.addEvent);
 
   const [config, setConfig] = useState<SpinConfig>({

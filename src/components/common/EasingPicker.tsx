@@ -40,8 +40,11 @@ function EasingThumb({ easing, size = 24 }: { easing: string; size?: number }) {
     ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(W, 0); ctx.stroke();
     ctx.setLineDash([]);
 
-    // Draw easing curve using CSS approximation
-    ctx.strokeStyle = "var(--accent-primary, #6366f1)";
+    // Draw easing curve. E8: a canvas ctx can't resolve a CSS var() string — it silently
+    // ignores the assignment (the curve then drew in the dashed guide's grey). Resolve
+    // the variable to a concrete color first.
+    const accent = getComputedStyle(canvas).getPropertyValue("--accent-primary").trim() || "#6366f1";
+    ctx.strokeStyle = accent;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let i = 0; i <= W; i++) {

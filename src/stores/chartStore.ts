@@ -23,9 +23,10 @@ import type {
 import { beatToFloat } from "../types/chart";
 import type { ExtraConfig } from "../types/extra";
 import { DEFAULT_EXTRA_CONFIG } from "../types/extra";
-import { ensureNoteUids, generateNoteUid } from "../utils/noteUid";
+import { ensureEntityIds, ensureLineIds, generateNoteUid, generateLineId, generateEventId } from "../utils/noteUid";
 import { BpmList } from "../utils/bpmList";
 import { nextUndoSeq } from "../utils/undoSequence";
+import { getLayerEvents, routeEventTarget, LAYER_CORE_KINDS } from "../utils/eventRouting";
 
 // ============================================================
 // CONFIGURABLE: Maximum undo history depth
@@ -78,6 +79,125 @@ export function getCachedMultiBeats(): Set<number> {
   return _cachedMultiBeats;
 }
 
+// ============================================================
+// Cached id->index resolution for selection-by-identity (finding L2)
+//
+// Selection (editorStore.selectedLineId / selectedNoteUids /
+// selectedEventIds), group refs, and drag refs all store stable ids;
+// consumers resolve them to current array indices through these helpers.
+// The note/event maps are keyed by the array reference (WeakMap) so Immer's
+// new-array-on-mutation auto-invalidates them; the line map compares the
+// lines-array reference. Resolving fresh on every read is what makes
+// selection survive sortNotes/sortEvents/reorderLines without going stale.
+// ============================================================
+
+let _lineIdMapRef: Line[] | null = null;
+let _lineIdMap: Map<string, number> | null = null;
+
+/** Resolve a line id to its current index, or -1 if the line no longer exists. */
+export function resolveLineIndex(lineId: string | null | undefined): number {
+  if (lineId == null) return -1;
+  const lines = useChartStore.getState().chart.lines;
+  if (lines !== _lineIdMapRef || !_lineIdMap) {
+    _lineIdMapRef = lines;
+    const m = new Map<string, number>();
+    for (let i = 0; i < lines.length; i++) {
+      const id = lines[i].id;
+      if (id) m.set(id, i);
+    }
+    _lineIdMap = m;
+  }
+  return _lineIdMap.get(lineId) ?? -1;
+}
+
+const _noteIndexCache = new WeakMap<Note[], Map<string, number>>();
+function noteIndexMap(notes: Note[]): Map<string, number> {
+  let m = _noteIndexCache.get(notes);
+  if (!m) {
+    m = new Map<string, number>();
+    for (let i = 0; i < notes.length; i++) {
+      const u = notes[i].uid;
+      if (u) m.set(u, i);
+    }
+    _noteIndexCache.set(notes, m);
+  }
+  return m;
+}
+
+/** Resolve a note uid to its index within the given line, or -1. */
+export function resolveNoteIndex(lineIndex: number, uid: string): number {
+  const line = useChartStore.getState().chart.lines[lineIndex];
+  if (!line) return -1;
+  return noteIndexMap(line.notes).get(uid) ?? -1;
+}
+
+/** Resolve note uids to their current indices within the line (skips uids no
+ *  longer present). Output order follows the input uids. */
+export function resolveNoteIndices(lineIndex: number, uids: string[]): number[] {
+  const line = useChartStore.getState().chart.lines[lineIndex];
+  if (!line) return [];
+  const m = noteIndexMap(line.notes);
+  const out: number[] = [];
+  for (const u of uids) {
+    const i = m.get(u);
+    if (i !== undefined) out.push(i);
+  }
+  return out;
+}
+
+const _eventIndexCache = new WeakMap<LineEvent[], Map<string, number>>();
+function eventIndexMap(events: LineEvent[]): Map<string, number> {
+  let m = _eventIndexCache.get(events);
+  if (!m) {
+    m = new Map<string, number>();
+    for (let i = 0; i < events.length; i++) {
+      const id = events[i].id;
+      if (id) m.set(id, i);
+    }
+    _eventIndexCache.set(events, m);
+  }
+  return m;
+}
+
+/** Resolve an event id to its index within the given line's flat events, or -1. */
+export function resolveEventIndex(lineIndex: number, eventId: string): number {
+  const line = useChartStore.getState().chart.lines[lineIndex];
+  if (!line) return -1;
+  return eventIndexMap(line.events).get(eventId) ?? -1;
+}
+
+/** Resolve event ids to their current indices within the line's flat events
+ *  (skips ids no longer present). Output order follows the input ids. */
+export function resolveEventIndices(lineIndex: number, ids: string[]): number[] {
+  const line = useChartStore.getState().chart.lines[lineIndex];
+  if (!line) return [];
+  const m = eventIndexMap(line.events);
+  const out: number[] = [];
+  for (const id of ids) {
+    const i = m.get(id);
+    if (i !== undefined) out.push(i);
+  }
+  return out;
+}
+
+// ---- Project-load reset hooks (finding L5 — session-owns-state) ----
+//
+// groupStore and bookmarkStore hold per-project state but live in separate
+// singletons. They can't be statically imported here: both run a top-level
+// `useChartStore.subscribe(...)`, so a static import would form an init cycle
+// and hit `useChartStore`'s TDZ at boot — and the require() lazy-import escape
+// hatch is broken in the Vite ESM browser build (finding S2). Instead each
+// store registers a SYNCHRONOUS reset callback at its module load, and
+// loadFromProjectData invokes them so a freshly loaded/imported project never
+// inherits the previous project's groups/bookmarks. Synchronous matters: the
+// import entry points call loadGroupsJson/loadBookmarksJson right AFTER
+// loadFromProjectData, so a deferred (microtask) clear would wipe the just-
+// loaded data. grep registerProjectLoadReset.
+const _projectLoadResetHandlers: Array<() => void> = [];
+export function registerProjectLoadReset(fn: () => void): void {
+  _projectLoadResetHandlers.push(fn);
+}
+
 // Default empty chart
 const DEFAULT_CHART: PhichainChart = {
   format: 1,
@@ -96,25 +216,62 @@ const DEFAULT_META: ProjectMeta = {
 
 // ---- Helper: create a default line with initial events ----
 function createDefaultLine(name?: string, index?: number): Line {
-  const defaultBeat: [number, number, number] = [0, 0, 1];
-  const farBeat: [number, number, number] = [1000, 0, 1];
-  return {
+  const line: Line = {
     name: name ?? `Line ${(index ?? 0) + 1}`,
     notes: [],
-    events: [
-      { kind: "x" as const, start_beat: defaultBeat, end_beat: farBeat, value: { constant: 0 } },
-      { kind: "y" as const, start_beat: defaultBeat, end_beat: farBeat, value: { constant: 0 } },
-      { kind: "rotation" as const, start_beat: defaultBeat, end_beat: farBeat, value: { constant: 0 } },
-      { kind: "opacity" as const, start_beat: defaultBeat, end_beat: farBeat, value: { constant: 255 } },
-      { kind: "speed" as const, start_beat: defaultBeat, end_beat: farBeat, value: { constant: 1 } },
-    ],
+    // No baseline events (finding L4): a line with no events falls back to
+    // DEFAULT_LINE_STATE (visible, speed 10, at the origin). The old [0,1000]
+    // per-kind sentinels shadowed interior events (largest end_beat won the
+    // affecting tie) and ballooned timeline/minimap length. An invisible line
+    // gets an explicit opacity-0 event (LineTemplateMenu) instead.
+    events: [],
     children: [],
     curve_note_tracks: [],
   };
+  // Stable line id for selection-by-identity (finding L2).
+  ensureLineIds(line);
+  return line;
 }
 
 // ---- Helper: push current chart to past, clear future ----
+//
+// Transaction-aware (finding L1 — heals the per-call undo floods). While a
+// transaction is open (_txnDepth > 0), the pre-transaction snapshot captured
+// by beginTransaction() is pushed exactly once — on the first mutation that
+// wants history — and every later mutation in the same gesture is a no-op
+// here. Outside a transaction it behaves as a normal per-call snapshot.
+//
+// Callers that mutate in a loop (slider drags, multi-step dialogs, the group
+// batch ops) wrap the loop in transaction(fn) so the whole gesture is a single
+// Ctrl+Z entry instead of flooding the MAX_HISTORY-deep stack. grep
+// `.transaction(` / `beginTransaction(` for the call sites.
+
+// ---- Helper: mark the chart dirty + advance the dirty token (finding F2) ----
+// EVERY path that sets isDirty=true must go through here so the _dirtySeq token
+// advances in lockstep — markCleanIf relies on that to detect an edit landing
+// during an in-flight save. Call sites: pushHistory (both branches), setMeta,
+// undo, redo. grep markStateDirty.
+function markStateDirty(state: ChartState) {
+  state.isDirty = true;
+  state._dirtySeq++;
+}
+
 function pushHistory(state: ChartState) {
+  if (state._txnDepth > 0) {
+    if (!state._txnDidPush && state._txnSnapshot) {
+      state._past.push(state._txnSnapshot);
+      state._pastSeqs.push(nextUndoSeq());
+      if (state._past.length > MAX_HISTORY) {
+        state._past.shift();
+        state._pastSeqs.shift();
+      }
+      state._future = [];
+      state._futureSeqs = [];
+      state._txnDidPush = true;
+    }
+    markStateDirty(state);
+    return;
+  }
   state._past.push(current(state.chart));
   state._pastSeqs.push(nextUndoSeq());
   if (state._past.length > MAX_HISTORY) {
@@ -123,7 +280,7 @@ function pushHistory(state: ChartState) {
   }
   state._future = [];
   state._futureSeqs = [];
-  state.isDirty = true;
+  markStateDirty(state);
 }
 
 // ---- Helper: sort notes by beat within a line ----
@@ -136,16 +293,51 @@ function sortEvents(events: LineEvent[]) {
   events.sort((a, b) => beatToFloat(a.start_beat) - beatToFloat(b.start_beat));
 }
 
-// ---- Helper: get the events array for a given kind within an event layer ----
-function getLayerEvents(layer: EventLayer, kind: LineEventKind): LineEvent[] {
-  switch (kind) {
-    case "x": return layer.move_x_events;
-    case "y": return layer.move_y_events;
-    case "rotation": return layer.rotate_events;
-    case "opacity": return layer.alpha_events;
-    case "speed": return layer.speed_events;
-    default: return [];
+// ---- Helper: force-assign fresh ids to a line's events (flat + layered) ----
+// Used by duplicateLine: a JSON clone carries the original's ids, which must
+// be replaced so the copy shares no identity with the source (selection /
+// group refs resolve by id; duplicates would be ambiguous).
+function regenerateEventIds(line: Line) {
+  for (const event of line.events) event.id = generateEventId();
+  if (line.event_layers) {
+    for (const layer of line.event_layers) {
+      for (const arr of [
+        layer.move_x_events,
+        layer.move_y_events,
+        layer.rotate_events,
+        layer.alpha_events,
+        layer.speed_events,
+      ]) {
+        for (const event of arr) event.id = generateEventId();
+      }
+    }
   }
+}
+
+// getLayerEvents (kind -> layer field map) now lives in utils/eventRouting.ts
+// as the single source of truth (finding L3); imported above. It returns null
+// for non-core kinds, so the layer mutations below guard the result.
+
+// ---- Helper: locate an event by stable id anywhere on a line draft ----
+// Returns the draft array holding the event + its index, so id-based routed
+// writes (editEventById / replaceEventById / removeEventsById — finding L3) can
+// splice/mutate in place whether the event lives in flat line.events or in any
+// event layer's kind-array. Mirrors utils/eventRouting.findEventInLine but
+// returns the array reference for mutation. grep `locateEventDraft`.
+function locateEventDraft(line: Line, eventId: string): { arr: LineEvent[]; index: number } | null {
+  const fi = line.events.findIndex((e) => e.id === eventId);
+  if (fi >= 0) return { arr: line.events, index: fi };
+  if (line.event_layers) {
+    for (const layer of line.event_layers) {
+      for (const kind of LAYER_CORE_KINDS) {
+        const arr = getLayerEvents(layer, kind);
+        if (!arr) continue;
+        const i = arr.findIndex((e) => e.id === eventId);
+        if (i >= 0) return { arr, index: i };
+      }
+    }
+  }
+  return null;
 }
 
 // ---- Helper: create an empty event layer ----
@@ -170,6 +362,12 @@ export interface ChartState {
   illustrationPath: string | null;
   meta: ProjectMeta;
   isDirty: boolean;
+  /** Monotonic counter bumped on every edit that marks the chart dirty (finding
+   *  F2). A save captures this token before its async write and later clears
+   *  isDirty via markCleanIf(token) ONLY if no edit landed meanwhile — so an
+   *  edit made DURING an in-flight save is never falsely marked saved. grep
+   *  _dirtySeq / markCleanIf. */
+  _dirtySeq: number;
   isLoaded: boolean;
 
   // Chart data (serialized to/from chart.json)
@@ -182,13 +380,26 @@ export interface ChartState {
   _pastSeqs: number[];
   _futureSeqs: number[];
 
+  // ---- Transaction batching (finding L1) ----
+  /** Depth of nested open transactions. While >0, pushHistory coalesces into one entry. */
+  _txnDepth: number;
+  /** Pre-transaction chart snapshot captured at the outermost beginTransaction(). */
+  _txnSnapshot: PhichainChart | null;
+  /** Whether the single coalesced history entry has been pushed for the open transaction. */
+  _txnDidPush: boolean;
+
   // ---- Project lifecycle ----
   /** Load a project from disk data. Resets undo history and marks clean. */
   loadFromProjectData: (data: ProjectData) => void;
   /** Close current project, reset all state to defaults. */
   closeProject: () => void;
-  /** Mark the project as saved (isDirty = false). */
+  /** Mark the project as saved (isDirty = false). Unconditional — used by
+   *  closeProject and any flow that knows the on-disk copy is current. */
   markClean: () => void;
+  /** Mark clean ONLY if no dirtying edit happened since `token` (the _dirtySeq
+   *  captured at save start). Closes the in-flight-save race where edits made
+   *  during the async write would otherwise be clobbered as "saved" (F2). */
+  markCleanIf: (token: number) => void;
 
   // ---- Chart-level mutations ----
   /** Set the chart's audio offset in seconds. Pushes undo. */
@@ -256,6 +467,25 @@ export interface ChartState {
   /** Atomically replace one event with one or more new events (single undo entry) */
   replaceEvent: (lineIndex: number, oldEventIndex: number, newEvents: LineEvent[]) => void;
 
+  // ---- Kind-aware routed event writes (finding L3) ----
+  // These route to the active event layer's kind-array on a layered chart (else
+  // flat line.events), so editor writes land where evaluateLineEventsWithLayers
+  // READS — fixing the "edit invisible in preview + dropped on RPE export" bug
+  // on imported charts. The flat add/edit/replace/removeEvents above are kept
+  // for non-layered consumers and internal use. grep `addEventRouted`.
+  /** Add an event, routing flat<->layer by kind. `layerIndex` mirrors
+   *  editorStore.eventEditorActiveLayer (-1 = force flat, 0..4 = layer,
+   *  undefined = auto/layer 0). Assigns a UID, sorts, pushes undo. */
+  addEventRouted: (lineIndex: number, event: LineEvent, layerIndex?: number) => void;
+  /** Edit an event located by its stable id (finding L2) — found in flat events
+   *  or any layer, so no flat-vs-layer index ambiguity. Pushes undo. */
+  editEventById: (lineIndex: number, eventId: string, changes: Partial<LineEvent>) => void;
+  /** Replace an event (located by stable id) with one or more new events in the
+   *  array where it lives. Single undo entry. */
+  replaceEventById: (lineIndex: number, eventId: string, newEvents: LineEvent[]) => void;
+  /** Remove events located by stable id (across flat + all layers). Single undo entry. */
+  removeEventsById: (lineIndex: number, eventIds: string[]) => void;
+
   // ---- Event layer mutations (RPE multi-layer events) ----
   /** Add an event to a specific RPE event layer. Creates the layer if needed. Pushes undo. */
   addEventToLayer: (lineIndex: number, layerIndex: number, kind: LineEventKind, event: LineEvent) => void;
@@ -292,6 +522,17 @@ export interface ChartState {
   chartFontFamily: string | null;
   setChartFontFamily: (family: string | null) => void;
 
+  // ---- Transaction batching ----
+  /** Open an undo transaction. All chart mutations until the matching
+   *  endTransaction() collapse into ONE undo entry. Nestable (depth-counted).
+   *  Prefer transaction() unless you need manual control across async work. */
+  beginTransaction: () => void;
+  /** Close the most recently opened transaction. */
+  endTransaction: () => void;
+  /** Run fn() with all its chart mutations coalesced into a single undo entry.
+   *  Use for slider drags, multi-step dialogs, and group batch operations. */
+  transaction: (fn: () => void) => void;
+
   // ---- Undo/redo ----
   /** Revert to previous chart state. Moves current state to _future stack. */
   undo: () => void;
@@ -320,12 +561,16 @@ export const useChartStore = create<ChartState>()((set, get) => ({
   illustrationPath: null,
   meta: { ...DEFAULT_META },
   isDirty: false,
+  _dirtySeq: 0,
   isLoaded: false,
   chart: structuredClone(DEFAULT_CHART),
   _past: [],
   _future: [],
   _pastSeqs: [],
   _futureSeqs: [],
+  _txnDepth: 0,
+  _txnSnapshot: null,
+  _txnDidPush: false,
   illustrationImage: null,
   lineTextures: new Map<string, Blob>(),
   extraConfig: { ...DEFAULT_EXTRA_CONFIG },
@@ -335,11 +580,15 @@ export const useChartStore = create<ChartState>()((set, get) => ({
 
   loadFromProjectData: (data) => {
     const chart = JSON.parse(data.chart_json) as PhichainChart;
-    ensureNoteUids(chart);
+    ensureEntityIds(chart);
     set({
       projectPath: data.project_path,
       musicPath: data.music_path,
       illustrationPath: data.illustration_path,
+      // Clear the previous project's illustration image so a chart without one
+      // doesn't inherit it (finding S8); the entry point loads the new one via
+      // loadIllustration() after this returns.
+      illustrationImage: null,
       meta: data.meta,
       chart,
       isDirty: false,
@@ -348,9 +597,22 @@ export const useChartStore = create<ChartState>()((set, get) => ({
       _future: [],
       _pastSeqs: [],
       _futureSeqs: [],
+      // A load can't run mid-gesture, but reset transaction state defensively so
+      // a stale open transaction can never bridge two projects (finding L1/L5).
+      _txnDepth: 0,
+      _txnSnapshot: null,
+      _txnDidPush: false,
       lineTextures: new Map<string, Blob>(),
       chartFontFamily: null,
+      // Reset prpr/Phira extra.json (effects/video) so an import without one
+      // doesn't keep the previous project's effects (finding S8); the .pez entry
+      // point re-applies it via setExtraConfig() after this returns.
+      extraConfig: { ...DEFAULT_EXTRA_CONFIG },
     });
+    // Clear editor-only per-project state (groups + bookmarks) BEFORE the entry
+    // point repopulates them. See registerProjectLoadReset above for why this is
+    // a synchronous registered hook rather than a direct import.
+    for (const reset of _projectLoadResetHandlers) reset();
   },
 
   closeProject: () =>
@@ -374,6 +636,13 @@ export const useChartStore = create<ChartState>()((set, get) => ({
 
   markClean: () => set({ isDirty: false }),
 
+  // F2: clear dirty only if the token (a _dirtySeq snapshot taken at save start)
+  // still matches — i.e. nothing edited the chart/meta during the async write.
+  // If an edit landed mid-save, _dirtySeq advanced past the token and we keep
+  // isDirty so that edit is saved by the next pass instead of being lost.
+  markCleanIf: (token) =>
+    set((state) => (state._dirtySeq === token ? { isDirty: false } : {})),
+
   // ---- Chart-level mutations ----
 
   setOffset: (offset) =>
@@ -387,7 +656,12 @@ export const useChartStore = create<ChartState>()((set, get) => ({
   setMeta: (changes) =>
     set(
       produce((state: ChartState) => {
-        pushHistory(state);
+        // Meta is intentionally excluded from undo history (finding S6):
+        // undo/redo restore only state.chart, so pushing a snapshot here
+        // created a no-op undo entry that evicted real chart history once
+        // the stack reached MAX_HISTORY. We still mark dirty so the edit saves
+        // (and advance the dirty token so an in-flight save won't clobber it).
+        markStateDirty(state);
         Object.assign(state.meta, changes);
       }),
     ),
@@ -421,6 +695,9 @@ export const useChartStore = create<ChartState>()((set, get) => ({
       produce((state: ChartState) => {
         pushHistory(state);
         const line = { ...createDefaultLine(undefined, state.chart.lines.length), ...partial };
+        // partial may replace events/layers (e.g. line templates) with id-less
+        // data; backfill so every entity is identity-addressable (L2).
+        ensureLineIds(line);
         state.chart.lines.push(line);
       }),
     ),
@@ -432,6 +709,7 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         pushHistory(state);
         for (const partial of partials) {
           const line = { ...createDefaultLine(undefined, state.chart.lines.length), ...partial };
+          ensureLineIds(line);
           state.chart.lines.push(line);
         }
       }),
@@ -452,8 +730,17 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         if (lineIndex < 0 || lineIndex >= state.chart.lines.length) return;
         pushHistory(state);
         const original = state.chart.lines[lineIndex];
-        const duplicated = JSON.parse(JSON.stringify(original));
+        const duplicated = JSON.parse(JSON.stringify(original)) as Line;
         duplicated.name = (duplicated.name || `Line ${lineIndex}`) + " (copy)";
+        // Regenerate ALL ids so the clone shares no identity with the original
+        // (findings S7 + L2): note uids, line id, and event ids. Group refs and
+        // identity-based selection resolve by id, so duplicate ids would make
+        // the copy share the original's membership and resolve ambiguously.
+        duplicated.id = generateLineId();
+        for (const note of duplicated.notes) {
+          note.uid = generateNoteUid();
+        }
+        regenerateEventIds(duplicated);
         state.chart.lines.splice(lineIndex + 1, 0, duplicated);
       }),
     ),
@@ -547,6 +834,10 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         if (notes.length === 0) return;
         pushHistory(state);
         for (const note of notes) {
+          // Assign a uid like addNote does (finding G3). Group note-refs and
+          // post-add reselection resolve notes by uid, so a missing uid makes
+          // batch-added notes invisible to groups and unselectable by identity.
+          if (!note.uid) note.uid = generateNoteUid();
           state.chart.lines[lineIndex].notes.push(note);
         }
         sortNotes(state.chart.lines[lineIndex].notes);
@@ -625,6 +916,7 @@ export const useChartStore = create<ChartState>()((set, get) => ({
             sortNotes(line.notes);
           }
           if (mut.newEvents) {
+            for (const e of mut.newEvents) if (!e.id) e.id = generateEventId();
             line.events.push(...mut.newEvents);
           }
           sortEvents(line.events);
@@ -639,6 +931,7 @@ export const useChartStore = create<ChartState>()((set, get) => ({
       produce((state: ChartState) => {
         if (lineIndex < 0 || lineIndex >= state.chart.lines.length) return;
         pushHistory(state);
+        if (!event.id) event.id = generateEventId();
         state.chart.lines[lineIndex].events.push(event);
         sortEvents(state.chart.lines[lineIndex].events);
       }),
@@ -674,8 +967,78 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         const line = state.chart.lines[lineIndex];
         if (!line || oldEventIndex < 0 || oldEventIndex >= line.events.length) return;
         pushHistory(state);
+        for (const e of newEvents) if (!e.id) e.id = generateEventId();
         line.events.splice(oldEventIndex, 1, ...newEvents);
         sortEvents(line.events);
+      }),
+    ),
+
+  // ---- Kind-aware routed event writes (finding L3) ----
+
+  // Dispatcher (not itself a producer): reads the current line to decide flat
+  // vs. layer, then delegates to addEvent / addEventToLayer so exactly one
+  // history entry is pushed by the delegate.
+  addEventRouted: (lineIndex, event, layerIndex) => {
+    const line = get().chart.lines[lineIndex];
+    if (!line) return;
+    const target = routeEventTarget(line, event.kind, layerIndex);
+    if (target.kind === "layer") {
+      get().addEventToLayer(lineIndex, target.layerIndex, event.kind, event);
+    } else {
+      get().addEvent(lineIndex, event);
+    }
+  },
+
+  editEventById: (lineIndex, eventId, changes) =>
+    set(
+      produce((state: ChartState) => {
+        const line = state.chart.lines[lineIndex];
+        if (!line) return;
+        const loc = locateEventDraft(line, eventId);
+        if (!loc) return;
+        pushHistory(state);
+        Object.assign(loc.arr[loc.index], changes);
+        sortEvents(loc.arr);
+      }),
+    ),
+
+  replaceEventById: (lineIndex, eventId, newEvents) =>
+    set(
+      produce((state: ChartState) => {
+        const line = state.chart.lines[lineIndex];
+        if (!line) return;
+        const loc = locateEventDraft(line, eventId);
+        if (!loc) return;
+        pushHistory(state);
+        for (const e of newEvents) if (!e.id) e.id = generateEventId();
+        loc.arr.splice(loc.index, 1, ...newEvents);
+        sortEvents(loc.arr);
+      }),
+    ),
+
+  removeEventsById: (lineIndex, eventIds) =>
+    set(
+      produce((state: ChartState) => {
+        const line = state.chart.lines[lineIndex];
+        if (!line || eventIds.length === 0) return;
+        // Group removals by their backing array (flat or a specific layer
+        // kind-array), then splice each in reverse index order so earlier
+        // indices stay valid. A draft array reference is a stable Map key
+        // within this producer.
+        const byArr = new Map<LineEvent[], number[]>();
+        for (const id of eventIds) {
+          const loc = locateEventDraft(line, id);
+          if (!loc) continue;
+          let list = byArr.get(loc.arr);
+          if (!list) { list = []; byArr.set(loc.arr, list); }
+          list.push(loc.index);
+        }
+        if (byArr.size === 0) return;
+        pushHistory(state);
+        for (const [arr, indices] of byArr) {
+          indices.sort((a, b) => b - a);
+          for (const i of indices) arr.splice(i, 1);
+        }
       }),
     ),
 
@@ -688,7 +1051,7 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         state._future.push(current(state.chart));
         state._futureSeqs.push(state._pastSeqs.pop()!);
         state.chart = state._past.pop()!;
-        state.isDirty = true;
+        markStateDirty(state);
       }),
     ),
 
@@ -699,9 +1062,46 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         state._past.push(current(state.chart));
         state._pastSeqs.push(state._futureSeqs.pop()!);
         state.chart = state._future.pop()!;
-        state.isDirty = true;
+        markStateDirty(state);
       }),
     ),
+
+  // ---- Transaction batching (finding L1) ----
+
+  beginTransaction: () =>
+    set(
+      produce((state: ChartState) => {
+        if (state._txnDepth === 0) {
+          // Snapshot the pre-transaction chart once. pushHistory pushes it
+          // lazily on the first mutation inside the transaction, so an empty
+          // transaction (no mutation) creates no undo entry.
+          state._txnSnapshot = current(state.chart);
+          state._txnDidPush = false;
+        }
+        state._txnDepth++;
+      }),
+    ),
+
+  endTransaction: () =>
+    set(
+      produce((state: ChartState) => {
+        if (state._txnDepth === 0) return;
+        state._txnDepth--;
+        if (state._txnDepth === 0) {
+          state._txnSnapshot = null;
+          state._txnDidPush = false;
+        }
+      }),
+    ),
+
+  transaction: (fn) => {
+    get().beginTransaction();
+    try {
+      fn();
+    } finally {
+      get().endTransaction();
+    }
+  },
 
   canUndo: () => get()._past.length > 0,
   canRedo: () => get()._future.length > 0,
@@ -731,8 +1131,10 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         const line = state.chart.lines[lineIndex];
         if (!line || !line.event_layers) return;
         if (layerIndex < 0 || layerIndex >= line.event_layers.length) return;
-        pushHistory(state);
         const events = getLayerEvents(line.event_layers[layerIndex], kind);
+        if (!events) return;
+        pushHistory(state);
+        if (!event.id) event.id = generateEventId();
         events.push(event);
         sortEvents(events);
       }),
@@ -745,8 +1147,9 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         if (!line || !line.event_layers) return;
         if (layerIndex < 0 || layerIndex >= line.event_layers.length) return;
         if (eventIndices.length === 0) return;
-        pushHistory(state);
         const events = getLayerEvents(line.event_layers[layerIndex], kind);
+        if (!events) return;
+        pushHistory(state);
         const sorted = [...eventIndices].sort((a, b) => b - a);
         for (const idx of sorted) {
           if (idx >= 0 && idx < events.length) {
@@ -763,6 +1166,7 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         if (!line || !line.event_layers) return;
         if (layerIndex < 0 || layerIndex >= line.event_layers.length) return;
         const events = getLayerEvents(line.event_layers[layerIndex], kind);
+        if (!events) return;
         if (eventIndex < 0 || eventIndex >= events.length) return;
         pushHistory(state);
         Object.assign(events[eventIndex], changes);
@@ -790,8 +1194,10 @@ export const useChartStore = create<ChartState>()((set, get) => ({
         if (!line || !line.event_layers) return;
         if (layerIndex < 0 || layerIndex >= line.event_layers.length) return;
         if (events.length === 0) return;
-        pushHistory(state);
         const layerEvents = getLayerEvents(line.event_layers[layerIndex], kind);
+        if (!layerEvents) return;
+        pushHistory(state);
+        for (const e of events) if (!e.id) e.id = generateEventId();
         layerEvents.push(...events);
         sortEvents(layerEvents);
       }),

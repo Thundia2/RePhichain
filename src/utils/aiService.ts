@@ -132,6 +132,7 @@ export async function generateAiCommandsStream(
   history: AiMessage[],
   config: AiConfig,
   onToken: (token: string) => void,
+  signal?: AbortSignal,   // M4: abort → cancels the Rust stream (ai_cancel_stream)
 ): Promise<AiGenerateResult> {
   // Build the chart context snapshot (pass userMessage for beat-aware filtering)
   const context = buildAiContext(userMessage);
@@ -164,6 +165,7 @@ export async function generateAiCommandsStream(
         onToken(chunk.content);
       }
     },
+    signal,
   );
 
   // Parse the final complete response (identical to non-streaming path)

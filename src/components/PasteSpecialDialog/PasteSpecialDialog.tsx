@@ -7,13 +7,13 @@
 // ============================================================
 
 import { useState } from "react";
-import { useEditorStore } from "../../stores/editorStore";
+import { getSelectedLineIndex } from "../../stores/selection";
 import { useChartStore } from "../../stores/chartStore";
-import { useAudioStore } from "../../stores/audioStore";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { getClipboard } from "../../hooks/useClipboard";
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import type { Note, LineEvent } from "../../types/chart";
+import { NumericInput } from "../common/FormFields";
 
 interface Props {
   open: boolean;
@@ -34,14 +34,12 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
 
   const handleApply = () => {
     if (!clipboard) return;
-    const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (es.selectedLineIndex === null) return;
+    const selectedLineIndex = getSelectedLineIndex();
+    if (selectedLineIndex === null) return;
 
     // Compute paste offset: paste at the current playback position
-    const { currentTime } = useAudioStore.getState();
-    const bpmList = new BpmList(cs.chart.bpm_list);
-    const currentBeat = bpmList.beatAtFloat(currentTime - cs.chart.offset);
+    const currentBeat = getPlayheadBeat();
 
     // The base beat from clipboard is the earliest item's beat
     const baseBeat = clipboard.baseBeat;
@@ -66,7 +64,7 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
         pasted.hold_beat = floatToBeat(Math.max(0, holdF * beatScale));
       }
 
-      cs.addNote(es.selectedLineIndex!, pasted);
+      cs.addNote(selectedLineIndex!, pasted);
     }
 
     // Paste events with transforms
@@ -86,7 +84,20 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
         end_beat: floatToBeat(Math.max(0, finalStart + finalDuration)),
       };
 
-      cs.addEvent(es.selectedLineIndex!, pasted);
+      // SW2: x events carry a horizontal position, so apply the same Mirror X / X-offset
+      // the notes get above. The dialog only transformed event BEATS before, leaving x
+      // events un-mirrored/un-offset (the label is "negate horizontal position").
+      if (event.kind === "x" && (mirrorX || xOffset !== 0)) {
+        const tx = (v: number) => (mirrorX ? -v : v) + xOffset;
+        if ("constant" in pasted.value) {
+          pasted.value = { constant: tx(pasted.value.constant) };
+        } else if ("transition" in pasted.value) {
+          const t = pasted.value.transition;
+          pasted.value = { transition: { ...t, start: tx(t.start), end: tx(t.end) } };
+        }
+      }
+
+      cs.addEvent(selectedLineIndex!, pasted);
     }
 
     onClose();
@@ -193,12 +204,13 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <label style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                   Beat scale factor
-                  <input
-                    type="number"
+                  <NumericInput
+                    commitMode="blur"
                     step="0.1"
-                    min="0.1"
+                    min={0.1}
+                    fallback={1}
                     value={beatScale}
-                    onChange={(e) => setBeatScale(Math.max(0.1, parseFloat(e.target.value) || 1))}
+                    onChange={setBeatScale}
                     className="w-full mt-1 px-2 py-1 rounded text-xs"
                     style={inputStyle}
                   />
@@ -206,11 +218,12 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
 
                 <label style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                   X offset
-                  <input
-                    type="number"
+                  <NumericInput
+                    commitMode="blur"
                     step="10"
+                    fallback={0}
                     value={xOffset}
-                    onChange={(e) => setXOffset(parseFloat(e.target.value) || 0)}
+                    onChange={setXOffset}
                     className="w-full mt-1 px-2 py-1 rounded text-xs"
                     style={inputStyle}
                   />
@@ -218,11 +231,12 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
 
                 <label style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                   Beat offset
-                  <input
-                    type="number"
+                  <NumericInput
+                    commitMode="blur"
                     step="0.25"
+                    fallback={0}
                     value={beatOffset}
-                    onChange={(e) => setBeatOffset(parseFloat(e.target.value) || 0)}
+                    onChange={setBeatOffset}
                     className="w-full mt-1 px-2 py-1 rounded text-xs"
                     style={inputStyle}
                   />

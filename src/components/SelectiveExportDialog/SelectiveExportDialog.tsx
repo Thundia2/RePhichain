@@ -7,10 +7,11 @@
 //   - Picking an export format
 // ============================================================
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { beatToFloat } from "../../types/chart";
 import type { PhichainChart, Beat, Note, LineEvent } from "../../types/chart";
+import { NumericInput } from "../common/FormFields";
 
 interface SelectiveExportDialogProps {
   open: boolean;
@@ -44,6 +45,19 @@ export function SelectiveExportDialog({ open, onClose }: SelectiveExportDialogPr
     () => new Set(chart.lines.map((_, i) => i)),
   );
   const [format, setFormat] = useState<"phichain" | "json">("phichain");
+
+  // D6: re-seed the line selection from the CURRENT lines on every open. The
+  // useState initializer above only runs once at first mount (App.tsx keeps
+  // this dialog mounted and gates visibility via `if (!open) return null`), so
+  // without this the set goes stale — it would hold indices for lines deleted
+  // since first mount and miss lines added since. "All lines" matches the
+  // initializer's intent (export defaults to the whole chart). grep
+  // showSelectiveExport in App.tsx for the always-mounted call site.
+  useEffect(() => {
+    if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedLines(new Set(chart.lines.map((_, i) => i)));
+  }, [open, chart.lines]);
 
   const toggleLine = useCallback((idx: number) => {
     setSelectedLines((prev) => {
@@ -127,26 +141,28 @@ export function SelectiveExportDialog({ open, onClose }: SelectiveExportDialogPr
         <div className="flex gap-3 mb-3">
           <label className="flex-1">
             <span className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Start Beat</span>
-            <input
+            <NumericInput
               className="w-full px-2 py-1 rounded text-xs"
               style={inputStyle}
-              type="number"
+              commitMode="blur"
               min={0}
               step={1}
+              fallback={0}
               value={startBeat}
-              onChange={(e) => setStartBeat(Math.max(0, parseFloat(e.target.value) || 0))}
+              onChange={setStartBeat}
             />
           </label>
           <label className="flex-1">
             <span className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>End Beat</span>
-            <input
+            <NumericInput
               className="w-full px-2 py-1 rounded text-xs"
               style={inputStyle}
-              type="number"
+              commitMode="blur"
               min={0}
               step={1}
+              fallback={0}
               value={endBeat}
-              onChange={(e) => setEndBeat(Math.max(0, parseFloat(e.target.value) || 0))}
+              onChange={setEndBeat}
             />
           </label>
         </div>

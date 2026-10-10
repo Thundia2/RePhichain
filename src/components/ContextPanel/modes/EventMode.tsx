@@ -9,11 +9,11 @@
 
 import React, { useMemo } from "react";
 import { useEditorStore } from "../../../stores/editorStore";
+import { useSelectedLineIndex, useSelectedEventIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
-import { useAudioStore } from "../../../stores/audioStore";
 import { useFavoritesStore } from "../../../stores/favoritesStore";
 import { useToastStore } from "../../../stores/toastStore";
-import { BpmList } from "../../../utils/bpmList";
+import { getPlayheadBeat } from "../../../utils/playhead";
 import type { LineEvent, EasingType } from "../../../types/chart";
 import { beatToFloat, floatToBeat } from "../../../types/chart";
 import { EVENT_COLORS } from "../../../constants/eventConfig";
@@ -91,8 +91,8 @@ export function EventMode({ activeTab }: EventModeProps) {
 // ---- Edit sub-tab ----
 
 function EditTab() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectedEventIndices = useEditorStore((s) => s.selectedEventIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const selectedEventIndices = useSelectedEventIndices();
   const eventEditorActiveLayer = useEditorStore((s) => s.eventEditorActiveLayer);
   const lines = useChartStore((s) => s.chart.lines);
   const editEvent = useChartStore((s) => s.editEvent);
@@ -121,9 +121,7 @@ function EditTab() {
   // ---- Split: split primary event at playhead into two events ----
   const handleSplit = () => {
     const cs = useChartStore.getState();
-    const { currentTime } = useAudioStore.getState();
-    const bpmList = new BpmList(cs.chart.bpm_list);
-    const playheadBeat = bpmList.beatAtFloat(currentTime - cs.chart.offset);
+    const playheadBeat = getPlayheadBeat();
     const startBeat = beatToFloat(event.start_beat);
     const endBeat = beatToFloat(event.end_beat);
     // Playhead must be strictly between start and end
@@ -507,8 +505,8 @@ function approximateEasing(name: string, t: number): number {
 // ---- Easing sub-tab ----
 
 function EasingTab() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
-  const selectedEventIndices = useEditorStore((s) => s.selectedEventIndices);
+  const selectedLineIndex = useSelectedLineIndex();
+  const selectedEventIndices = useSelectedEventIndices();
   const lines = useChartStore((s) => s.chart.lines);
   const editEvent = useChartStore((s) => s.editEvent);
   const favoriteEasings = useFavoritesStore((s) => s.favoriteEasings);

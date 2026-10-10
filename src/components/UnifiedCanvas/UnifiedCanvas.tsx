@@ -25,6 +25,15 @@ import { useRef, useEffect, useCallback, useState } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  getMultiSelectedLineIndices,
+  setNoteSelectionByIndex,
+  toggleNoteSelectionByIndex,
+  selectLineByIndex,
+  toggleMultiSelectedLineByIndex,
+} from "../../stores/selection";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useRespackStore } from "../../stores/respackStore";
 import { useGroupStore } from "../../stores/groupStore";
@@ -36,6 +45,10 @@ import { HitEffectManager } from "../../canvas/hitEffects";
 import { BpmList } from "../../utils/bpmList";
 import { beatToFloat, floatToBeat, CANVAS_WIDTH } from "../../types/chart";
 import { getXSnapPositions } from "../../utils/xSnap";
+// Central playhead-beat policy (L6). latencyCompensated:true → the game-render
+// space (offset + audioLatencyMs); the hit-tests below MUST use it so clicks land
+// on the latency-shifted visuals the renderers draw. grep effectiveOffset.
+import { getPlayheadBeat, playbackOffsetSeconds } from "../../utils/playhead";
 
 // Interaction modules
 import {
@@ -100,6 +113,11 @@ import {
   computePlacementGhost,
 } from "./CanvasMouseHandlers";
 
+// Q6: when the Pixi renderer is active it draws the game scene at identity (viewport
+// zoom/pan is a future enhancement — see the render loop), so overlays + mouse hit-tests
+// use this identity viewport instead of es.canvasViewport, or they drift from the lines.
+const IDENTITY_VIEWPORT = { zoom: 1, offsetX: 0, offsetY: 0 };
+
 export function UnifiedCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null); // Canvas 2D overlay for handles/selection (Pixi mode)
@@ -117,6 +135,15 @@ export function UnifiedCanvas() {
   const spaceDownRef = useRef(false);
   // Raw cursor position in screen pixels (for screen-space overlays like ghost beat label)
   const rawCursorRef = useRef<{ x: number; y: number } | null>(null);
+  // UC7: last absolute client coords — handleMouseUp has no event, so the drag-select
+  // FloatingInspector reads this instead of the logical (viewport-adjusted) drag coords,
+  // which would mis-place the fixed-position popover (the other 3 call sites pass clientX/Y).
+  const lastClientRef = useRef<{ x: number; y: number } | null>(null);
+  // Q2/Q8: line-texture load bookkeeping. texInFlightRef = names with a decode in flight
+  // (so a load isn't re-kicked every frame); loadedTexBlobsRef = the Blob last loaded per
+  // name, so a re-upload under the same name (new Blob) reloads + invalidates the stale one.
+  const texInFlightRef = useRef<Set<string>>(new Set());
+  const loadedTexBlobsRef = useRef<Map<string, Blob>>(new Map());
 
   const isLoaded = useChartStore((s) => s.isLoaded);
 
@@ -143,13 +170,11 @@ export function UnifiedCanvas() {
   }
   /* eslint-enable react-hooks/refs */
 
-  // ---- Get current beat ----
+  // ---- Get current beat (raw chart beat — editing / placement space) ----
+  // Note: hit-testing the RENDERED visuals does NOT use this — it uses the
+  // latency-compensated beat (see handleMouseDown). grep effectiveOffset.
   const getCurrentBeat = useCallback((): number => {
-    const { currentTime } = useAudioStore.getState();
-    const cs = useChartStore.getState();
-    const bpmList = bpmListRef.current;
-    if (!bpmList) return 0;
-    return bpmList.beatAtFloat(currentTime - cs.chart.offset);
+    return getPlayheadBeat();
   }, []);
 
   // ---- Get current time (offset-adjusted) ----
@@ -277,6 +302,8 @@ export function UnifiedCanvas() {
       const ss = useSettingsStore.getState();
       const rs = useRespackStore.getState();
       const activeRespack = rs.getActiveRespack();
+      const selLineIdx = getSelectedLineIndex();
+      const multiSel = getMultiSelectedLineIndices();
 
       // Reset hit effects on seek/stop
       if (wasPlayingRef.current && !isPlaying) {
@@ -324,35 +351,57 @@ export function UnifiedCanvas() {
       // ---- Load line textures into active renderer cache ----
       const activeRenderer = renderer || pixiRenderer;
       for (const line of cs.chart.lines) {
-        if (line.texture && activeRenderer && !activeRenderer.hasLineTexture(line.texture)) {
-          const blob = cs.lineTextures.get(line.texture);
-          if (blob) {
-            const img = new Image();
-            const url = URL.createObjectURL(blob);
-            img.onload = () => {
-              activeRenderer.loadLineTexture(line.texture!, img);
-              URL.revokeObjectURL(url);
-            };
-            img.onerror = () => URL.revokeObjectURL(url);
-            img.src = url;
+        if (!line.texture || !activeRenderer) continue;
+        const texName = line.texture;
+        const blob = cs.lineTextures.get(texName);
+        if (!blob) continue;
+        // Q8: skip if a decode for this name is already running (the old loop kicked a
+        // fresh Image every frame until it finished). Q2: reload when the Blob changed
+        // (re-upload under the same name) or the renderer lost it, invalidating the stale one.
+        if (texInFlightRef.current.has(texName)) continue;
+        const have = activeRenderer.hasLineTexture(texName);
+        const loadedBlob = loadedTexBlobsRef.current.get(texName);
+        if (have && loadedBlob === blob) continue;
+        if (have && loadedBlob !== blob) activeRenderer.invalidateLineTexture(texName);
+
+        texInFlightRef.current.add(texName);
+        const img = new Image();
+        const url = URL.createObjectURL(blob);
+        img.onload = () => {
+          texInFlightRef.current.delete(texName);
+          // Re-resolve the renderer — it may have been swapped/destroyed mid-decode.
+          const r = rendererRef.current || pixiRendererRef.current;
+          if (r) {
+            try {
+              r.loadLineTexture(texName, img);
+              loadedTexBlobsRef.current.set(texName, blob);
+            } catch { /* renderer torn down between guard and call */ }
           }
-        }
+          URL.revokeObjectURL(url);
+        };
+        img.onerror = () => {
+          texInFlightRef.current.delete(texName);
+          URL.revokeObjectURL(url);
+        };
+        img.src = url;
       }
 
       // ---- Render options (shared by both renderers) ----
       const dpr = window.devicePixelRatio || 1;
       const vp = es.canvasViewport;
 
-      // Audio latency compensation for game preview visuals only.
-      // Editor interaction helpers (getCurrentBeat/getCurrentTime) stay on raw chart.offset.
-      const effectiveOffset = cs.chart.offset + ss.audioLatencyMs / 1000;
+      // Audio latency compensation for game preview visuals only (the renderers
+      // shift visuals to match what the user hears). Editor interaction helpers
+      // (getCurrentBeat/getCurrentTime) stay on raw chart.offset; the hit-tests in
+      // handleMouseDown use this same compensated offset. grep playbackOffsetSeconds.
+      const effectiveOffset = playbackOffsetSeconds(true);
 
       const renderOptions = {
         noteSize: ss.noteSize,
         backgroundDim: ss.backgroundDim,
         illustrationImage: cs.illustrationImage,
-        selectedLineIndex: es.selectedLineIndex,
-        selectedNoteIndices: es.selectedNoteIndices,
+        selectedLineIndex: selLineIdx,
+        selectedNoteIndices: getSelectedNoteIndices(),
         showFcApIndicator: ss.showFcApIndicator,
         isFcValid: es.isFcValid,
         multiHighlight: ss.multiHighlight,
@@ -364,10 +413,10 @@ export function UnifiedCanvas() {
         isPlaying,
         showHitEffects: ss.showHitEffects,
         pendingNote: es.pendingNote,
-        pendingLineIndex: es.selectedLineIndex,
+        pendingLineIndex: selLineIdx,
         respack: activeRespack,
         hiddenLineIndices: hiddenLineIndices.size > 0 ? hiddenLineIndices : null,
-        multiSelectedLineIndices: es.multiSelectedLineIndices.length > 0 ? new Set(es.multiSelectedLineIndices) : null,
+        multiSelectedLineIndices: multiSel.length > 0 ? new Set(multiSel) : null,
         chartFontFamily: cs.chartFontFamily,
         // Group editing mode
         ...(() => {
@@ -409,11 +458,11 @@ export function UnifiedCanvas() {
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, overlay.width, overlay.height);
             ctx.restore();
-            // Apply DPR + viewport transform
+            // Q6: Pixi renders the scene at identity (no viewport transform yet), so the
+            // overlay must NOT apply the viewport either — otherwise handles/selection
+            // drift from the rendered lines when zoomed/panned. DPR only here.
             ctx.save();
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            ctx.translate(vp.offsetX, vp.offsetY);
-            ctx.scale(vp.zoom, vp.zoom);
           }
         }
       } else if (renderer) {
@@ -447,9 +496,9 @@ export function UnifiedCanvas() {
       // ---- Draw overlays on top of game render (same viewport transform) ----
       if (ctx) {
         // Draw handles on the selected line
-        if (es.selectedLineIndex !== null) {
+        if (selLineIdx !== null) {
           const selectedLineInfo = renderResult.lines.find(
-            (l) => l.lineIndex === es.selectedLineIndex,
+            (l) => l.lineIndex === selLineIdx,
           );
           if (selectedLineInfo) {
             const drag = dragRef.current;
@@ -511,9 +560,9 @@ export function UnifiedCanvas() {
         }
 
         // ---- Pattern ghost note preview ----
-        if (es.activeTool === "place_pattern" && es.patternGhostNotes.length > 0 && es.selectedLineIndex !== null) {
+        if (es.activeTool === "place_pattern" && es.patternGhostNotes.length > 0 && selLineIdx !== null) {
           const patternLineInfo = renderResult.lines.find(
-            (l) => l.lineIndex === es.selectedLineIndex,
+            (l) => l.lineIndex === selLineIdx,
           );
           if (patternLineInfo) {
             drawPatternGhostNotes(ctx, es.patternGhostNotes, patternLineInfo, rect.width);
@@ -521,9 +570,9 @@ export function UnifiedCanvas() {
         }
 
         // ---- X snap grid (with active lane highlight) ----
-        if (es.xSnapEnabled && es.verticalLines > 0 && es.selectedLineIndex !== null) {
+        if (es.xSnapEnabled && es.verticalLines > 0 && selLineIdx !== null) {
           const snapLineInfo = renderResult.lines.find(
-            (l) => l.lineIndex === es.selectedLineIndex,
+            (l) => l.lineIndex === selLineIdx,
           );
           if (snapLineInfo) {
             drawXSnapGrid(
@@ -534,10 +583,10 @@ export function UnifiedCanvas() {
         }
 
         // ---- Beat grid perpendicular lines ----
-        if (ss.showBeatGrid && es.selectedLineIndex !== null) {
-          const beatGridLine = cs.chart.lines[es.selectedLineIndex];
+        if (ss.showBeatGrid && selLineIdx !== null) {
+          const beatGridLine = cs.chart.lines[selLineIdx];
           const beatGridLineInfo = renderResult.lines.find(
-            (l) => l.lineIndex === es.selectedLineIndex,
+            (l) => l.lineIndex === selLineIdx,
           );
           if (beatGridLine && beatGridLineInfo && bpmListRef.current) {
             const bgCurrentBeat = bpmList.beatAtFloat(latestTime - effectiveOffset);
@@ -557,8 +606,8 @@ export function UnifiedCanvas() {
         }
 
         // ---- Line path preview ----
-        if (ss.showLinePath && es.selectedLineIndex !== null) {
-          const line = cs.chart.lines[es.selectedLineIndex];
+        if (ss.showLinePath && selLineIdx !== null) {
+          const line = cs.chart.lines[selLineIdx];
           if (line) {
             const currentBeat = bpmList.beatAtFloat(latestTime - effectiveOffset);
             drawLinePathPreview(
@@ -642,10 +691,10 @@ export function UnifiedCanvas() {
 
   // ---- Helper: Get selected line's render info ----
   const getSelectedLineInfo = useCallback((): RenderedLineInfo | null => {
-    const es = useEditorStore.getState();
     const rr = lastRenderResultRef.current;
-    if (!rr || es.selectedLineIndex === null) return null;
-    return rr.lines.find((l) => l.lineIndex === es.selectedLineIndex) ?? null;
+    const selLineIdx = getSelectedLineIndex();
+    if (!rr || selLineIdx === null) return null;
+    return rr.lines.find((l) => l.lineIndex === selLineIdx) ?? null;
   }, []);
 
   // ---- Mouse Down Handler ----
@@ -662,8 +711,10 @@ export function UnifiedCanvas() {
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
 
-    // Convert to logical (viewport-adjusted) coordinates for hit-testing
-    const vp = es.canvasViewport;
+    // Convert to logical (viewport-adjusted) coordinates for hit-testing. Q6: in Pixi
+    // mode the scene renders at identity, so hit-test in identity space too or clicks
+    // land off the rendered lines when zoomed/panned.
+    const vp = usePixiRef.current ? IDENTITY_VIEWPORT : es.canvasViewport;
     const mouseX = (rawMouseX - vp.offsetX) / vp.zoom;
     const mouseY = (rawMouseY - vp.offsetY) / vp.zoom;
 
@@ -684,9 +735,18 @@ export function UnifiedCanvas() {
     if (selectedLineInfo) {
       const chartLine = cs.chart.lines[selectedLineInfo.lineIndex];
       if (chartLine) {
+        // UC6: a child line's committed x/y/rotation are LOCAL (in the parent's
+        // frame), but the drag delta + handle angle are world-space. Pass the parent's
+        // world rotation so the drag un-rotates the delta and subtracts it from the
+        // committed rotation (no-op for root lines, where father_index < 0).
+        const fatherIdx = chartLine.father_index ?? -1;
+        const parentInfo = fatherIdx >= 0
+          ? lastRenderResultRef.current?.lines.find((l) => l.lineIndex === fatherIdx)
+          : null;
+        const parentWorldRotation = parentInfo?.rotation ?? 0;
         const handleResult = tryHandleDrag(
           mouseX, mouseY, selectedLineInfo, chartLine,
-          getCurrentBeat(), rect.width,
+          getCurrentBeat(), rect.width, parentWorldRotation,
         );
         if (handleResult) {
           dragRef.current = handleResult.drag;
@@ -759,7 +819,7 @@ export function UnifiedCanvas() {
         if (line && bpmList) {
           const noteAction = tryNoteHit(
             mouseX, mouseY, selectedLineInfo, line,
-            es.selectedNoteIndices, bpmList, rect.width, rect.height,
+            getSelectedNoteIndices(), bpmList, rect.width, rect.height,
             getCurrentBeat(), getCurrentTime(), e.ctrlKey || e.metaKey,
           );
           if (noteAction) {
@@ -785,12 +845,12 @@ export function UnifiedCanvas() {
                 es.setCanvasInteractionMode("dragging_translate");
                 return;
               case "select":
-                es.setNoteSelection([noteAction.noteIndex]);
+                setNoteSelectionByIndex([noteAction.noteIndex]);
                 es.showFloatingInspector(e.clientX, e.clientY, "note");
                 return;
               case "toggle":
-                es.toggleNoteSelection(noteAction.noteIndex);
-                if (es.selectedNoteIndices.length > 1) {
+                toggleNoteSelectionByIndex(noteAction.noteIndex);
+                if (getSelectedNoteIndices().length > 1) {
                   es.showFloatingInspector(e.clientX, e.clientY, "multi_note");
                 }
                 return;
@@ -802,8 +862,8 @@ export function UnifiedCanvas() {
       // Check notes on other lines (stays inline — needs renderer)
       const noteHit = renderer.hitTestNote(mouseX, mouseY, renderResult);
       if (noteHit) {
-        es.selectLine(noteHit.lineIndex);
-        es.setNoteSelection([noteHit.noteIndex]);
+        selectLineByIndex(noteHit.lineIndex);
+        setNoteSelectionByIndex([noteHit.noteIndex], noteHit.lineIndex);
         es.showFloatingInspector(e.clientX, e.clientY, "note");
         return;
       }
@@ -811,9 +871,10 @@ export function UnifiedCanvas() {
       // ---- Bookmark hit-testing ----
       const bsHit = useBookmarkStore.getState();
       if (bsHit.bookmarks.length > 0 && bpmListRef.current) {
-        const curBeatHit = bpmListRef.current.beatAtFloat(
-          useAudioStore.getState().currentTime - cs.chart.offset,
-        );
+        // Latency-compensated: the bookmark diamonds are DRAWN at the compensated
+        // beat (render loop, drawBookmarkOverlay), so hit-test at the same beat or
+        // clicks miss by audioLatencyMs worth of beats (L6 render-vs-hittest skew).
+        const curBeatHit = getPlayheadBeat({ latencyCompensated: true });
         const hitId = tryBookmarkHit(
           mouseX, mouseY, bsHit.bookmarks, bsHit.visibilityRange,
           curBeatHit, renderResult.lines, rect.width,
@@ -838,17 +899,19 @@ export function UnifiedCanvas() {
     // ---- Line hit-testing (falls through from above) ----
     const bpmList = bpmListRef.current;
     if (bpmList) {
-      const { currentTime } = useAudioStore.getState();
-      const currentBeat = bpmList.beatAtFloat(currentTime - cs.chart.offset);
+      // Latency-compensated to match where the renderer DREW the lines (it renders
+      // with effectiveOffset); raw offset here missed moving lines by the latency
+      // during playback / when audioLatencyMs ≠ 0 (L6 render-vs-hittest skew).
+      const currentBeat = getPlayheadBeat({ latencyCompensated: true });
       const hitIndex = renderer.hitTestLine(
         cs.chart.lines, currentBeat, mouseX, mouseY, rect.width, rect.height,
       );
 
       if (hitIndex !== null) {
         if (e.ctrlKey || e.metaKey) {
-          es.toggleMultiSelectedLine(hitIndex);
+          toggleMultiSelectedLineByIndex(hitIndex);
         } else {
-          es.selectLine(hitIndex);
+          selectLineByIndex(hitIndex);
         }
         return;
       }
@@ -872,9 +935,12 @@ export function UnifiedCanvas() {
     const rawMouseY = e.clientY - rect.top;
     // Store raw cursor position for screen-space overlays (ghost beat label, eraser count)
     rawCursorRef.current = { x: rawMouseX, y: rawMouseY };
+    lastClientRef.current = { x: e.clientX, y: e.clientY }; // UC7: absolute coords for the popover
 
-    // Convert to logical (viewport-adjusted) coordinates
-    const vp = useEditorStore.getState().canvasViewport;
+
+
+    // Convert to logical (viewport-adjusted) coordinates. Q6: identity viewport in Pixi mode.
+    const vp = usePixiRef.current ? IDENTITY_VIEWPORT : useEditorStore.getState().canvasViewport;
     const mouseX = (rawMouseX - vp.offsetX) / vp.zoom;
     const mouseY = (rawMouseY - vp.offsetY) / vp.zoom;
 
@@ -882,11 +948,9 @@ export function UnifiedCanvas() {
     // Canvas space: X from -675 to +675, Y from -450 to +450
     const canvasX = (mouseX / rect.width - 0.5) * CANVAS_WIDTH;
     const canvasY = (0.5 - mouseY / rect.height) * (CANVAS_WIDTH * (900 / 1350));
-    const cs = useChartStore.getState();
-    const as_ = useAudioStore.getState();
-    const curBeat = bpmListRef.current
-      ? bpmListRef.current.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset))
-      : 0;
+    // Playhead beat for the HUD readout — raw editor space (the HUD shows the true
+    // chart beat, not the latency-shifted render beat); clamped to ≥ 0.
+    const curBeat = getPlayheadBeat({ clampNonNegative: true });
     cursorInfoRef.current = { canvasX, canvasY, beat: curBeat };
 
     const drag = dragRef.current;
@@ -970,11 +1034,11 @@ export function UnifiedCanvas() {
     // ---- Record mode: capture keyframes during playback ----
     {
       const es = useEditorStore.getState();
+      const selLineIdx = getSelectedLineIndex();
       const { isPlaying } = useAudioStore.getState();
-      if (es.recordMode && isPlaying && es.selectedLineIndex !== null && bpmListRef.current) {
-        const currentBeat = bpmListRef.current.beatAtFloat(
-          useAudioStore.getState().currentTime - cs.chart.offset,
-        );
+      if (es.recordMode && isPlaying && selLineIdx !== null && bpmListRef.current) {
+        // Raw chart beat — captured keyframes land on the true musical beat.
+        const currentBeat = getPlayheadBeat();
         const lastBeat = es.recordedKeyframes.length > 0
           ? es.recordedKeyframes[es.recordedKeyframes.length - 1].beat : null;
         const kf = captureRecordKeyframe(
@@ -1041,9 +1105,8 @@ export function UnifiedCanvas() {
 
       // ---- Pattern tool: compute ghost notes ----
       if (es.activeTool === "place_pattern") {
-        const anchorBeat = bpmListRef.current
-          ? bpmListRef.current.beatAtFloat(Math.max(0, useAudioStore.getState().currentTime - useChartStore.getState().chart.offset))
-          : 0;
+        // Raw editor space, clamped — the pattern is placed at the true chart beat.
+        const anchorBeat = getPlayheadBeat({ clampNonNegative: true });
         es.setPatternGhostNotes(computePatternGhosts(es.patternConfig, anchorBeat));
       } else if (es.patternGhostNotes.length > 0) {
         // Clear ghost notes when switching away from pattern tool
@@ -1063,7 +1126,10 @@ export function UnifiedCanvas() {
           );
           es.setPendingNote(ghost);
         }
-      } else {
+      } else if (!es.stepRecordActive) {
+        // UC4: don't clear the ghost while step-record owns it — the "Step record
+        // ghost note" block above set es.pendingNote this same move, and the bare
+        // else cleared it every frame, making the step-record ghost flicker/vanish.
         if (es.pendingNote) {
           es.setPendingNote(null);
         }
@@ -1121,10 +1187,12 @@ export function UnifiedCanvas() {
           }
 
           if (hitNotes.length > 0) {
-            es.setNoteSelection(hitNotes);
+            setNoteSelectionByIndex(hitNotes);
             const targetType = hitNotes.length > 1 ? "multi_note" : "note";
-            // Use drag end coordinates since the mouse event is not available in this callback
-            es.showFloatingInspector(drag.currentX, drag.currentY, targetType);
+            // UC7: the popover is position:fixed (absolute client coords). drag.currentX/Y
+            // are logical viewport-adjusted coords, so fall back to the last client position.
+            const lc = lastClientRef.current;
+            es.showFloatingInspector(lc?.x ?? drag.currentX, lc?.y ?? drag.currentY, targetType);
           } else {
             es.clearSelection();
           }
@@ -1268,24 +1336,23 @@ export function UnifiedCanvas() {
           e.preventDefault();
           const canvasEl = canvasRef.current;
           const es = useEditorStore.getState();
-          const cs = useChartStore.getState();
-          if (!canvasEl || es.selectedLineIndex === null) return;
+          const selLineIdx = getSelectedLineIndex();
+          if (!canvasEl || selLineIdx === null) return;
 
-          // Compute canvas-space coordinates
+          // UC3: use the SAME viewport→canvas mapping as the cursor HUD and the
+          // click hit-tests (handleMouseMove/handleMouseDown). The old formula put
+          // the rendered center at rect.width/2 + offsetX, but it actually sits at
+          // rect.width/2*zoom + offsetX, so the quick-event X/Y landed off by a
+          // zoom-dependent amount whenever zoom ≠ 1.
           const rect = canvasEl.getBoundingClientRect();
-          const vp = es.canvasViewport;
-          const pixelX = (e.clientX - rect.left);
-          const pixelY = (e.clientY - rect.top);
-          const centerX = rect.width / 2 + vp.offsetX;
-          const centerY = rect.height / 2 + vp.offsetY;
-          const scale = (rect.width / 1350) * vp.zoom;
-          const canvasX = (pixelX - centerX) / scale;
-          const canvasY = -(pixelY - centerY) / scale;
+          const vp = usePixiRef.current ? IDENTITY_VIEWPORT : es.canvasViewport;
+          const mouseX = (e.clientX - rect.left - vp.offsetX) / vp.zoom;
+          const mouseY = (e.clientY - rect.top - vp.offsetY) / vp.zoom;
+          const canvasX = (mouseX / rect.width - 0.5) * CANVAS_WIDTH;
+          const canvasY = (0.5 - mouseY / rect.height) * (CANVAS_WIDTH * (900 / 1350));
 
-          // Get current beat
-          const { currentTime } = useAudioStore.getState();
-          const bpmList = new BpmList(cs.chart.bpm_list);
-          const beat = bpmList.beatAtFloat(Math.max(0, currentTime - cs.chart.offset));
+          // Current beat — raw editor space, clamped to ≥ 0 (placement target).
+          const beat = getPlayheadBeat({ clampNonNegative: true });
 
           setCanvasContextMenu({
             x: e.clientX,
@@ -1293,7 +1360,7 @@ export function UnifiedCanvas() {
             canvasX,
             canvasY,
             beat,
-            lineIndex: es.selectedLineIndex,
+            lineIndex: selLineIdx,
           });
         }}
         style={{ cursor: "default" }}

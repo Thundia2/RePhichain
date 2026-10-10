@@ -26,9 +26,14 @@ export interface AudioState {
   currentTime: number; // seconds
   duration: number; // seconds
   playbackRate: number;
-  metronomeEnabled: boolean;
   hitSoundEnabled: boolean;
   musicLoaded: boolean;
+  /** URL of the currently-loaded audio source — engine-authoritative mirror of
+   *  audioEngine._currentUrl, set in its onload/unload. Reactive so
+   *  useOnsetDetection can treat a song CHANGE (not just a musicLoaded toggle) as
+   *  a re-detect trigger (O1): a project swap reloads audio without musicLoaded
+   *  ever going false, so the old [onsetEnabled, musicLoaded] deps never re-fired. */
+  musicUrl: string | null;
 
   // ---- Loop region ----
   loopEnabled: boolean;
@@ -42,7 +47,6 @@ export interface AudioState {
   seek: (time: number) => void;
   /** Set playback speed (0.25x to 2x). Persists to audioEngine. */
   setPlaybackRate: (rate: number) => void;
-  toggleMetronome: () => void;
   toggleHitSound: () => void;
 
   // ---- Loop region actions ----
@@ -61,6 +65,9 @@ export interface AudioState {
   setCurrentTime: (time: number) => void;
   setDuration: (duration: number) => void;
   setMusicLoaded: (loaded: boolean) => void;
+  /** Set the current audio source URL. Called by the engine on load (onload) and
+   *  unload so the value is authoritative. */
+  setMusicUrl: (url: string | null) => void;
   /** Internal: set playback rate state without calling engine (avoids circular call) */
   _setPlaybackRateInternal: (rate: number) => void;
 }
@@ -70,9 +77,9 @@ export const useAudioStore = create<AudioState>()((set, _get) => ({
   currentTime: 0,
   duration: 0,
   playbackRate: 1.0,
-  metronomeEnabled: false,
   hitSoundEnabled: true,
   musicLoaded: false,
+  musicUrl: null,
 
   // ---- Loop region ----
   loopEnabled: false,
@@ -95,15 +102,26 @@ export const useAudioStore = create<AudioState>()((set, _get) => ({
     audioEngine.setRate(rate);
   },
 
-  toggleMetronome: () =>
-    set((state) => ({ metronomeEnabled: !state.metronomeEnabled })),
-
   toggleHitSound: () =>
     set((state) => ({ hitSoundEnabled: !state.hitSoundEnabled })),
 
   // ---- Loop region actions ----
-  setLoopStart: (beat) => set({ loopStartBeat: beat }),
-  setLoopEnd: (beat) => set({ loopEndBeat: beat }),
+  // H7: normalize so the stored region stays ordered (start <= end). The [ / ]
+  // hotkeys can set the markers out of order; an inverted region would otherwise
+  // render backwards and (without the tick's start<end guard) freeze the loop.
+  // Setting a marker past the other swaps them so the region stays valid.
+  setLoopStart: (beat) =>
+    set((s) =>
+      beat !== null && s.loopEndBeat !== null && beat > s.loopEndBeat
+        ? { loopStartBeat: s.loopEndBeat, loopEndBeat: beat }
+        : { loopStartBeat: beat },
+    ),
+  setLoopEnd: (beat) =>
+    set((s) =>
+      beat !== null && s.loopStartBeat !== null && beat < s.loopStartBeat
+        ? { loopStartBeat: beat, loopEndBeat: s.loopStartBeat }
+        : { loopEndBeat: beat },
+    ),
   toggleLoop: () => set((s) => ({ loopEnabled: !s.loopEnabled })),
   clearLoop: () => set({ loopEnabled: false, loopStartBeat: null, loopEndBeat: null }),
 
@@ -114,11 +132,9 @@ export const useAudioStore = create<AudioState>()((set, _get) => ({
   stop: () => set({ isPlaying: false, currentTime: 0 }),
   setCurrentTime: (time) => set({ currentTime: time }),
   setDuration: (duration) => set({ duration }),
-  setMusicLoaded: (loaded) => {
-    // DEBUG: Track musicLoaded changes to find the ghost song bug
-    console.warn("[audioStore.setMusicLoaded]", loaded,
-      "\n  stack:", new Error().stack?.split("\n").slice(1, 4).join("\n  "));
-    set({ musicLoaded: loaded });
-  },
+  // Q1: the ghost-song bug is fixed at its source (audioEngine load-generation
+  // guard) — the stack-capturing DEBUG probe that used to live here is removed.
+  setMusicLoaded: (loaded) => set({ musicLoaded: loaded }),
+  setMusicUrl: (url) => set({ musicUrl: url }),
   _setPlaybackRateInternal: (rate: number) => set({ playbackRate: rate }),
 }));

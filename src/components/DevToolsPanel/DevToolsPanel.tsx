@@ -7,6 +7,7 @@
 
 import { useState, useMemo } from "react";
 import { useEditorStore } from "../../stores/editorStore";
+import { useSelectedLineIndex } from "../../stores/selection";
 import { useChartStore } from "../../stores/chartStore";
 import { beatToFloat } from "../../types/chart";
 import { BpmList } from "../../utils/bpmList";
@@ -15,7 +16,7 @@ import { evaluateEasing } from "../../canvas/easings";
 type DevTab = "json" | "stats" | "evaluator";
 
 function JsonTab() {
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const chart = useChartStore((s) => s.chart);
 
   const jsonText = useMemo(() => {
@@ -101,7 +102,7 @@ function StatsTab() {
 function EvaluatorTab() {
   const [beatInput, setBeatInput] = useState("0");
   const chart = useChartStore((s) => s.chart);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
 
   const result = useMemo(() => {
     const beatVal = parseFloat(beatInput);

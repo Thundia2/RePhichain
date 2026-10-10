@@ -4,6 +4,7 @@
 
 import React, { useState, useCallback } from "react";
 import { useEditorStore } from "../../../stores/editorStore";
+import { useMultiSelectedLineIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { BUILTIN_PRESETS } from "../../../presets/builtinPresets";
 import { applyPresetAtPlayhead } from "../../../utils/applyPreset";
@@ -35,12 +36,16 @@ export function MultiLineMode({ activeTab }: MultiLineModeProps) {
 // ---- Batch Ops sub-tab ----
 
 function BatchOpsTab() {
-  const multiSelectedLineIndices = useEditorStore((s) => s.multiSelectedLineIndices);
+  const multiSelectedLineIndices = useMultiSelectedLineIndices();
   const lines = useChartStore((s) => s.chart.lines);
   const duplicateLine = useChartStore((s) => s.duplicateLine);
   const removeLine = useChartStore((s) => s.removeLine);
   const editLine = useChartStore((s) => s.editLine);
-  const addEvent = useChartStore((s) => s.addEvent);
+  // Routed add (finding L3): batch fades land in the active layer on layered
+  // lines so they're visible + exported. transaction (finding L1): one undo
+  // entry per batch instead of one per line.
+  const addEventRouted = useChartStore((s) => s.addEventRouted);
+  const transaction = useChartStore((s) => s.transaction);
   const clearMultiSelectedLines = useEditorStore((s) => s.clearMultiSelectedLines);
 
   const [presetSearch, setPresetSearch] = useState("");
@@ -84,37 +89,49 @@ function BatchOpsTab() {
   }, [multiSelectedLineIndices, editLine]);
 
   const handleBatchFadeIn = useCallback(() => {
-    for (const { index } of selectedLines) {
-      addEvent(index, {
-        kind: "opacity",
-        start_beat: [0, 0, 1],
-        end_beat: [2, 0, 1],
-        value: { transition: { start: 0, end: 255, easing: "ease_out_sine" } },
-      });
-    }
-  }, [selectedLines, addEvent]);
+    transaction(() => {
+      for (const { index } of selectedLines) {
+        addEventRouted(index, {
+          kind: "opacity",
+          start_beat: [0, 0, 1],
+          end_beat: [2, 0, 1],
+          value: { transition: { start: 0, end: 255, easing: "ease_out_sine" } },
+        });
+      }
+    });
+  }, [selectedLines, addEventRouted, transaction]);
 
   const handleBatchFadeOut = useCallback(() => {
-    for (const { index } of selectedLines) {
-      addEvent(index, {
-        kind: "opacity",
-        start_beat: [0, 0, 1],
-        end_beat: [2, 0, 1],
-        value: { transition: { start: 255, end: 0, easing: "ease_in_sine" } },
-      });
-    }
-  }, [selectedLines, addEvent]);
+    transaction(() => {
+      for (const { index } of selectedLines) {
+        addEventRouted(index, {
+          kind: "opacity",
+          start_beat: [0, 0, 1],
+          end_beat: [2, 0, 1],
+          value: { transition: { start: 255, end: 0, easing: "ease_in_sine" } },
+        });
+      }
+    });
+  }, [selectedLines, addEventRouted, transaction]);
 
   const handleSyncSpeed = useCallback(() => {
-    for (const { index } of selectedLines) {
-      addEvent(index, {
-        kind: "speed",
-        start_beat: [0, 0, 1],
-        end_beat: [1000, 0, 1],
-        value: { constant: 1 },
-      });
-    }
-  }, [selectedLines, addEvent]);
+    // Set the base speed to a constant 1 at beat 0. Short span (not [0,1000]):
+    // a constant holds its value via inheritance for all later beats, so this
+    // sets the line's initial speed without planting a baseline that would
+    // shadow real speed automation under the value-tiebreak (finding L4). Lines
+    // with their own speed events keep them (Affecting outranks this Inherited
+    // value past beat 1).
+    transaction(() => {
+      for (const { index } of selectedLines) {
+        addEventRouted(index, {
+          kind: "speed",
+          start_beat: [0, 0, 1],
+          end_beat: [1, 0, 1],
+          value: { constant: 1 },
+        });
+      }
+    });
+  }, [selectedLines, addEventRouted, transaction]);
 
   // Filter presets for batch apply
   const normalizedSearch = presetSearch.toLowerCase().trim();

@@ -69,6 +69,12 @@ let _cachedTempPath: string | null = null;
  *  Effect B watches this to know when to re-apply the threshold. */
 let _cacheVersion = 0;
 
+/** Monotonic id for the heavy detection run (O2). Each Effect-A detection claims
+ *  one before its awaits; if a newer run supersedes it (the song changed
+ *  mid-detect), the stale run bails instead of clobbering _cachedResults /
+ *  _cachedMusicKey with the previous song's frames. */
+let _detectRunId = 0;
+
 // ── Peak-picking parameters (Phase A rewrite) ──────────────────
 // The old "absolute threshold + ±20 ms local max + 50 ms combine"
 // picker fired ~9.5 events/sec on a 182 BPM song regardless of
@@ -286,7 +292,16 @@ export function useOnsetDetection(): void {
   // slider (which writes chart.onset_target_density via updateChartField)
   // triggers a peak-picker re-run.
   const chartOnsetTargetDensity = useChartStore((s) => s.chart.onset_target_density);
+  // O6: subscribe to bpm_list + offset so the frame→beat conversion in Effect B
+  // re-runs when the tempo map or audio offset changes. applyThreshold reads both
+  // but they were absent from its deps, so markers drifted after a BPM/offset edit.
+  const chartBpmList = useChartStore((s) => s.chart.bpm_list);
+  const chartOffset = useChartStore((s) => s.chart.offset);
   const musicLoaded = useAudioStore((s) => s.musicLoaded);
+  // O1: a reactive song identity. musicLoaded only toggles on unload→load, but a
+  // project SWAP reloads audio without it ever going false — so key Effect A on
+  // the loaded URL too, to re-detect when the SONG actually changes.
+  const musicUrl = useAudioStore((s) => s.musicUrl);
 
   // Local state to bridge Effect A → Effect B. When detection completes,
   // cacheVersion bumps, triggering Effect B to re-apply the threshold.
@@ -295,7 +310,9 @@ export function useOnsetDetection(): void {
   // ── Effect A: Heavy detection (only when music changes) ────────
   useEffect(() => {
     if (!onsetEnabled || !musicLoaded || !isTauri()) {
-      if (!onsetEnabled) {
+      // O1: clear markers when onset is off OR no song is loaded — a song-less
+      // project swap (E3) must not keep showing the previous song's markers.
+      if (!onsetEnabled || !musicLoaded) {
         useEditorStore.getState().setOnsetMarkers(null);
       }
       return;
@@ -304,6 +321,11 @@ export function useOnsetDetection(): void {
     // Small debounce to handle musicLoaded false→true restore cycles
     const timer = setTimeout(async () => {
       if (!useAudioStore.getState().musicLoaded) return;
+
+      // O2: claim a detection generation up front. If the song changes during the
+      // awaits below, a newer Effect-A run bumps _detectRunId and this stale run
+      // bails instead of writing the previous song's frames into the cache.
+      const runId = ++_detectRunId;
 
       const cs = useChartStore.getState();
 
@@ -342,6 +364,8 @@ export function useOnsetDetection(): void {
       }
 
       if (!absoluteMusicPath || !cacheKey) return;
+      // O2: bail if a newer detection started while resolving the temp-file path.
+      if (runId !== _detectRunId) return;
 
       // ── Check module-level cache ──
       if (_cachedMusicKey === cacheKey && _cachedResults !== null) {
@@ -352,10 +376,17 @@ export function useOnsetDetection(): void {
         return;
       }
 
+      // O1: a different song is loaded (cache miss) — drop the previous song's
+      // markers now so they don't linger during the ~2 s detection.
+      useEditorStore.getState().setOnsetMarkers(null);
+
       // ── Cache miss — invoke Rust CNN pipeline ──
       useEditorStore.getState().setOnsetAnalyzing(true);
       try {
         const bundle = await detectOnsetsMl(absoluteMusicPath);
+        // O2: a newer detection (song change) superseded us while awaiting —
+        // discard these now-stale frames without touching the cache or spinner.
+        if (runId !== _detectRunId) return;
         // Verify the Rust pipeline version matches what the frontend expects.
         // A mismatch means the user is running skewed binary/frontend builds
         // (typical after a partial upgrade); we discard the results so no
@@ -382,9 +413,9 @@ export function useOnsetDetection(): void {
     }, 150);
 
     return () => clearTimeout(timer);
-    // Only re-run when music actually loads or onset toggle changes.
+    // Re-run when onset toggles, music (un)loads, or the SONG changes (O1).
     // Sensitivity/snapToGrid are handled by Effect B (instant).
-  }, [onsetEnabled, musicLoaded]);
+  }, [onsetEnabled, musicLoaded, musicUrl]);
 
   // ── Effect B: Instant peak-picking + beat conversion ──
   const applyThreshold = useCallback(() => {
@@ -394,8 +425,9 @@ export function useOnsetDetection(): void {
       return;
     }
 
-    const cs = useChartStore.getState();
-    const bl = new BpmList(cs.chart.bpm_list);
+    // O6: use the subscribed bpm_list/offset (not getState) so this matches the
+    // useCallback deps below — a tempo or offset edit now recomputes the markers.
+    const bl = new BpmList(chartBpmList);
     const density = useEditorStore.getState().density;
 
     // Per-chart density override (Phase B): if the chart has explicitly set
@@ -414,7 +446,7 @@ export function useOnsetDetection(): void {
     const snapFrameToCell = onsetSnapToGrid
       ? (frame: number) => {
           const tSec = frame / 100; // 100 fps → seconds
-          const beat = bl.beatAtFloat(tSec - cs.chart.offset);
+          const beat = bl.beatAtFloat(tSec - chartOffset);
           const snapped = beatToFloat(snapBeat(beat, density));
           // Quantize to 4 decimal places so floating jitter doesn't
           // produce spurious distinct keys.
@@ -438,7 +470,7 @@ export function useOnsetDetection(): void {
     // When snap is on, we use the snapped beat so markers land exactly on the
     // grid; otherwise we keep the raw-time beat position.
     let beatMarkers = peaks.map((r) => {
-      const rawBeat = bl.beatAtFloat(r.time - cs.chart.offset);
+      const rawBeat = bl.beatAtFloat(r.time - chartOffset);
       const beat = onsetSnapToGrid
         ? beatToFloat(snapBeat(rawBeat, density))
         : rawBeat;
@@ -467,6 +499,8 @@ export function useOnsetDetection(): void {
     onsetAbsFloor,
     onsetAdaptiveDelta,
     onsetMinDisplayStrength,
+    chartBpmList, // O6
+    chartOffset, // O6
   ]);
 
   useEffect(() => {

@@ -20,9 +20,13 @@ async function performAutosave(): Promise<void> {
   const cs = useChartStore.getState();
   if (!cs.isLoaded || !cs.projectPath || cs.projectPath === "in-memory" || !cs.isDirty) return;
 
+  // F2: capture the dirty token BEFORE the async write. If the user edits during
+  // the write, _dirtySeq advances past the token and markCleanIf no-ops, so the
+  // edit stays dirty and gets saved next pass instead of being clobbered.
+  const token = cs._dirtySeq;
   try {
-    await saveProject(cs.projectPath, cs.getChartJson());
-    cs.markClean();
+    await saveProject(cs.projectPath, cs.getChartJson(), JSON.stringify(cs.meta));
+    cs.markCleanIf(token);
     console.debug("[autosave] Saved successfully");
   } catch (err) {
     console.warn("[autosave] Save failed:", err);

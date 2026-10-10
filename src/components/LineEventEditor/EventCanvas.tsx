@@ -13,9 +13,10 @@ import { useAudioStore } from "../../stores/audioStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { EventCanvasRenderer } from "../../canvas/eventCanvasRenderer";
 import { evaluateLineEventsWithLayers } from "../../canvas/events";
-import { BpmList } from "../../utils/bpmList";
+import { resolveActiveKindEvents } from "../../utils/eventRouting";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, beatToFloat, floatToBeat } from "../../types/chart";
-import type { LineEvent, LineEventKind, Beat } from "../../types/chart";
+import type { LineEvent, LineEventKind } from "../../types/chart";
 
 interface EventCanvasProps {
   lineIndex: number;
@@ -48,13 +49,17 @@ function commitValue(lineIndex: number, kind: LineEventKind, newValue: number, c
   const line = cs.chart.lines[lineIndex];
   if (!line) return;
 
-  const activeIdx = findActiveEventIndex(line.events, kind, currentBeat);
+  // Route flat<->layer (finding L3): edit the array the evaluator actually reads
+  // for this kind on this line (active layer on a layered chart, else flat).
+  const activeLayer = useEditorStore.getState().eventEditorActiveLayer;
+  const kindEvents = resolveActiveKindEvents(line, kind, activeLayer);
+  const activeIdx = findActiveEventIndex(kindEvents, kind, currentBeat);
+  const event = activeIdx >= 0 ? kindEvents[activeIdx] : null;
 
-  if (activeIdx >= 0) {
-    const event = line.events[activeIdx];
+  if (event && event.id) {
     if ("constant" in event.value) {
       // Update the constant value
-      cs.editEvent(lineIndex, activeIdx, { value: { constant: newValue } });
+      cs.editEventById(lineIndex, event.id, { value: { constant: newValue } });
     } else if ("transition" in event.value) {
       // Split the transition event at the current beat
       const splitBeat = floatToBeat(currentBeat);
@@ -78,18 +83,20 @@ function commitValue(lineIndex: number, kind: LineEventKind, newValue: number, c
           value: { constant: newValue },
         },
       ];
-      cs.replaceEvent(lineIndex, activeIdx, newEvents);
+      cs.replaceEventById(lineIndex, event.id, newEvents);
     }
   } else {
-    // No active event — create a new constant event
+    // No active event — create a short constant in the routed target. It holds
+    // its value via inheritance for all later beats, so no [1000] far-end is
+    // needed; a far-end would compete as "affecting" across the whole chart and
+    // shadow later events under the value-tiebreak (finding L4).
     const snappedBeat = floatToBeat(currentBeat);
-    const farBeat: Beat = [1000, 0, 1];
-    cs.addEvent(lineIndex, {
+    cs.addEventRouted(lineIndex, {
       kind,
       start_beat: snappedBeat,
-      end_beat: farBeat,
+      end_beat: floatToBeat(currentBeat + 1),
       value: { constant: newValue },
-    });
+    }, activeLayer);
   }
 }
 
@@ -114,12 +121,10 @@ export function EventCanvas({ lineIndex }: EventCanvasProps) {
 
   // Get current beat from editor store or audio
   const getCurrentBeat = useCallback(() => {
-    const { currentTime, isPlaying } = useAudioStore.getState();
+    const { isPlaying } = useAudioStore.getState();
     const es = useEditorStore.getState();
     if (isPlaying) {
-      const cs = useChartStore.getState();
-      const bpmList = new BpmList(cs.chart.bpm_list);
-      return bpmList.beatAtFloat(currentTime - cs.chart.offset);
+      return getPlayheadBeat();
     }
     return es.eventEditorCurrentBeat;
   }, []);
@@ -257,11 +262,16 @@ export function EventCanvas({ lineIndex }: EventCanvasProps) {
       drag.currentX = drag.startCanvasX + deltaCanvasX;
       drag.currentY = drag.startCanvasY + deltaCanvasY;
     } else if (drag.type === "rotate") {
-      // Compute angle from line center to mouse
+      // Compute angle from line center to mouse. C3: negate so the committed
+      // rotation matches the renderer's rotate(-rotation) — the line's handle now
+      // sits at screen angle -rotation, so dragging the handle to screen angle θ
+      // must store rotation = -θ (and the game preview then renders it identically
+      // to the event-editor ghost). Existing values are unaffected; only new drags
+      // get the correct sign.
       const centerScreenX = renderer.canvasToScreenX(drag.startCanvasX, canvas.width);
       const centerScreenY = renderer.canvasToScreenY(drag.startCanvasY, canvas.height);
       const angle = Math.atan2(mouseY - centerScreenY, mouseX - centerScreenX);
-      let angleDeg = (angle * 180) / Math.PI;
+      let angleDeg = -(angle * 180) / Math.PI;
 
       // Apply angle snapping if enabled
       const snapDeg = useSettingsStore.getState().rotationSnapDegrees;

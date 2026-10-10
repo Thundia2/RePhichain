@@ -47,10 +47,16 @@ export const DEFAULT_HOTKEYS: Record<string, HotkeyDefinition> = {
   place_drag: { key: "w", label: "Place Drag Note", category: "Tools" },
   place_flick: { key: "e", label: "Place Flick Note", category: "Tools" },
   place_hold: { key: "r", label: "Place Hold Note", category: "Tools" },
+  // L7: displaced here when the registry reclaimed their old keys (s -> split_event,
+  // ctrl+g -> go_to_beat). New homes chosen by the user. grep step_record/pattern_tool.
+  step_record: { key: "b", label: "Toggle Step Record", category: "Tools" },
+  pattern_tool: { key: "p", label: "Toggle Pattern Tool", category: "Tools" },
 
   // ---- Edit ----
   undo: { key: "ctrl+z, meta+z", label: "Undo", category: "Edit" },
-  redo: { key: "ctrl+shift+z, meta+shift+z", label: "Redo", category: "Edit" },
+  // ctrl+y is a real working redo alias in the code; fold it in so the registry is the
+  // true superset (registry-authoritative) and rebinding doesn't silently drop it.
+  redo: { key: "ctrl+shift+z, meta+shift+z, ctrl+y", label: "Redo", category: "Edit" },
   delete: { key: "delete, backspace", label: "Delete Selected", category: "Edit" },
   select_all: { key: "ctrl+a, meta+a", label: "Select All", category: "Edit" },
 
@@ -67,8 +73,9 @@ export const DEFAULT_HOTKEYS: Record<string, HotkeyDefinition> = {
 
   // ---- Events ----
   split_event: { key: "s", label: "Split Event", category: "Events" },
-  merge_events: { key: "ctrl+m, meta+m", label: "Merge Events", category: "Events" },
-  swap_easing: { key: "ctrl+e, meta+e", label: "Swap Easing", category: "Events" },
+  // (merge_events / swap_easing removed in L7 — no underlying operation existed
+  //  anywhere in the codebase; they were registry-only orphans showing dead settings
+  //  rows. Re-add with a real handler if those ops are ever implemented.)
 
   // ---- Navigation ----
   move_up: { key: "up", label: "Move Selection Forward", category: "Navigation" },
@@ -76,8 +83,11 @@ export const DEFAULT_HOTKEYS: Record<string, HotkeyDefinition> = {
   move_right: { key: "right", label: "Move Selection Right", category: "Navigation" },
   move_left: { key: "left", label: "Move Selection Left", category: "Navigation" },
   go_to_beat: { key: "ctrl+g, meta+g", label: "Go to Beat...", category: "Navigation" },
-  prev_marker: { key: "ctrl+[, meta+[", label: "Previous Marker", category: "Navigation" },
-  next_marker: { key: "ctrl+], meta+]", label: "Next Marker", category: "Navigation" },
+  // ctrl+up/down, NOT ctrl+[/] : react-hotkeys-hook needs useKey:true to match "[",
+  // and that flag's single-key short-circuit then fires on a BARE "[" (loop_start), so
+  // ctrl+[ would collide with the loop key. Arrow combos sidestep the quirk entirely.
+  prev_marker: { key: "ctrl+up, meta+up", label: "Previous Marker", category: "Navigation" },
+  next_marker: { key: "ctrl+down, meta+down", label: "Next Marker", category: "Navigation" },
 
   // ---- Playback ----
   toggle_playback: { key: "space", label: "Play / Pause", category: "Playback" },

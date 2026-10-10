@@ -8,15 +8,15 @@
 import { useState, useRef } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
-import { useEditorStore } from "../../stores/editorStore";
+import { selectLineByIndex } from "../../stores/selection";
 import { useTabStore } from "../../stores/tabStore";
 import { audioEngine } from "../../audio/audioEngine";
 import { isTauri, pickFile, createProject, loadProject } from "../../utils/ipc";
-import { saveSession, registerSession, setSkipNextSave, setSkipNextRestore, setAudioBlobUrl, setStoredProjectId } from "../../utils/chartSessions";
+import { saveActiveChartSession, registerSession, setSkipNextSave, setSkipNextRestore, setAudioBlobUrl, setStoredProjectId } from "../../utils/chartSessions";
 import { useRecentProjectsStore } from "../../stores/recentProjectsStore";
 import { saveStoredProject } from "../../utils/projectStorage";
 import type { ProjectMeta, PhichainChart } from "../../types/chart";
-import { safeParseNumber } from "../common/FormFields";
+import { safeParseNumber, NumericInput } from "../common/FormFields";
 
 interface Props {
   open: boolean;
@@ -400,22 +400,11 @@ export function NewProjectDialog({ open, onClose }: Props) {
     try {
       let musicUrl: string | null = null;
 
-      // Save the current chart's session before loading a new one
-      const chartLikeTabs = useTabStore.getState().tabs.filter(
-        (t) => t.type === "chart" || t.type === "unified_editor"
-      );
-      const currentActiveTab = useTabStore.getState().tabs.find(
-        (t) => t.id === useTabStore.getState().activeTabId,
-      );
-      if (
-        currentActiveTab &&
-        (currentActiveTab.type === "chart" || currentActiveTab.type === "unified_editor") &&
-        useChartStore.getState().isLoaded
-      ) {
-        saveSession(currentActiveTab.id);
-      } else if (chartLikeTabs.length > 0 && useChartStore.getState().isLoaded) {
-        saveSession(chartLikeTabs[chartLikeTabs.length - 1].id);
-      }
+      // Save the outgoing chart's session under its real owning tab id before
+      // loadFromProjectData replaces the chart store (finding L5/H2: the old
+      // positional "last chart-like tab" fallback could overwrite a different
+      // chart's session).
+      saveActiveChartSession();
 
       setSkipNextSave();
 
@@ -441,7 +430,7 @@ export function NewProjectDialog({ open, onClose }: Props) {
           await cs.loadIllustration(illustUrl);
         }
 
-        useEditorStore.getState().selectLine(0);
+        selectLineByIndex(0);
 
         useTabStore.getState().openChart(folderPath, finalMeta.name || "Untitled Chart");
         const tabId = useTabStore.getState().getChartTabId(folderPath);
@@ -486,13 +475,9 @@ export function NewProjectDialog({ open, onClose }: Props) {
           {
             name: "Line 1",
             notes: [],
-            events: [
-              { kind: "x", start_beat: [0, 0, 1], end_beat: [1000, 0, 1], value: { constant: 0 } },
-              { kind: "y", start_beat: [0, 0, 1], end_beat: [1000, 0, 1], value: { constant: 0 } },
-              { kind: "rotation", start_beat: [0, 0, 1], end_beat: [1000, 0, 1], value: { constant: 0 } },
-              { kind: "opacity", start_beat: [0, 0, 1], end_beat: [1000, 0, 1], value: { constant: 255 } },
-              { kind: "speed", start_beat: [0, 0, 1], end_beat: [1000, 0, 1], value: { constant: 1 } },
-            ],
+            // No baseline events (finding L4): defaults render this line visible
+            // at the origin, speed 10. grep DEFAULT_LINE_STATE.
+            events: [],
             children: [],
             curve_note_tracks: [],
           },
@@ -512,7 +497,7 @@ export function NewProjectDialog({ open, onClose }: Props) {
         await cs.loadIllustration(illustrationUrl);
       }
 
-      useEditorStore.getState().selectLine(0);
+      selectLineByIndex(0);
 
       const chartId = `browser-${Date.now()}`;
       useTabStore.getState().openChart(chartId, finalMeta.name || "Untitled Chart");
@@ -764,10 +749,12 @@ export function NewProjectDialog({ open, onClose }: Props) {
                       You can add BPM changes later in the editor
                     </div>
                   </div>
-                  <input
-                    type="number"
+                  <NumericInput
+                    commitMode="blur"
+                    min={1}
+                    fallback={120}
                     value={initialBpm}
-                    onChange={(e) => setInitialBpm(parseFloat(e.target.value) || 120)}
+                    onChange={setInitialBpm}
                     style={{
                       ...INPUT_STYLE,
                       width: 70,

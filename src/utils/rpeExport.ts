@@ -15,6 +15,7 @@ import type {
   ProjectMeta,
 } from "../types/chart";
 import { addBeats } from "./beat";
+import { beatToFloat } from "../types/chart";
 import { PHICHAIN_TO_RPE_EASING } from "./rpeImport";
 
 // ============================================================
@@ -286,6 +287,24 @@ export function convertPhichainToRpe(
     let eventLayers: Record<string, RpeEvent[]>[];
     if (line.event_layers && line.event_layers.length > 0) {
       eventLayers = line.event_layers.map(convertEventLayerToRpe);
+      // F1: fold any CORE-kind events stranded in flat line.events into layer 0
+      // so they aren't dropped. L3 routes new edits into layers, but a chart
+      // edited before that fix (or imported with mixed flat+layer data) can have
+      // stranded flat core events the evaluator already ignores in preview —
+      // dropping them on export too would silently lose the data. Merge + re-sort
+      // each kind array by start beat so the layer stays chronological.
+      const flatCore = buildEventLayersFromFlat(line.events);
+      const flatKeys = Object.keys(flatCore);
+      if (flatKeys.length > 0) {
+        const layer0 = eventLayers[0] ?? (eventLayers[0] = {});
+        for (const key of flatKeys) {
+          const stranded = flatCore[key];
+          if (!stranded || stranded.length === 0) continue;
+          const merged = [...(layer0[key] ?? []), ...stranded];
+          merged.sort((a, b) => beatToFloat(a.startTime) - beatToFloat(b.startTime));
+          layer0[key] = merged;
+        }
+      }
     } else {
       eventLayers = [buildEventLayersFromFlat(line.events)];
     }

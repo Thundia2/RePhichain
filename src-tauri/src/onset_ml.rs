@@ -71,7 +71,11 @@ const SILENCE_THRESHOLD: f32 = 1e-4;
 /// shape or the meaning of `OnsetResult` changes so the frontend cache
 /// invalidates cleanly across upgrades. Must match
 /// `EXPECTED_ONSET_PIPELINE_VERSION` in src/utils/ipc.ts.
-pub const ONSET_PIPELINE_VERSION: u32 = 2;
+///
+/// v3 (2026-06-14): O3 gapless decode + O7 resampler delay compensation. Both
+/// shift detected onset *times* earlier (gapless ≈13 ms on MP3; resampler ≈3 ms
+/// on non-44.1 kHz), so cached v2 salience is now misaligned — the bump busts it.
+pub const ONSET_PIPELINE_VERSION: u32 = 3;
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -161,8 +165,16 @@ fn decode_audio_mono(path: &Path) -> Result<Vec<f32>, String> {
         hint.with_extension(ext);
     }
 
+    // O3: enable gapless so symphonia trims the encoder delay/padding (MP3
+    // priming ≈576 samples / ~13 ms; Vorbis pre-skip). The PLAYBACK path —
+    // howler → WebAudio decodeAudioData — trims the same samples (measured:
+    // a 44.1 kHz LAME MP3 decodes to exactly nominal − encDelay − encPad =
+    // nominal − 1863). With gapless OFF the decoded buffer kept those priming
+    // samples, so every onset time landed ~13 ms LATER than the audio the user
+    // hears. grep enable_gapless / ONSET_PIPELINE_VERSION.
+    let format_opts = FormatOptions { enable_gapless: true, ..Default::default() };
     let probe_result = symphonia::default::get_probe()
-        .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+        .format(&hint, mss, &format_opts, &MetadataOptions::default())
         .map_err(|e| format!("Cannot probe audio format: {}", e))?;
 
     let mut format_reader = probe_result.format;
@@ -229,8 +241,9 @@ fn decode_audio_mono(path: &Path) -> Result<Vec<f32>, String> {
 fn resample_to_44100(samples: &[f32], source_rate: u32) -> Result<Vec<f32>, String> {
     let ratio = SAMPLE_RATE as f64 / source_rate as f64;
 
+    let sinc_len: usize = 256;
     let params = SincInterpolationParameters {
-        sinc_len: 256,
+        sinc_len,
         f_cutoff: 0.95,
         interpolation: SincInterpolationType::Linear,
         oversampling_factor: 256,
@@ -245,17 +258,32 @@ fn resample_to_44100(samples: &[f32], source_rate: u32) -> Result<Vec<f32>, Stri
         1,
     ).map_err(|e| format!("Resampler init: {}", e))?;
 
-    let mut output = Vec::with_capacity((samples.len() as f64 * ratio) as usize + 1024);
+    // O7 (verified — NOT the naive fix): rubato 0.16's SincFixedIn returns a
+    // TIME-ALIGNED stream — an input impulse round-trips to imp*ratio within ~1
+    // output sample (proven by the unit tests below). The plan's "drop
+    // output_delay()" is WRONG for this version: output_delay() reports the
+    // resampler's internal buffering latency, not an uncompensated offset in the
+    // returned samples, so dropping it would shift every onset ~2.7 ms EARLY.
+    // We therefore drop NO leading delay. The one real defect is the zero-padded
+    // final block, which appends phantom resampled silence — trim to the
+    // theoretical length ("no tail pad"). 44.1 kHz sources never reach this fn.
+    let expected = (samples.len() as f64 * ratio).round() as usize;
+
+    let mut output: Vec<f32> = Vec::with_capacity(expected + RESAMPLE_CHUNK);
 
     for chunk in samples.chunks(RESAMPLE_CHUNK) {
-        let mut input_chunk = vec![chunk.to_vec()];
-        if input_chunk[0].len() < RESAMPLE_CHUNK {
-            input_chunk[0].resize(RESAMPLE_CHUNK, 0.0);
+        let mut buf = chunk.to_vec();
+        if buf.len() < RESAMPLE_CHUNK {
+            buf.resize(RESAMPLE_CHUNK, 0.0);
         }
-        let resampled = resampler.process(&input_chunk, None)
+        let resampled = resampler.process(&[buf], None)
             .map_err(|e| format!("Resample: {}", e))?;
         output.extend_from_slice(&resampled[0]);
     }
+
+    // Trim the zero-padded tail back to the true resampled length. No leading
+    // drop — the stream is already time-aligned (see the O7 note above).
+    output.truncate(expected);
 
     Ok(output)
 }
@@ -742,4 +770,87 @@ pub async fn write_temp_audio(
         .map_err(|e| format!("Failed to write temp audio: {}", e))?;
 
     Ok(file_path.to_string_lossy().into_owned())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Tests — O7 resampler timing. These exercise resample_to_44100 only
+// (no ONNX model / audio files needed), so `cargo test` runs them on
+// any machine. grep O7 / resample_to_44100.
+// ═══════════════════════════════════════════════════════════════
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Locate the index of the largest-magnitude sample (the resampled impulse
+    /// peak — the sinc spreads a unit impulse, so we take the energy centroid's
+    /// peak).
+    fn argmax_abs(xs: &[f32]) -> usize {
+        let mut idx = 0usize;
+        let mut best = 0.0f32;
+        for (i, &v) in xs.iter().enumerate() {
+            if v.abs() > best {
+                best = v.abs();
+                idx = i;
+            }
+        }
+        idx
+    }
+
+    /// O7: an impulse at input time T must round-trip to output time T*ratio so
+    /// onset times survive resampling. This proves rubato 0.16's SincFixedIn
+    /// output is ALREADY time-aligned AND guards against the plan's naive "drop
+    /// output_delay()" fix — which shifts the peak ~2.7 ms early and would fail
+    /// this assert. Also checks the zero-padded tail is trimmed ("no tail pad").
+    #[test]
+    fn resample_48k_preserves_onset_timing() {
+        let src_rate = 48_000u32;
+        let n = 48_000usize; // 1 s
+        let impulse_at = 24_000usize; // 0.5 s in
+        let mut input = vec![0.0f32; n];
+        input[impulse_at] = 1.0;
+
+        let out = resample_to_44100(&input, src_rate).expect("resample 48k→44.1k");
+
+        let ratio = SAMPLE_RATE as f64 / src_rate as f64;
+        let expected_pos = (impulse_at as f64 * ratio).round() as usize;
+        let peak = argmax_abs(&out);
+        let drift = (peak as i64 - expected_pos as i64).abs();
+        assert!(
+            drift <= 8,
+            "impulse drifted {} samples (peak {}, expected ~{}); timing not preserved \
+             (a 'drop output_delay()' regression shifts it early)",
+            drift, peak, expected_pos
+        );
+
+        // "no tail pad": the output length is the theoretical resample length
+        // (within a couple of samples of resampler internal accounting), NOT
+        // inflated by the zero-padded final block (which would add ~1 chunk).
+        let expected_len = (n as f64 * ratio).round() as usize;
+        let len_err = (out.len() as i64 - expected_len as i64).abs();
+        assert!(
+            len_err <= 16,
+            "resampled length {} should be ~round(len*ratio)={} (err {})",
+            out.len(), expected_len, len_err
+        );
+    }
+
+    /// Upsampling path (22.05 kHz → 44.1 kHz, ratio 2.0) preserves timing too.
+    #[test]
+    fn resample_22k_upsample_preserves_onset_timing() {
+        let src_rate = 22_050u32;
+        let n = 22_050usize;
+        let impulse_at = 8_000usize;
+        let mut input = vec![0.0f32; n];
+        input[impulse_at] = 1.0;
+
+        let out = resample_to_44100(&input, src_rate).expect("resample 22.05k→44.1k");
+        let ratio = SAMPLE_RATE as f64 / src_rate as f64;
+        let expected_pos = (impulse_at as f64 * ratio).round() as usize;
+        let peak = argmax_abs(&out);
+        assert!(
+            (peak as i64 - expected_pos as i64).abs() <= 8,
+            "upsample impulse peak {} drifted from expected ~{}",
+            peak, expected_pos
+        );
+    }
 }

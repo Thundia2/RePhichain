@@ -8,10 +8,10 @@
 
 import { useState } from "react";
 import { useChartStore } from "../../stores/chartStore";
-import { useEditorStore } from "../../stores/editorStore";
+import { getSelectedLineIndex } from "../../stores/selection";
 import type { LineEventKind } from "../../types/chart";
 import { generateParametricEvents, type ParametricConfig } from "../../utils/parametricTrajectory";
-import { safeParseNumber } from "../common/FormFields";
+import { safeParseNumber, NumericInput } from "../common/FormFields";
 
 interface ParametricDialogProps {
   open: boolean;
@@ -113,10 +113,10 @@ export function ParametricDialog({ open, onClose }: ParametricDialogProps) {
   if (!open) return null;
 
   const handleGenerate = () => {
-    const es = useEditorStore.getState();
     const cs = useChartStore.getState();
+    const selectedLineIndex = getSelectedLineIndex();
 
-    if (es.selectedLineIndex === null) {
+    if (selectedLineIndex === null) {
       setError("Please select a line first.");
       return;
     }
@@ -131,9 +131,13 @@ export function ParametricDialog({ open, onClose }: ParametricDialogProps) {
       return;
     }
 
-    for (const event of events) {
-      cs.addEvent(es.selectedLineIndex, event);
-    }
+    // One undo entry (finding L1) + route flat<->layer (finding L3) so generated
+    // events land where the evaluator reads on a layered (RPE-imported) line.
+    cs.transaction(() => {
+      for (const event of events) {
+        cs.addEventRouted(selectedLineIndex, event);
+      }
+    });
 
     setError(null);
     onClose();
@@ -304,12 +308,14 @@ export function ParametricDialog({ open, onClose }: ParametricDialogProps) {
                   />
                 </CardRow>
                 <CardRow label="Steps" last>
-                  <input
-                    type="number"
-                    min="1"
-                    max="1000"
+                  <NumericInput
+                    commitMode="blur"
+                    integer
+                    min={1}
+                    max={1000}
+                    fallback={1}
                     value={steps}
-                    onChange={(e) => setSteps(parseInt(e.target.value) || 1)}
+                    onChange={setSteps}
                     style={INPUT_STYLE}
                     onFocus={focusInput}
                     onBlur={blurInput}

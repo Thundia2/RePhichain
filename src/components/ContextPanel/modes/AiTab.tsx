@@ -83,6 +83,10 @@ export function AiTab() {
   const [errorRawExpanded, setErrorRawExpanded] = useState(false);
   // Abort flag — when set to true, the streaming handler stops processing chunks
   const abortRef = useRef(false);
+  // M4: per-generation AbortController — abort() triggers the Rust-side stream
+  // cancel (ai_cancel_stream via ipc generateAiStream) so a stopped generation
+  // doesn't keep draining the upstream model in the background.
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Auto-scroll to bottom when messages change
   // Use instant scroll during streaming to avoid animation jank
@@ -114,6 +118,8 @@ export function AiTab() {
     setErrorRawExpanded(false);
     setLastRawResponse(null);
     abortRef.current = false;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       // Use streaming — tokens arrive progressively via appendStreamingContent
@@ -132,6 +138,7 @@ export function AiTab() {
           if (abortRef.current) return;
           appendStreamingContent(token);
         },
+        controller.signal,
       );
 
       // If aborted, save whatever we got so far and stop
@@ -211,6 +218,9 @@ export function AiTab() {
   // ---- Stop handler — aborts the current streaming generation ----
   const handleStop = useCallback(() => {
     abortRef.current = true;
+    // M4: cancel the Rust-side stream too (not just stop processing tokens) so the
+    // abandoned upstream request is dropped instead of draining in the background.
+    abortControllerRef.current?.abort();
     // Save whatever streamed so far as a partial response
     const partial = useAiChatStore.getState().streamingContent ?? "";
     clearStreamingContent();

@@ -28,6 +28,7 @@ import { KeyframeBar } from "../KeyframeBar/KeyframeBar";
 import { LineStrip } from "../LineStrip/LineStrip";
 import { StatusBar } from "../StatusBar/StatusBar";
 import { useEditorStore } from "../../stores/editorStore";
+import { getSelectedLineIndex, selectLineByIndex } from "../../stores/selection";
 import { useChartStore } from "../../stores/chartStore";
 import { useGroupStore } from "../../stores/groupStore";
 import { CanvasPanelDrawer } from "../UnifiedCanvas/CanvasPanelDrawer";
@@ -66,7 +67,7 @@ export function UnrolledEditorTab({ lineIndex }: UnrolledEditorTabProps = {}) {
   // On mount for per-line tabs, select the line so Inspector/KeyframeBar show correct data
   useEffect(() => {
     if (isPerLineTab && lineIndex !== undefined) {
-      useEditorStore.getState().selectLine(lineIndex);
+      selectLineByIndex(lineIndex);
     }
   }, [isPerLineTab, lineIndex]);
 
@@ -136,9 +137,8 @@ export function UnrolledEditorTab({ lineIndex }: UnrolledEditorTabProps = {}) {
       }}
       // When a per-line tab receives interaction, sync the shared editorStore
       onMouseDown={isPerLineTab && lineIndex !== undefined ? () => {
-        const es = useEditorStore.getState();
-        if (es.selectedLineIndex !== lineIndex) {
-          es.selectLine(lineIndex);
+        if (getSelectedLineIndex() !== lineIndex) {
+          selectLineByIndex(lineIndex);
         }
       } : undefined}
     >

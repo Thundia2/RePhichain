@@ -12,7 +12,11 @@
 // ============================================================
 
 import { useChartStore } from "../stores/chartStore";
-import { useEditorStore } from "../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  getSelectedEventIndices,
+} from "../stores/selection";
 import { floatToBeat, beatToFloat } from "../types/chart";
 import type { Note, LineEvent, LineEventValue, EasingType, Line } from "../types/chart";
 import type { AiCommand, AiNote, AiEvent } from "./aiCommandSchema";
@@ -128,12 +132,121 @@ function aiEventToLineEvent(ai: AiEvent): LineEvent {
 
 function resolveLineIndex(ref: number | "selected" | "new"): number | "new" {
   if (ref === "selected") {
-    const idx = useEditorStore.getState().selectedLineIndex;
+    const idx = getSelectedLineIndex();
     if (idx === null) throw new Error("No line is selected. Select a line first.");
     return idx;
   }
   if (ref === "new") return "new";
   return ref;
+}
+
+/** A5: for a target of "selected", the selected note/event indices index the
+ *  SELECTED line — so the edit/removal must land on getSelectedLineIndex(), not
+ *  whatever cmd.line says. The model sometimes pairs target:"selected" with a
+ *  different (or numeric) cmd.line, which would apply the selected indices to the
+ *  wrong line. grep selectedLineForTarget. */
+function selectedLineForTarget(): number {
+  const idx = getSelectedLineIndex();
+  if (idx === null) throw new Error("No line is selected. Select a line first.");
+  return idx;
+}
+
+// ============================================================
+// Pre-flight validation (A3)
+// ============================================================
+
+/**
+ * A3: replay the command sequence WITHOUT mutating the store, tracking a
+ * simulated line count, and throw on the same conditions the apply pass would.
+ * This lets executeAiCommands apply everything inside ONE transaction with no
+ * partial apply — the old code mutated on each command, so a mid-sequence throw
+ * (e.g. a "selected" target with no selection, a text/gif event, an
+ * out-of-range line) left the chart half-applied across several undo entries.
+ * grep validateAiCommands.
+ */
+function validateAiCommands(commands: AiCommand[]): void {
+  const cs = useChartStore.getState();
+  let simCount = cs.chart.lines.length;   // simulated line count as add/remove run
+  let created = 0;                        // add_line count for the safety cap
+  const selected = getSelectedLineIndex();
+
+  const resolveSim = (ref: number | "selected" | "new"): number | "new" => {
+    if (ref === "selected") {
+      if (selected === null) throw new Error("No line is selected. Select a line first.");
+      return selected;
+    }
+    return ref;
+  };
+  const checkRange = (idx: number) => {
+    if (idx < 0 || idx >= simCount) throw new Error(`Line ${idx} does not exist`);
+  };
+  const checkEvents = (events: AiEvent[] | undefined) => {
+    for (const e of events ?? []) {
+      if (e.kind === "text" || e.kind === "gif") {
+        throw new Error(`Cannot generate "${e.kind}" events — these are read-only for AI.`);
+      }
+    }
+  };
+
+  for (const cmd of commands) {
+    switch (cmd.command) {
+      case "add_line":
+        if (created >= MAX_LINES_PER_GENERATION) throw new Error(`Safety limit: cannot create more than ${MAX_LINES_PER_GENERATION} lines in one generation`);
+        checkEvents(cmd.events);
+        created++; simCount++;
+        break;
+      case "add_notes": {
+        const li = resolveSim(cmd.line);
+        if (li === "new") simCount++;
+        else checkRange(li);
+        break;
+      }
+      case "add_events": {
+        const li = resolveSim(cmd.line);
+        if (li === "new") throw new Error("add_events does not support line='new'. Create the line first.");
+        checkRange(li);
+        checkEvents(cmd.events);
+        break;
+      }
+      case "edit_line": {
+        const li = resolveSim(cmd.line);
+        if (li === "new") throw new Error("edit_line does not support line='new'");
+        checkRange(li);
+        break;
+      }
+      case "edit_notes": {
+        // A5: a "selected" target forces the selected line.
+        const li = cmd.target === "selected" ? resolveSim("selected") : resolveSim(cmd.line);
+        if (li === "new") throw new Error("edit_notes does not support line='new'");
+        checkRange(li);
+        break;
+      }
+      case "edit_events": {
+        const li = resolveSim(cmd.line);
+        if (li === "new") throw new Error("edit_events does not support line='new'");
+        checkRange(li);
+        break;
+      }
+      case "remove_notes": {
+        const li = cmd.target === "selected" ? resolveSim("selected") : resolveSim(cmd.line);
+        if (li === "new") throw new Error("remove_notes does not support line='new'");
+        checkRange(li);
+        break;
+      }
+      case "remove_events": {
+        const li = cmd.target === "selected" ? resolveSim("selected") : resolveSim(cmd.line);
+        if (li === "new") throw new Error("remove_events does not support line='new'");
+        checkRange(li);
+        break;
+      }
+      case "remove_line":
+        checkRange(cmd.line);
+        simCount--;
+        break;
+      case "set_bpm":
+        break;
+    }
+  }
 }
 
 // ============================================================
@@ -161,6 +274,12 @@ export function executeAiCommands(commands: AiCommand[]): ExecutionResult {
   let notesCreated = 0;
   let eventsCreated = 0;
 
+  // A3: validate the whole batch first (throws on any problem WITHOUT mutating),
+  // then apply inside ONE transaction so the generation is atomic and a single
+  // undo entry. grep validateAiCommands.
+  validateAiCommands(commands);
+
+  cs.transaction(() => {
   for (const cmd of commands) {
     switch (cmd.command) {
       case "add_line": {
@@ -226,8 +345,10 @@ export function executeAiCommands(commands: AiCommand[]): ExecutionResult {
       }
 
       case "edit_notes": {
-        const lineIdx = resolveLineIndex(cmd.line);
+        let lineIdx = resolveLineIndex(cmd.line);
         if (lineIdx === "new") throw new Error("edit_notes does not support line='new'");
+        // A5: selected indices belong to the selected line, not cmd.line.
+        if (cmd.target === "selected") lineIdx = selectedLineForTarget();
         const line = useChartStore.getState().chart.lines[lineIdx as number];
         if (!line) throw new Error(`Line ${lineIdx} does not exist`);
 
@@ -236,7 +357,7 @@ export function executeAiCommands(commands: AiCommand[]): ExecutionResult {
         if (cmd.target === "all") {
           indices = line.notes.map((_, i) => i);
         } else if (cmd.target === "selected") {
-          indices = useEditorStore.getState().selectedNoteIndices;
+          indices = getSelectedNoteIndices();
         } else if ("beat_range" in cmd.target) {
           const [lo, hi] = cmd.target.beat_range;
           indices = line.notes
@@ -350,8 +471,10 @@ export function executeAiCommands(commands: AiCommand[]): ExecutionResult {
       }
 
       case "remove_notes": {
-        const lineIdx = resolveLineIndex(cmd.line);
+        let lineIdx = resolveLineIndex(cmd.line);
         if (lineIdx === "new") throw new Error("remove_notes does not support line='new'");
+        // A5: selected indices belong to the selected line, not cmd.line.
+        if (cmd.target === "selected") lineIdx = selectedLineForTarget();
         const line = useChartStore.getState().chart.lines[lineIdx as number];
         if (!line) throw new Error(`Line ${lineIdx} does not exist`);
 
@@ -360,7 +483,7 @@ export function executeAiCommands(commands: AiCommand[]): ExecutionResult {
         if (cmd.target === "all") {
           indices = line.notes.map((_, i) => i);
         } else if (cmd.target === "selected") {
-          indices = useEditorStore.getState().selectedNoteIndices;
+          indices = getSelectedNoteIndices();
         } else if (typeof cmd.target === "object" && "beat_range" in cmd.target) {
           const [lo, hi] = cmd.target.beat_range;
           indices = line.notes
@@ -386,15 +509,17 @@ export function executeAiCommands(commands: AiCommand[]): ExecutionResult {
       }
 
       case "remove_events": {
-        const lineIdx = resolveLineIndex(cmd.line);
+        let lineIdx = resolveLineIndex(cmd.line);
         if (lineIdx === "new") throw new Error("remove_events does not support line='new'");
+        // A5: selected indices belong to the selected line, not cmd.line.
+        if (cmd.target === "selected") lineIdx = selectedLineForTarget();
         const line = useChartStore.getState().chart.lines[lineIdx as number];
         if (!line) throw new Error(`Line ${lineIdx} does not exist`);
 
         // Determine which event indices to remove
         let indices: number[];
         if (cmd.target === "selected") {
-          indices = useEditorStore.getState().selectedEventIndices;
+          indices = getSelectedEventIndices();
         } else {
           const target = cmd.target as { kind: string; beat_range: [number, number] };
           const [lo, hi] = target.beat_range;
@@ -430,6 +555,7 @@ export function executeAiCommands(commands: AiCommand[]): ExecutionResult {
         summaryParts.push(`Unknown command: ${(cmd as { command: string }).command}`);
     }
   }
+  });
 
   return {
     success: true,

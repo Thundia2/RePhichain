@@ -14,19 +14,30 @@
 // editor tabs (overrideLineIndex, scrollBeatKey, followPlaybackKey).
 // ============================================================
 
-import { useRef, useEffect, useCallback, useMemo } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  getSelectedEventIndices,
+  setNoteSelectionByIndex,
+  toggleNoteSelectionByIndex,
+  setEventSelectionByIndex,
+  toggleEventSelectionByIndex,
+  noteUidAt,
+} from "../../stores/selection";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { UnrolledRenderer, effectiveGutterWidth, EVENT_DIAMOND_HIT_RADIUS, EVENT_GUTTER_EXTRA } from "../../canvas/unrolledRenderer";
 import type { UnrolledOverlayLine } from "../../canvas/unrolledRenderer";
-import { BEAT_GUTTER_WIDTH } from "../../constants/canvasConstants";
-import { BpmList } from "../../utils/bpmList";
+import { BEAT_GUTTER_WIDTH, BASE_PX_PER_BEAT } from "../../constants/canvasConstants";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { beatToFloat } from "../../types/chart";
 import { snapBeat, floatToBeat } from "../../utils/beat";
 import { snapX } from "../../utils/xSnap";
 import { placeEventAtBeats } from "../../utils/quickEventCreate";
+import { findEventInLine } from "../../utils/eventRouting";
 import { EVENT_TOOL_TO_KIND } from "../../types/editor";
 import type { NoteKind, Beat, LineEventKind } from "../../types/chart";
 
@@ -70,9 +81,10 @@ interface HoldTailDragState {
 // ============================================================
 interface EventPlacementDragState {
   lineIndex: number;
-  /** Index in line.events. Stable across the drag because end_beat
-   *  edits don't re-sort (sort is by start_beat). */
-  eventIndex: number;
+  /** Stable id of the placed event (finding L2/L3). Resolved by id on every
+   *  move so the live end_beat drag survives flat<->layer routing and any
+   *  re-sort, instead of trusting a now-ambiguous array index. */
+  eventId: string;
   /** Click beat — the immutable lower bound of the event. */
   startBeat: number;
   kind: LineEventKind;
@@ -105,7 +117,7 @@ export function UnrolledCanvas({
 
   /** Get the effective line index (overridden or from editorStore) */
   const getLineIndex = useCallback((): number | null => {
-    return isPerLineTab ? overrideLineIndex! : useEditorStore.getState().selectedLineIndex;
+    return isPerLineTab ? overrideLineIndex! : getSelectedLineIndex();
   }, [isPerLineTab, overrideLineIndex]);
 
   /** Get the effective scroll beat (per-tab or global) */
@@ -133,11 +145,7 @@ export function UnrolledCanvas({
   const eventPlacementDragRef = useRef<EventPlacementDragState | null>(null);
 
   // Store selectors
-  const chart = useChartStore((s) => s.chart);
   const isLoaded = useChartStore((s) => s.isLoaded);
-  const bpmList = useMemo(() => new BpmList(chart.bpm_list), [chart.bpm_list]);
-  const bpmListRef = useRef(bpmList);
-  useEffect(() => { bpmListRef.current = bpmList; }, [bpmList]);
 
   // ---- Canvas sizing ----
   const resizeCanvas = useCallback(() => {
@@ -216,8 +224,7 @@ export function UnrolledCanvas({
       const line = cs.chart.lines[lineIdx];
       if (!line) { rafRef.current = requestAnimationFrame(animate); return; }
 
-      const bl = bpmListRef.current;
-      const currentBeat = bl.beatAtFloat(Math.max(0, as_.currentTime - cs.chart.offset));
+      const currentBeat = getPlayheadBeat({ clampNonNegative: true });
       const dpr = window.devicePixelRatio || 1;
       const w = cnv.width / dpr;
       const h = cnv.height / dpr;
@@ -226,7 +233,9 @@ export function UnrolledCanvas({
       const followPlayback = es.unrolledFollowPlayback[followPlaybackKey] ?? true;
       if (as_.isPlaying && followPlayback) {
         const scrollBeat = getScrollBeat();
-        const pxPerBeat = 80 * es.timelineZoom;
+        // Y8: BASE_PX_PER_BEAT (not a bare 80) so this auto-follow math stays in
+        // lockstep with UnrolledRenderer.beatToY, which scales by the same constant.
+        const pxPerBeat = BASE_PX_PER_BEAT * es.timelineZoom;
         const maxVisibleBeat = scrollBeat + h / pxPerBeat;
         // If playhead is about to go off-screen, scroll to center it
         if (currentBeat > maxVisibleBeat - 1 || currentBeat < scrollBeat + 0.5) {
@@ -262,7 +271,7 @@ export function UnrolledCanvas({
         density: es.density,
         verticalLines: es.verticalLines,
         noteSideFilter: es.noteSideFilter,
-        selectedNoteIndices: es.selectedNoteIndices,
+        selectedNoteIndices: getSelectedNoteIndices(),
         scrollBeat: getScrollBeat(),
         canvasWidth: w,
         canvasHeight: h,
@@ -278,7 +287,7 @@ export function UnrolledCanvas({
         // merge that layer's five sub-arrays the same way KeyframeBar
         // does (so this view stays in sync with the active layer pill).
         events: line.events,
-        selectedEventIndices: es.selectedEventIndices,
+        selectedEventIndices: getSelectedEventIndices(),
         noteVisibility: es.unrolledNoteVisibility,
         eventVisibility: es.unrolledEventVisibility,
         showEventSpanTints: ss.unrolledShowEventSpanTints,
@@ -369,7 +378,7 @@ export function UnrolledCanvas({
     const { noteAreaLeft, noteAreaWidth } = UnrolledRenderer.getNoteAreaBounds(w, getGutterWidth());
     const scrollBeat = getScrollBeat();
 
-    for (const idx of es.selectedNoteIndices) {
+    for (const idx of getSelectedNoteIndices()) {
       const note = line.notes[idx];
       if (!note || note.kind !== "hold" || !note.hold_beat) continue;
 
@@ -513,13 +522,13 @@ export function UnrolledCanvas({
       const evtIdx = hitTestEventMarker(x, y);
       if (evtIdx >= 0) {
         if (e.ctrlKey || e.metaKey) {
-          es.toggleEventSelection(evtIdx);
+          toggleEventSelectionByIndex(evtIdx, lineIdx);
         } else {
-          es.setEventSelection([evtIdx]);
+          setEventSelectionByIndex([evtIdx], lineIdx);
         }
         es.showFloatingInspector(
           e.clientX, e.clientY,
-          es.selectedEventIndices.length > 1 ? "multi_event" : "event",
+          getSelectedEventIndices().length > 1 ? "multi_event" : "event",
         );
         return;
       }
@@ -545,16 +554,17 @@ export function UnrolledCanvas({
       const minDuration = 1 / safeDensity;
       const endBeat = startBeat + minDuration;
 
-      const eventIndex = placeEventAtBeats(lineIdx, kind, startBeat, endBeat);
-      if (eventIndex < 0) return;
+      const eventId = placeEventAtBeats(lineIdx, kind, startBeat, endBeat);
+      if (!eventId) return;
 
-      // Select the new event so any keyframe-bar / inspector panels
-      // that key off selection update immediately.
-      es.setEventSelection([eventIndex]);
+      // Select the new event by id so any keyframe-bar / inspector panels
+      // that key off selection update immediately. Select by id, not index:
+      // the write may have routed into a layer's kind-array (finding L3).
+      es.setEventSelection([eventId]);
 
       eventPlacementDragRef.current = {
         lineIndex: lineIdx,
-        eventIndex,
+        eventId,
         startBeat,
         kind,
       };
@@ -634,14 +644,15 @@ export function UnrolledCanvas({
       if (hitIdx >= 0) {
         // Ctrl+click toggles multi-select
         if (e.ctrlKey || e.metaKey) {
-          es.toggleNoteSelection(hitIdx);
-        } else if (!es.selectedNoteIndices.includes(hitIdx)) {
-          es.setNoteSelection([hitIdx]);
+          toggleNoteSelectionByIndex(hitIdx, lineIdx);
+        } else if (!getSelectedNoteIndices().includes(hitIdx)) {
+          setNoteSelectionByIndex([hitIdx], lineIdx);
         }
 
         // Start note drag
-        const selected = es.selectedNoteIndices.includes(hitIdx)
-          ? es.selectedNoteIndices
+        const selNotes = getSelectedNoteIndices();
+        const selected = selNotes.includes(hitIdx)
+          ? selNotes
           : [hitIdx];
         noteDragRef.current = {
           noteIndices: selected,
@@ -668,13 +679,13 @@ export function UnrolledCanvas({
       const boundaryIdx = hitTestEventBoundary(x, y);
       if (boundaryIdx >= 0) {
         if (e.ctrlKey || e.metaKey) {
-          es.toggleEventSelection(boundaryIdx);
+          toggleEventSelectionByIndex(boundaryIdx, lineIdx);
         } else {
-          es.setEventSelection([boundaryIdx]);
+          setEventSelectionByIndex([boundaryIdx], lineIdx);
         }
         es.showFloatingInspector(
           e.clientX, e.clientY,
-          es.selectedEventIndices.length > 1 ? "multi_event" : "event",
+          getSelectedEventIndices().length > 1 ? "multi_event" : "event",
         );
         return;
       }
@@ -765,9 +776,9 @@ export function UnrolledCanvas({
       // to skip writes when end_beat hasn't actually changed (cuts
       // history churn during smooth drags).
       const line = cs.chart.lines[drag.lineIndex];
-      const evt = line?.events[drag.eventIndex];
+      const evt = line ? findEventInLine(line, drag.eventId) : null;
       if (evt && Math.abs(beatToFloat(evt.end_beat) - newEnd) > 1e-9) {
-        cs.editEvent(drag.lineIndex, drag.eventIndex, { end_beat: floatToBeat(newEnd) });
+        cs.editEventById(drag.lineIndex, drag.eventId, { end_beat: floatToBeat(newEnd) });
       }
       return;
     }
@@ -892,13 +903,13 @@ export function UnrolledCanvas({
       // now select the events, addressing the "drag-select can't pick
       // events" bug the user reported.
       if (selectedNotes.length > 0) {
-        es.setNoteSelection(selectedNotes);
+        setNoteSelectionByIndex(selectedNotes, lineIdx);
         es.showFloatingInspector(
           e.clientX, e.clientY,
           selectedNotes.length > 1 ? "multi_note" : "note",
         );
       } else if (selectedEvents.length > 0) {
-        es.setEventSelection(selectedEvents);
+        setEventSelectionByIndex(selectedEvents, lineIdx);
         es.showFloatingInspector(
           e.clientX, e.clientY,
           selectedEvents.length > 1 ? "multi_event" : "event",
@@ -947,11 +958,13 @@ export function UnrolledCanvas({
     e.preventDefault();
     const { x, y } = getCanvasCoords(e);
     const es = useEditorStore.getState();
+    const lineIdx = getLineIndex();
+    if (lineIdx === null) return;
 
     // Event marker first — gutter zone never overlaps the note area.
     const evtIdx = hitTestEventMarker(x, y);
     if (evtIdx >= 0) {
-      es.setEventSelection([evtIdx]);
+      setEventSelectionByIndex([evtIdx], lineIdx);
       es.showFloatingInspector(e.clientX, e.clientY, "event");
       return;
     }
@@ -963,10 +976,13 @@ export function UnrolledCanvas({
         // Second right-click: complete the track creation
         es.setCurveTrackCreation(null);
       } else {
-        es.setCurveTrackCreation({ fromNoteIndex: hitIdx });
+        // Store the source note's stable uid (L2) so the in-progress track
+        // survives a note re-sort before the second click completes it.
+        const fromUid = noteUidAt(lineIdx, hitIdx);
+        if (fromUid) es.setCurveTrackCreation({ fromNoteUid: fromUid });
       }
     }
-  }, [getCanvasCoords, hitTestNote, hitTestEventMarker]);
+  }, [getCanvasCoords, hitTestNote, hitTestEventMarker, getLineIndex]);
 
   // Subscribe to noteVisibility so the cursor reflects the current
   // gating state without needing a force re-render trick.

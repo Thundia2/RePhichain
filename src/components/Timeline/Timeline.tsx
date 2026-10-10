@@ -19,6 +19,15 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
+import {
+  useSelectedLineIndex,
+  useSelectedNoteIndices,
+  getSelectedLineIndex,
+  getSelectedNoteIndices,
+  setNoteSelectionByIndex,
+  toggleNoteSelectionByIndex,
+  noteUidAt,
+} from "../../stores/selection";
 import { useAudioStore } from "../../stores/audioStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { TimelineRenderer, BASE_PX_PER_BEAT } from "../../canvas/timelineRenderer";
@@ -59,13 +68,13 @@ export function Timeline() {
 
   // Store subscriptions for reactive rendering — values read via getState() in callbacks
   const chart = useChartStore((s) => s.chart);
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   // Subscribe to trigger re-renders when these change (used in render loop via getState)
   void useEditorStore((s) => s.timelineZoom);
   void useEditorStore((s) => s.density);
   void useEditorStore((s) => s.verticalLines);
   void useEditorStore((s) => s.noteSideFilter);
-  void useEditorStore((s) => s.selectedNoteIndices);
+  void useSelectedNoteIndices();
   const audioDuration = useAudioStore((s) => s.duration);
 
   const maxBeat = useMemo(() => {
@@ -80,8 +89,9 @@ export function Timeline() {
         latest = Math.max(latest, note.hold_beat ? b + beatToFloat(note.hold_beat) : b);
       }
       for (const ev of line.events) {
-        const eb = beatToFloat(ev.end_beat);
-        if (eb < 999) latest = Math.max(latest, eb);
+        // No eb<999 dodge anymore — baselines are gone (finding L4), so an
+        // event's end_beat is real chart length, not a [0,1000] sentinel.
+        latest = Math.max(latest, beatToFloat(ev.end_beat));
       }
     }
     return Math.max(latest + SCROLL_PADDING_BEATS, 16);
@@ -149,6 +159,7 @@ export function Timeline() {
       const { chart: c } = useChartStore.getState();
       const { currentTime } = useAudioStore.getState();
       const es = useEditorStore.getState();
+      const selLineIdx = getSelectedLineIndex();
       if (bpmListDataRef.current !== c.bpm_list) {
         bpmListDataRef.current = c.bpm_list;
         bpmListRef.current = new BpmList(c.bpm_list);
@@ -165,7 +176,7 @@ export function Timeline() {
         setScrollBeat(Math.max(0, Math.min(targetScroll, maxBeatRef.current)));
       }
 
-      const line = es.selectedLineIndex !== null ? c.lines[es.selectedLineIndex] : null;
+      const line = selLineIdx !== null ? c.lines[selLineIdx] : null;
 
       // Build overlay lines from editorStore if overlay is enabled
       const overlayLines: { notes: import("../../types/chart").Note[]; lineIndex: number; color: string }[] = [];
@@ -174,7 +185,7 @@ export function Timeline() {
         const OVERLAY_COLORS = ["#ff6b6b", "#51cf66", "#ffd43b", "#cc5de8", "#4dabf7", "#ff922b", "#20c997", "#f06595"];
         for (let oi = 0; oi < es.timelineOverlayLines.length; oi++) {
           const oLineIdx = es.timelineOverlayLines[oi];
-          if (oLineIdx === es.selectedLineIndex) continue; // skip selected line
+          if (oLineIdx === selLineIdx) continue; // skip selected line
           const oLine = c.lines[oLineIdx];
           if (oLine) {
             overlayLines.push({
@@ -195,7 +206,7 @@ export function Timeline() {
         density: es.density,
         verticalLines: es.verticalLines,
         noteSideFilter: es.noteSideFilter,
-        selectedNoteIndices: es.selectedNoteIndices,
+        selectedNoteIndices: getSelectedNoteIndices(),
         scrollBeat: scrollBeatRef.current,
         canvasWidth: rect.width,
         canvasHeight: rect.height,
@@ -259,8 +270,9 @@ export function Timeline() {
 
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    const line = es.selectedLineIndex !== null ? cs.chart.lines[es.selectedLineIndex] : null;
-    if (!line || es.selectedLineIndex === null) return;
+    const selLineIdx = getSelectedLineIndex();
+    const line = selLineIdx !== null ? cs.chart.lines[selLineIdx] : null;
+    if (!line || selLineIdx === null) return;
 
     const clickBeat = TimelineRenderer.yToBeat(y, scrollBeatRef.current, es.timelineZoom, rect.height);
     const { noteAreaLeft, noteAreaWidth } = TimelineRenderer.getNoteAreaBounds(rect.width);
@@ -273,7 +285,7 @@ export function Timeline() {
       if (noteKind) {
         const noteX = TimelineRenderer.pixelToNoteX(x, noteAreaLeft, noteAreaWidth);
         const snappedBeat = snapBeat(clickBeat, es.density);
-        cs.addNote(es.selectedLineIndex, {
+        cs.addNote(selLineIdx, {
           kind: noteKind,
           above: true,
           beat: snappedBeat,
@@ -305,7 +317,7 @@ export function Timeline() {
       // Eraser tool
       if (es.activeTool === "eraser") {
         if (closestIdx >= 0) {
-          cs.removeNotes(es.selectedLineIndex, [closestIdx]);
+          cs.removeNotes(selLineIdx, [closestIdx]);
         }
         return;
       }
@@ -313,9 +325,9 @@ export function Timeline() {
       // Select tool - click on note
       if (closestIdx >= 0) {
         if (e.ctrlKey || e.metaKey) {
-          es.toggleNoteSelection(closestIdx);
+          toggleNoteSelectionByIndex(closestIdx);
         } else {
-          es.setNoteSelection([closestIdx]);
+          setNoteSelectionByIndex([closestIdx]);
         }
         return;
       }
@@ -376,11 +388,12 @@ export function Timeline() {
 
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
+    const selLineIdx = getSelectedLineIndex();
     const dragRect = es.dragSelectionRect;
     es.setDragSelectionRect(null);
 
-    if (!dragRect || es.selectedLineIndex === null) return;
-    const line = cs.chart.lines[es.selectedLineIndex];
+    if (!dragRect || selLineIdx === null) return;
+    const line = cs.chart.lines[selLineIdx];
     if (!line) return;
 
     // Find notes within the drag rectangle
@@ -408,7 +421,7 @@ export function Timeline() {
     });
 
     if (selected.length > 0) {
-      es.setNoteSelection(selected);
+      setNoteSelectionByIndex(selected);
     }
   }, []);
 
@@ -433,8 +446,9 @@ export function Timeline() {
 
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    const line = es.selectedLineIndex !== null ? cs.chart.lines[es.selectedLineIndex] : null;
-    if (!line || es.selectedLineIndex === null) return;
+    const selLineIdx = getSelectedLineIndex();
+    const line = selLineIdx !== null ? cs.chart.lines[selLineIdx] : null;
+    if (!line || selLineIdx === null) return;
 
     const { noteAreaLeft, noteAreaWidth } = TimelineRenderer.getNoteAreaBounds(rect.width);
 
@@ -465,7 +479,11 @@ export function Timeline() {
   const handleStartCurveTrack = useCallback(() => {
     if (!contextMenu) return;
     const es = useEditorStore.getState();
-    es.setCurveTrackCreation({ fromNoteIndex: contextMenu.noteIdx });
+    const lineIdx = getSelectedLineIndex();
+    if (lineIdx === null) return;
+    const fromUid = noteUidAt(lineIdx, contextMenu.noteIdx);
+    if (!fromUid) return;
+    es.setCurveTrackCreation({ fromNoteUid: fromUid });
     setContextMenu(null);
   }, [contextMenu]);
 
@@ -473,13 +491,15 @@ export function Timeline() {
     if (!contextMenu) return;
     const es = useEditorStore.getState();
     const cs = useChartStore.getState();
-    if (!es.curveTrackCreation || es.selectedLineIndex === null) return;
+    const lineIdx = getSelectedLineIndex();
+    if (!es.curveTrackCreation || lineIdx === null) return;
 
-    const line = cs.chart.lines[es.selectedLineIndex];
-    const fromNote = line?.notes[es.curveTrackCreation.fromNoteIndex];
+    // curveTrackCreation stores the source note's stable uid (L2), so the track
+    // start survives a note re-sort between "start" and "complete".
+    const line = cs.chart.lines[lineIdx];
     const toNote = line?.notes[contextMenu.noteIdx];
-    cs.addCurveNoteTrack(es.selectedLineIndex, {
-      from: fromNote?.uid ?? String(es.curveTrackCreation.fromNoteIndex),
+    cs.addCurveNoteTrack(lineIdx, {
+      from: es.curveTrackCreation.fromNoteUid,
       to: toNote?.uid ?? String(contextMenu.noteIdx),
       options: { density: 4, kind: "drag", curve: "linear" },
     });

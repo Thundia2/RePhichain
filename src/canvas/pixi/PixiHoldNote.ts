@@ -129,6 +129,9 @@ export class PixiHoldNoteContainer extends Container {
       this.bodySprite.alpha = 0.9;
       this.bodySprite.visible = true;
     }
+    // X5: reset tint to white — a pooled hold reused from updateFallback() keeps its
+    // colored tint, which would discolor the respack body/head/tail textures.
+    if (this.bodySprite) this.bodySprite.tint = 0xffffff;
 
     // ---- Head ----
     if (!this.headSprite) {
@@ -140,6 +143,7 @@ export class PixiHoldNoteContainer extends Container {
     this.headSprite.width = noteW;
     this.headSprite.height = headTexH;
     this.headSprite.alpha = 0.9;
+    this.headSprite.tint = 0xffffff; // X5: clear any leftover fallback tint
 
     if (holdCompact) {
       this.headSprite.position.set(noteX, top);
@@ -159,6 +163,7 @@ export class PixiHoldNoteContainer extends Container {
     this.tailSprite.width = noteW;
     this.tailSprite.height = tailTexH;
     this.tailSprite.alpha = 0.9;
+    this.tailSprite.tint = 0xffffff; // X5: clear any leftover fallback tint
 
     if (holdCompact) {
       this.tailSprite.position.set(noteX, top + bodyHeight);
@@ -175,7 +180,7 @@ export class PixiHoldNoteContainer extends Container {
     noteW: number,
     noteH: number,
     headY: number,
-    _tailY: number,
+    tailY: number,
     top: number,
     bodyHeight: number,
     color: number,
@@ -227,8 +232,10 @@ export class PixiHoldNoteContainer extends Container {
     this.tailSprite.tint = color;
     this.tailSprite.width = noteW;
     this.tailSprite.height = noteH / 2;
-    // Tail is at bottom of body
-    this.tailSprite.position.set(noteX, top + bodyHeight);
+    // X6: tail at its real screen Y (tailY), not top+bodyHeight. For an "above" line
+    // (dir = -1) top+bodyHeight equals the HEAD's Y, so the tail drew over the head.
+    // The textured path (updateTextured) already positions the tail at tailY.
+    this.tailSprite.position.set(noteX, tailY);
     this.tailSprite.alpha = 0.7;
     this.tailSprite.visible = true;
   }

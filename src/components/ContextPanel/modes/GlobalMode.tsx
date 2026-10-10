@@ -10,6 +10,7 @@
 
 import React, { useState } from "react";
 import { useEditorStore } from "../../../stores/editorStore";
+import { getSelectedLineIndex, setNoteSelectionByIndex, useSelectedLineIndex } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { useAudioStore } from "../../../stores/audioStore";
 import { useDialogStore } from "../../../stores/dialogStore";
@@ -23,7 +24,7 @@ import { performCopy, performCut, performPaste } from "../../../hooks/useClipboa
 import { useSettingsStore } from "../../../stores/settingsStore";
 import { useToastStore } from "../../../stores/toastStore";
 import { selectByRange } from "../../../utils/batchNoteOps";
-import { BpmList } from "../../../utils/bpmList";
+import { getPlayheadBeat } from "../../../utils/playhead";
 import type { EditorTool } from "../../../types/editor";
 
 // Panel components rendered inline when a panel button is clicked
@@ -87,19 +88,25 @@ const EDIT_BUTTONS: ActionButtonDef[] = [
     if (bmRedoSeq > chartRedoSeq && bs.canRedo()) { bs.redo(); } else { cs.redo(); }
   }},
   { icon: "A", label: "Sel All", hotkey: "Ctrl+A", action: () => {
-    const es = useEditorStore.getState();
-    const lineIdx = es.selectedLineIndex;
+    const lineIdx = getSelectedLineIndex();
     if (lineIdx === null) return;
     const notes = useChartStore.getState().chart.lines[lineIdx]?.notes;
-    if (notes) es.setNoteSelection([...Array(notes.length).keys()]);
+    if (notes) setNoteSelectionByIndex([...Array(notes.length).keys()]);
   }},
 ];
 
 const FILE_BUTTONS: ActionButtonDef[] = [
   { icon: "\uD83D\uDCC2", label: "Open", hotkey: "Ctrl+O", action: () => triggerImportChart() },
-  { icon: "\uD83D\uDCBE", label: "Save", hotkey: "Ctrl+S", action: () => {
+  { icon: "\uD83D\uDCBE", label: "Save", hotkey: "Ctrl+S", action: async () => {
     const cs = useChartStore.getState();
-    if (cs.projectPath) saveProject(cs.projectPath, cs.getChartJson());
+    if (!cs.projectPath) return;
+    const token = cs._dirtySeq; // F2: capture before the async write (see markCleanIf)
+    try {
+      await saveProject(cs.projectPath, cs.getChartJson(), JSON.stringify(cs.meta));
+      cs.markCleanIf(token);
+    } catch (e) {
+      console.error("Save failed:", e);
+    }
   }},
   { icon: "\uD83D\uDCE4", label: "Export", hotkey: "\u2014", action: () => useDialogStore.getState().openDialog("selective-export") },
   { icon: "\uD83D\uDCC4", label: "Import", hotkey: "Ctrl+O", action: () => triggerImportChart() },
@@ -705,7 +712,7 @@ function SelectByRangeSection() {
   const [xMin, setXMin] = useState("");
   const [xMax, setXMax] = useState("");
   const [sideFilter, setSideFilter] = useState<"all" | "above" | "below">("all");
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
   const lines = useChartStore((s) => s.chart.lines);
 
   const handleSelect = () => {
@@ -723,7 +730,7 @@ function SelectByRangeSection() {
     const indices = selectByRange(line.notes, sb, eb, xMinVal, xMaxVal, sideFilter);
 
     // Always apply the selection (empty = deselect), and give feedback
-    useEditorStore.getState().setNoteSelection(indices);
+    setNoteSelectionByIndex(indices);
     if (indices.length === 0) {
       useToastStore.getState().addToast({ message: "No notes matched the range", type: "info" });
     }
@@ -731,10 +738,7 @@ function SelectByRangeSection() {
 
   // Quick fill: set start from current playhead position
   const handleFromPlayhead = () => {
-    const { currentTime } = useAudioStore.getState();
-    const cs = useChartStore.getState();
-    const bpmList = new BpmList(cs.chart.bpm_list);
-    const beat = bpmList.beatAtFloat(currentTime - cs.chart.offset);
+    const beat = getPlayheadBeat();
     setStartBeat(beat.toFixed(2));
   };
 

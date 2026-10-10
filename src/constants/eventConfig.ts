@@ -11,7 +11,7 @@
 // from EVENT_COLORS so there is only one place to update colors.
 // ============================================================
 
-import type { LineEventKind } from "../types/chart";
+import type { LineEventKind, LineEventValue } from "../types/chart";
 import { EVENT_COLORS } from "./eventColors";
 
 // Re-export for convenience — consumers can import from either file
@@ -35,11 +35,32 @@ export const EXTENDED_EVENT_KINDS: LineEventKind[] = ["scale_x", "scale_y", "col
 
 // ---- Default Values ----
 
-/** Default constant values when creating new events */
+/** Default constant values when creating new events.
+ *  speed is 10 to match DEFAULT_LINE_STATE.speed (finding L4/N5): a default
+ *  line evaluates to speed 10, so a newly-added speed keyframe must start at 10
+ *  too — else the line would discontinuously jump to 1 the moment you add one. */
 export const DEFAULT_EVENT_VALUES: Record<string, number> = {
-  x: 0, y: 0, rotation: 0, opacity: 255, speed: 1,
+  x: 0, y: 0, rotation: 0, opacity: 255, speed: 10,
   scale_x: 1, scale_y: 1, incline: 0, gif: 0,
 };
+
+/** M6: a valid default CONSTANT value for ANY event kind. Numeric kinds use
+ *  DEFAULT_EVENT_VALUES; color/text carry their own value shapes, so a bare
+ *  `{ constant: 0 }` is an invalid event for those (it round-trips wrong / renders
+ *  garbage). Use this wherever a new event of an arbitrary kind is created. */
+export function defaultEventValue(kind: LineEventKind): LineEventValue {
+  if (kind === "color") return { color_constant: [255, 255, 255] };
+  if (kind === "text") return { text_value: "" };
+  return { constant: DEFAULT_EVENT_VALUES[kind] ?? 0 };
+}
+
+/** M6: a valid default TRANSITION value for ANY event kind (see defaultEventValue). */
+export function defaultEventTransition(kind: LineEventKind): LineEventValue {
+  if (kind === "color") return { color_transition: { start: [255, 255, 255], end: [255, 255, 255], easing: "linear" } };
+  if (kind === "text") return { text_transition: { start: "", end: "", easing: "linear" } };
+  const v = DEFAULT_EVENT_VALUES[kind] ?? 0;
+  return { transition: { start: v, end: v, easing: "linear" } };
+}
 
 // ---- Kind Metadata ----
 

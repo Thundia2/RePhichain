@@ -12,10 +12,9 @@
 
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useAudioStore } from "../../stores/audioStore";
-import { useChartStore } from "../../stores/chartStore";
 import type { ShaderEffect } from "../../types/extra";
 import { beatToFloat } from "../../types/chart";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 
 // ---- Lane color palette (one per shader type) ----
 const LANE_COLORS: Record<string, string> = {
@@ -70,17 +69,18 @@ export function EffectsTimeline({
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, scrollX: 0 });
 
-  // Audio time for playhead
+  // Audio time for playhead (subscribed → drives the canvas redraw)
   const currentTime = useAudioStore((s) => s.currentTime);
-  const bpmList = useChartStore((s) => s.chart.bpm_list);
 
   // Build unique lane list (sorted by first appearance order)
   const laneOrder = buildLaneOrder(effects);
   const totalHeight = HEADER_HEIGHT + laneOrder.length * LANE_HEIGHT;
 
-  // Convert current time to beat for the playhead
-  const bpmCalc = new BpmList(bpmList);
-  const currentBeat = bpmCalc.beatAtFloat(currentTime);
+  // Playhead beat via the central helper, so it subtracts chart.offset like the
+  // effect bars (which are positioned by chart beat). The old inline form
+  // `beatAtFloat(currentTime)` dropped the offset, putting the playhead `offset`
+  // beats off from the bars (finding T3 / L6).
+  const currentBeat = getPlayheadBeat({ time: currentTime });
 
   // ---- Drawing ----
   const draw = useCallback(() => {
@@ -247,10 +247,26 @@ export function EffectsTimeline({
   }, [effects, laneOrder, beatZoom, scrollX, currentBeat, selectedIndex]);
 
   // ---- Animation loop ----
+  //
+  // Z4: `draw` is memoized on ALL of its inputs (effects/laneOrder/beatZoom/
+  // scrollX/currentBeat/selectedIndex), and currentBeat derives from the
+  // SUBSCRIBED currentTime — so any change that affects the picture recreates
+  // `draw` and re-runs this effect. Between those, the old loop redrew the same
+  // closed-over inputs 60×/sec (identical pixels), even while paused. Now the
+  // loop is dirty-gated: it redraws once per effect run (lastSig resets to "")
+  // and otherwise only when the canvas's CSS size changes (the one redraw
+  // trigger that doesn't go through React). Idle ⇒ a clientWidth read + string
+  // compare, no canvas work.
   useEffect(() => {
     let rafId = 0;
+    let lastSig = "";
     const tick = () => {
-      draw();
+      const canvas = canvasRef.current;
+      const sig = canvas ? `${canvas.clientWidth}x${canvas.clientHeight}` : "";
+      if (sig !== lastSig) {
+        lastSig = sig;
+        draw();
+      }
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);

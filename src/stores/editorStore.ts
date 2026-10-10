@@ -17,6 +17,10 @@ import type { EditorTool, NoteSideFilter, LineSortMode, PanelId } from "../types
 import type { Beat, NoteKind, LineEventKind } from "../types/chart";
 import { beatToFloat } from "../types/chart";
 import { snapBeat } from "../utils/beat";
+// Central playhead-beat helper (L6). Static import is safe: playhead → {audio,
+// chart, settings} stores, none of which import editorStore back (no cycle), which
+// is exactly what lets us drop the old broken require() below (finding S2).
+import { getPlayheadBeat } from "../utils/playhead";
 
 export interface DragSelectionRect {
   x1: number; y1: number;
@@ -45,10 +49,10 @@ export interface PendingNote {
 export type LayerVisibility = "all" | "ghost" | "none";
 
 export interface EditorState {
-  // ---- Selection ----
-  selectedLineIndex: number | null;
-  selectedNoteIndices: number[];
-  selectedEventIndices: number[];
+  // ---- Selection (stable ids — finding L2; resolve to indices via stores/selection.ts) ----
+  selectedLineId: string | null;
+  selectedNoteUids: string[];
+  selectedEventIds: string[];
 
   // ---- Tool ----
   activeTool: EditorTool;
@@ -65,13 +69,13 @@ export interface EditorState {
   dragSelectionRect: DragSelectionRect | null;
 
   // ---- Hold note resize ----
-  holdResizeState: { noteIndex: number; handle: "head" | "tail" } | null;
+  holdResizeState: { noteUid: string; handle: "head" | "tail" } | null;
 
   // ---- Pending/ghost note ----
   pendingNote: PendingNote | null;
 
   // ---- Curve note track creation ----
-  curveTrackCreation: { fromNoteIndex: number } | null;
+  curveTrackCreation: { fromNoteUid: string } | null;
 
   // ---- FC/AP tracking ----
   isFcValid: boolean;
@@ -103,7 +107,7 @@ export interface EditorState {
   improvisationMode: boolean;
 
   // ---- Multi-line selection (batch editing) ----
-  multiSelectedLineIndices: number[];
+  multiSelectedLineIds: string[];
 
   // ---- Curve Editor state ----
   curveEditorExpanded: boolean;
@@ -113,12 +117,12 @@ export interface EditorState {
   curveEditorValueRange: { min: number; max: number } | null;
   curveEditorNormalized: boolean;
   curveEditorHoveredKeyframe: {
-    eventIndex: number;
+    eventId: string;
     kind: LineEventKind;
     handle: "start" | "end";
   } | null;
   curveEditorDragState: {
-    eventIndex: number;
+    eventId: string;
     kind: LineEventKind;
     handle: "start" | "end";
     startMouseX: number;
@@ -221,17 +225,17 @@ export interface EditorState {
   };
   setPatternConfig: (config: Partial<EditorState["patternConfig"]>) => void;
 
-  // ---- Selection actions ----
-  /** Select a line by index. Clears note/event selection. Pass null to deselect. */
-  selectLine: (index: number | null) => void;
-  /** Replace the note selection with the given indices. */
-  setNoteSelection: (indices: number[]) => void;
-  /** Toggle a note index in/out of the current selection. */
-  toggleNoteSelection: (index: number) => void;
-  /** Replace the event selection with the given indices. Switches panel to EventMode. */
-  setEventSelection: (indices: number[]) => void;
-  /** Toggle an event index in/out of the current selection. */
-  toggleEventSelection: (index: number) => void;
+  // ---- Selection actions (id-based — finding L2) ----
+  /** Select a line by its stable id. Clears note/event selection. Pass null to deselect. */
+  selectLine: (id: string | null) => void;
+  /** Replace the note selection with the given note uids. */
+  setNoteSelection: (uids: string[]) => void;
+  /** Toggle a note uid in/out of the current selection. */
+  toggleNoteSelection: (uid: string) => void;
+  /** Replace the event selection with the given event ids. */
+  setEventSelection: (ids: string[]) => void;
+  /** Toggle an event id in/out of the current selection. */
+  toggleEventSelection: (id: string) => void;
   /** Clear all note and event selections. */
   clearSelection: () => void;
 
@@ -251,13 +255,13 @@ export interface EditorState {
   setDragSelectionRect: (rect: DragSelectionRect | null) => void;
 
   // ---- Hold resize actions ----
-  setHoldResizeState: (state: { noteIndex: number; handle: "head" | "tail" } | null) => void;
+  setHoldResizeState: (state: { noteUid: string; handle: "head" | "tail" } | null) => void;
 
   // ---- Pending note actions ----
   setPendingNote: (note: PendingNote | null) => void;
 
   // ---- Curve track creation actions ----
-  setCurveTrackCreation: (state: { fromNoteIndex: number } | null) => void;
+  setCurveTrackCreation: (state: { fromNoteUid: string } | null) => void;
 
   // ---- FC/AP actions ----
   setFcValid: (valid: boolean) => void;
@@ -284,8 +288,8 @@ export interface EditorState {
   toggleImprovisationMode: () => void;
 
   // ---- Multi-line selection actions ----
-  setMultiSelectedLines: (indices: number[]) => void;
-  toggleMultiSelectedLine: (index: number) => void;
+  setMultiSelectedLines: (ids: string[]) => void;
+  toggleMultiSelectedLine: (id: string) => void;
   clearMultiSelectedLines: () => void;
 
   // ---- Curve Editor actions ----
@@ -386,9 +390,9 @@ export interface EditorState {
 
 export const useEditorStore = create<EditorState>()((set) => ({
   // ---- Initial state ----
-  selectedLineIndex: null,
-  selectedNoteIndices: [],
-  selectedEventIndices: [],
+  selectedLineId: null,
+  selectedNoteUids: [],
+  selectedEventIds: [],
   activeTool: "select",
   timelineZoom: 1.0,
   density: 4,
@@ -406,7 +410,13 @@ export const useEditorStore = create<EditorState>()((set) => ({
   eventEditorShowAllLines: false,
   eventEditorShowNotes: false,
   eventEditorActiveProperty: "x",
-  eventEditorActiveLayer: -1, // -1 = flat events (non-layered)
+  // Default to layer 0, not flat (finding L3): on a layered (RPE-imported) chart
+  // the evaluator reads core kinds from event_layers, so a "flat" default left
+  // the diamond strip empty AND sent edits to flat where they were invisible +
+  // dropped on export. Layer 0 makes display and routed writes agree. On a
+  // non-layered chart routeEventTarget falls back to flat regardless, so this is
+  // inert there. The "Flat" pill still sets -1 to reach flat/extended events.
+  eventEditorActiveLayer: 0,
   eventEditorDragState: null,
 
   // ---- Beat-sync placement ----
@@ -419,7 +429,7 @@ export const useEditorStore = create<EditorState>()((set) => ({
   improvisationMode: false,
 
   // ---- Multi-line selection ----
-  multiSelectedLineIndices: [],
+  multiSelectedLineIds: [],
 
   // ---- Curve Editor ----
   curveEditorExpanded: false,
@@ -501,54 +511,54 @@ export const useEditorStore = create<EditorState>()((set) => ({
 
   // ---- Selection ----
 
-  selectLine: (index) =>
+  selectLine: (id) =>
     set({
-      selectedLineIndex: index,
-      selectedNoteIndices: [],
-      selectedEventIndices: [],
-      multiSelectedLineIndices: [],
+      selectedLineId: id,
+      selectedNoteUids: [],
+      selectedEventIds: [],
+      multiSelectedLineIds: [],
     }),
 
-  setNoteSelection: (indices) =>
-    set({ selectedNoteIndices: indices, selectedEventIndices: [] }),
+  setNoteSelection: (uids) =>
+    set({ selectedNoteUids: uids, selectedEventIds: [] }),
 
-  toggleNoteSelection: (index) =>
+  toggleNoteSelection: (uid) =>
     set((state) => {
-      const existing = state.selectedNoteIndices;
-      const pos = existing.indexOf(index);
+      const existing = state.selectedNoteUids;
+      const pos = existing.indexOf(uid);
       if (pos >= 0) {
         return {
-          selectedNoteIndices: existing.filter((_, i) => i !== pos),
-          selectedEventIndices: [],
+          selectedNoteUids: existing.filter((_, i) => i !== pos),
+          selectedEventIds: [],
         };
       }
       return {
-        selectedNoteIndices: [...existing, index],
-        selectedEventIndices: [],
+        selectedNoteUids: [...existing, uid],
+        selectedEventIds: [],
       };
     }),
 
-  setEventSelection: (indices) =>
-    set({ selectedEventIndices: indices, selectedNoteIndices: [] }),
+  setEventSelection: (ids) =>
+    set({ selectedEventIds: ids, selectedNoteUids: [] }),
 
-  toggleEventSelection: (index) =>
+  toggleEventSelection: (id) =>
     set((state) => {
-      const existing = state.selectedEventIndices;
-      const pos = existing.indexOf(index);
+      const existing = state.selectedEventIds;
+      const pos = existing.indexOf(id);
       if (pos >= 0) {
         return {
-          selectedEventIndices: existing.filter((_, i) => i !== pos),
-          selectedNoteIndices: [],
+          selectedEventIds: existing.filter((_, i) => i !== pos),
+          selectedNoteUids: [],
         };
       }
       return {
-        selectedEventIndices: [...existing, index],
-        selectedNoteIndices: [],
+        selectedEventIds: [...existing, id],
+        selectedNoteUids: [],
       };
     }),
 
   clearSelection: () =>
-    set({ selectedNoteIndices: [], selectedEventIndices: [] }),
+    set({ selectedNoteUids: [], selectedEventIds: [] }),
 
   // ---- Tool ----
 
@@ -611,17 +621,17 @@ export const useEditorStore = create<EditorState>()((set) => ({
   })),
 
   // ---- Multi-line selection ----
-  setMultiSelectedLines: (indices) => set({ multiSelectedLineIndices: indices }),
-  toggleMultiSelectedLine: (index) =>
+  setMultiSelectedLines: (ids) => set({ multiSelectedLineIds: ids }),
+  toggleMultiSelectedLine: (id) =>
     set((state) => {
-      const existing = state.multiSelectedLineIndices;
-      const pos = existing.indexOf(index);
+      const existing = state.multiSelectedLineIds;
+      const pos = existing.indexOf(id);
       if (pos >= 0) {
-        return { multiSelectedLineIndices: existing.filter((_, i) => i !== pos) };
+        return { multiSelectedLineIds: existing.filter((_, i) => i !== pos) };
       }
-      return { multiSelectedLineIndices: [...existing, index] };
+      return { multiSelectedLineIds: [...existing, id] };
     }),
-  clearMultiSelectedLines: () => set({ multiSelectedLineIndices: [] }),
+  clearMultiSelectedLines: () => set({ multiSelectedLineIds: [] }),
 
   // ---- Curve Editor ----
   toggleCurveEditorExpanded: () => set((s) => ({ curveEditorExpanded: !s.curveEditorExpanded })),
@@ -652,15 +662,11 @@ export const useEditorStore = create<EditorState>()((set) => ({
       // Deactivating — reset
       return { stepRecordActive: false, stepRecordNotesPlaced: 0 };
     }
-    // Activating — set current beat from playhead position.
-    // Import audio/chart stores lazily to avoid circular dependency issues
-    // at module load time. These stores exist at runtime.
-    const { useAudioStore } = require("./audioStore");
-    const { useChartStore, getCachedBpmList } = require("./chartStore");
-    const as_ = useAudioStore.getState();
-    const cs = useChartStore.getState();
-    const bpmList = getCachedBpmList();
-    const currentBeat = bpmList.beatAtFloat(as_.currentTime - cs.chart.offset);
+    // Activating — set the current beat from the playhead position.
+    // (Previously used require() to dodge a load-time cycle; that throws
+    // ReferenceError in the Vite ESM bundle, so step-record was dead — finding S2.
+    // getPlayheadBeat is a static import with no cycle.)
+    const currentBeat = getPlayheadBeat();
     const snapped = beatToFloat(snapBeat(currentBeat, s.density));
     return {
       stepRecordActive: true,

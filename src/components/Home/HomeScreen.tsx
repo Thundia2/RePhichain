@@ -14,17 +14,19 @@ import { useRecentProjectsStore } from "../../stores/recentProjectsStore";
 import type { RecentProject } from "../../stores/recentProjectsStore";
 import { loadStoredProject } from "../../utils/projectStorage";
 import { useChartStore } from "../../stores/chartStore";
-import { useEditorStore } from "../../stores/editorStore";
+import { selectLineByIndex } from "../../stores/selection";
 import { useTabStore } from "../../stores/tabStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { audioEngine } from "../../audio/audioEngine";
 import { useToastStore } from "../../stores/toastStore";
 import {
-  saveSession,
+  saveActiveChartSession,
   registerSession,
   setSkipNextSave,
   setSkipNextRestore,
   setStoredProjectId,
+  setAudioBlobUrl,
+  clearProjectAudio,
 } from "../../utils/chartSessions";
 import { EditorGuideModal } from "./EditorGuideModal";
 
@@ -105,16 +107,10 @@ function Kbd({ children }: { children: React.ReactNode }) {
 
 async function handleOpenRecent(project: RecentProject) {
   try {
-    // Save the current chart's session before replacing it (safety measure)
-    const tabState = useTabStore.getState();
-    const currentTab = tabState.tabs.find((t) => t.id === tabState.activeTabId);
-    if (
-      currentTab &&
-      (currentTab.type === "chart" || currentTab.type === "unified_editor") &&
-      useChartStore.getState().isLoaded
-    ) {
-      saveSession(currentTab.id);
-    }
+    // Save the outgoing chart's session under its real owning tab id before
+    // loadFromProjectData replaces the chart store (finding L5: the old
+    // type-gated check skipped unrolled-editor tabs and mis-routed satellites).
+    saveActiveChartSession();
     setSkipNextSave();
 
     // Tauri project with a folder on disk — reload via IPC
@@ -130,6 +126,11 @@ async function handleOpenRecent(project: RecentProject) {
         const ext = projectData.music_path.split(".").pop()?.toLowerCase() ?? "mp3";
         await audioEngine.load(url, ext);
         useAudioStore.getState().setMusicLoaded(true);
+      } else {
+        // E3: defensive — a disk project normally must have audio (the Rust loader
+        // requires a music file), but if music_path is ever null don't leave the
+        // previous project's song playing under this one.
+        clearProjectAudio();
       }
 
       if (projectData.illustration_path) {
@@ -137,7 +138,7 @@ async function handleOpenRecent(project: RecentProject) {
         await cs.loadIllustration(illustUrl);
       }
 
-      useEditorStore.getState().selectLine(0);
+      selectLineByIndex(0);
       useTabStore.getState().openChart(project.projectPath, project.name || "Untitled");
       setSkipNextRestore();
       registerSession(useTabStore.getState().getChartTabId(project.projectPath));
@@ -168,11 +169,16 @@ async function handleOpenRecent(project: RecentProject) {
       const mimeTypes: Record<string, string> = { mp3: "audio/mpeg", ogg: "audio/ogg", wav: "audio/wav", flac: "audio/flac", m4a: "audio/mp4" };
       const blob = new Blob([stored.audioBlob], { type: mimeTypes[stored.audioExt] ?? "audio/mpeg" });
       const url = URL.createObjectURL(blob);
+      // F5: publish the blob URL + format BEFORE awaiting the decode so a tab
+      // switch mid-decode still snapshots this tab's audio source (see importChart).
+      setAudioBlobUrl(url, stored.audioExt);
       await audioEngine.load(url, stored.audioExt);
       useAudioStore.getState().setMusicLoaded(true);
-      // Track the blob URL + format so tab session restore can reuse it
-      const { setAudioBlobUrl } = await import("../../utils/chartSessions");
-      setAudioBlobUrl(url, stored.audioExt);
+    } else {
+      // E3: this recent project has no audio — unload any song still playing from
+      // the previously open project (the swap leaves isLoaded true, so App's
+      // close-time unload effect never fires here).
+      clearProjectAudio();
     }
 
     // Bug audit #4: record the IndexedDB id so restoreSession can
@@ -186,7 +192,7 @@ async function handleOpenRecent(project: RecentProject) {
       await cs.loadIllustration(illuUrl);
     }
 
-    useEditorStore.getState().selectLine(0);
+    selectLineByIndex(0);
     const chartId = "recent-" + project.id;
     useTabStore.getState().openChart(chartId, project.name || "Untitled");
     setSkipNextRestore();

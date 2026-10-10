@@ -18,6 +18,7 @@
 
 import type { PhichainChart, Line, LineEvent, EasingType } from "../types/chart";
 import { beatToFloat } from "../types/chart";
+import { collectKindEvents, LAYER_CORE_KINDS } from "./eventRouting";
 
 // ============================================================
 // Phichain → PEC Easing Mapping (inverse of PEC_EASINGS in pecImport)
@@ -190,24 +191,15 @@ export function convertPhichainToPec(chart: PhichainChart): string {
 
 /**
  * Collect the 5 core event types from a line, flattening event layers if present.
- * Only returns x, y, rotation, opacity, speed events.
+ * Only returns x, y, rotation, opacity, speed events. Uses the shared
+ * collectKindEvents (finding L3) so this exporter no longer duplicates the
+ * kind->layer-field map; PEC has no additive layers, so summed layer events
+ * are merged (the caller sorts by start beat + property).
  */
 function collectCoreEvents(line: Line): LineEvent[] {
-  const coreKinds = new Set(["x", "y", "rotation", "opacity", "speed"]);
-
-  if (line.event_layers && line.event_layers.length > 0) {
-    // Flatten all layers into a single event list
-    // Note: PEC doesn't support additive layers, so we just merge them
-    const events: LineEvent[] = [];
-    for (const layer of line.event_layers) {
-      events.push(...layer.move_x_events.filter(e => coreKinds.has(e.kind)));
-      events.push(...layer.move_y_events.filter(e => coreKinds.has(e.kind)));
-      events.push(...layer.rotate_events.filter(e => coreKinds.has(e.kind)));
-      events.push(...layer.alpha_events.filter(e => coreKinds.has(e.kind)));
-      events.push(...layer.speed_events.filter(e => coreKinds.has(e.kind)));
-    }
-    return events;
+  const events: LineEvent[] = [];
+  for (const kind of LAYER_CORE_KINDS) {
+    events.push(...collectKindEvents(line, kind));
   }
-
-  return line.events.filter(e => coreKinds.has(e.kind));
+  return events;
 }

@@ -22,8 +22,11 @@
 
 import { Application, Container, Sprite, Graphics, Texture, Filter } from "pixi.js";
 import type { Line, Beat } from "../../types/chart";
-import { CANVAS_WIDTH, CANVAS_HEIGHT, beatToFloat } from "../../types/chart";
-import { computeWorldTransforms, evaluateLineEventsWithLayers } from "../events";
+// N2: CANVAS_WIDTH/CANVAS_HEIGHT and evaluateLineEventsWithLayers dropped — hitTestLine
+// now goes through computeWorldTransforms (world-space, parent-child aware) instead of
+// raw local state, matching gameRenderer.ts.
+import { beatToFloat } from "../../types/chart";
+import { computeWorldTransforms } from "../events";
 import type { BpmList } from "../../utils/bpmList";
 import { getCachedMultiBeats } from "../../stores/chartStore";
 
@@ -165,6 +168,15 @@ export class PixiGameRenderer {
     // Disable Pixi's built-in ticker — we drive rendering manually via render()
     this.app.ticker.stop();
 
+    // Q3: reconcile the surface to the container's CURRENT size. app.init() is
+    // async, so the container may have resized between reading width/height above
+    // and now; without this the Pixi canvas (and its drawing buffer) stays at the
+    // stale init size until the next ResizeObserver tick, which may never fire if
+    // the observed size hasn't changed since observe(). The container-bound click
+    // hit-test in GamePreview uses the container rect (grep "Q3:" in GamePreview.tsx),
+    // so the rendered surface must match the container for clicks to line up.
+    this.resize(container.clientWidth || width, container.clientHeight || height);
+
     this.initPromise = null; // Clear so destroy() takes the sync path
     this.initComplete = true;
   }
@@ -263,6 +275,13 @@ export class PixiGameRenderer {
    */
   resize(width: number, height: number): void {
     if (!this.app?.renderer) return;
+    // Q3: ignore degenerate sizes (a collapsed/hidden container reports 0×0).
+    // Resizing the surface to 0 would zero the drawing buffer and desync the
+    // rendered scene from the container-rect hit-test until the next real resize.
+    if (width <= 0 || height <= 0) return;
+    // autoDensity:true means this updates BOTH the canvas backing store and its
+    // CSS width/height (CanvasSource.resizeCanvas), so the Pixi canvas tracks the
+    // container. grep resize in GamePreview.tsx (ResizeObserver) for the caller.
     this.app.renderer.resize(width, height);
   }
 
@@ -280,6 +299,14 @@ export class PixiGameRenderer {
    */
   hasLineTexture(path: string): boolean {
     return this.textureManager.hasLineTexture(path);
+  }
+
+  /**
+   * Drop a cached line texture so a re-uploaded image reloads (finding Q2).
+   * Compatible with GameRenderer.invalidateLineTexture().
+   */
+  invalidateLineTexture(path: string): void {
+    this.textureManager.invalidateLineTexture(path);
   }
 
   /**
@@ -505,7 +532,6 @@ export class PixiGameRenderer {
 
   /**
    * Hit-test lines (same logic as GameRenderer.hitTestLine()).
-   * Uses evaluateLineEventsWithLayers for fresh state computation.
    */
   hitTestLine(
     lines: Line[],
@@ -518,15 +544,23 @@ export class PixiGameRenderer {
     const lineHalfW = canvasWidth * 1.5;
     const hitThreshold = 8;
 
+    // N2: hit-test against the SAME world transforms render() draws with
+    // (computeWorldTransforms resolves father_index parent-child composition).
+    // The old path used each line's raw local state.x/state.y, so a child line
+    // parented to a moved/rotated parent was unselectable where it visually sits.
+    // Mirrors gameRenderer.ts hitTestLine — grep "N2:" there.
+    const worldTransforms = computeWorldTransforms(lines, currentBeat, canvasWidth, canvasHeight);
+
     for (let i = lines.length - 1; i >= 0; i--) {
-      const state = evaluateLineEventsWithLayers(lines[i].events, lines[i].event_layers, currentBeat);
-      if (state.opacity <= 0) continue;
-      const screenX = canvasWidth / 2 + (state.x / CANVAS_WIDTH) * canvasWidth;
-      const screenY = canvasHeight / 2 - (state.y / CANVAS_HEIGHT) * canvasHeight;
-      const dx = clickX - screenX;
-      const dy = clickY - screenY;
-      const cos = Math.cos(-state.rotation);
-      const sin = Math.sin(-state.rotation);
+      const wt = worldTransforms[i];
+      if (wt.localState.opacity <= 0) continue;
+
+      const dx = clickX - wt.worldX;
+      const dy = clickY - wt.worldY;
+      // render() draws lines with rotation -worldRotation, so transform screen
+      // coords back to line-local space with the same negated angle.
+      const cos = Math.cos(-wt.worldRotation);
+      const sin = Math.sin(-wt.worldRotation);
       const localX = dx * cos + dy * sin;
       const localY = -dx * sin + dy * cos;
       if (Math.abs(localX) <= lineHalfW && Math.abs(localY) <= hitThreshold) {
@@ -550,9 +584,13 @@ export class PixiGameRenderer {
 
     // Update illustration
     if (illustrationImage && illustrationImage !== this.lastIllustrationImage) {
-      // Create new texture from the image using Texture.from()
+      // X8: skipCache=true — this renderer owns the illustration texture/source
+      // privately so the destroy(true) below can't tear down a globally-shared
+      // entry another consumer of the same image still references.
+      // grep Texture.from(.*true for the other skip-cache sites (PixiTextureManager,
+      // PixiHitEffects).
       if (this.illustrationTexture) this.illustrationTexture.destroy(true);
-      this.illustrationTexture = Texture.from(illustrationImage);
+      this.illustrationTexture = Texture.from(illustrationImage, true);
       this.illustrationSprite.texture = this.illustrationTexture;
       this.lastIllustrationImage = illustrationImage;
     }

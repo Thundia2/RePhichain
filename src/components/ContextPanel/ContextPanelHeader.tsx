@@ -15,6 +15,10 @@ const MISC_TOOL_ICONS: Record<string, string> = {
   "export-diff": "\u{1F4CA}",
   "selective-export": "\u{1F4E6}",
   "go-to-beat": "\u2386",
+  // I1: spin-generator + shake-generator are in MISC_ACTION_MAP (ContextPanel) but were
+  // missing here, so pinning either rendered the "?" placeholder.
+  "spin-generator": "\u{1F300}",
+  "shake-generator": "\u{1F4F3}",
 };
 
 export function ContextPanelHeader({

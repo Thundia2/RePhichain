@@ -72,8 +72,17 @@ export class PixiHitEffectLayer extends Container {
   private config: HitEffectConfig | null = null;
   private onHitSound: ((kind: NoteKind) => void) | null = null;
 
-  // Sprite sheet textures (extracted frames from respack hit_fx.png)
+  // Sprite sheet textures (extracted frames from respack hit_fx.png).
+  // frameTextures are views over frameSheetTexture.source (shared); only the
+  // base owns the GPU source, so destroy frames with destroy(false) and the
+  // base with destroy(true). grep destroyFrameTextures.
   private frameTextures: Texture[] = [];
+  private frameSheetTexture: Texture | null = null;
+  // X3: identity of the sprite sheet the current frameTextures were built from.
+  // GamePreview rebuilds the HitEffectConfig object literal every frame (grep
+  // setHitEffectConfig in GamePreview.tsx), so a reference guard never fires;
+  // gate the expensive rebuild on the image + grid instead.
+  private frameSheetKey: { sheet: HTMLImageElement; cols: number; rows: number } | null = null;
 
   constructor() {
     super();
@@ -81,13 +90,27 @@ export class PixiHitEffectLayer extends Container {
 
   /** Set respack hit effect config (null = use default ring+particles) */
   setConfig(config: HitEffectConfig | null): void {
+    // X3: keep the live config (duration/scale/rotate/tinted are read per-frame
+    // in update()/trySpawnEffect), but only rebuild the GPU frame textures when
+    // the sprite sheet identity actually changes — otherwise this allocated a new
+    // base texture + N frame textures every frame and never freed them (per-frame
+    // GPU + source leak). Free the previous frame textures before replacing them.
     this.config = config;
-    // Rebuild frame textures if sprite sheet changed
-    if (config?.spriteSheet) {
-      this.buildFrameTextures(config);
-    } else {
-      this.frameTextures = [];
+
+    const sheet = config?.spriteSheet ?? null;
+    if (!sheet) {
+      if (this.frameSheetKey !== null) this.destroyFrameTextures();
+      return;
     }
+
+    const key = this.frameSheetKey;
+    if (key && key.sheet === sheet && key.cols === config!.cols && key.rows === config!.rows) {
+      return; // unchanged — reuse existing frame textures
+    }
+
+    this.destroyFrameTextures();
+    this.buildFrameTextures(config!);
+    this.frameSheetKey = { sheet, cols: config!.cols, rows: config!.rows };
   }
 
   /** Set callback for playing hit sounds when notes are hit */
@@ -100,7 +123,13 @@ export class PixiHitEffectLayer extends Container {
    */
   private buildFrameTextures(config: HitEffectConfig): void {
     const sheet = config.spriteSheet;
-    const baseTexture = Texture.from(sheet);
+    // X8: skipCache=true so this manager owns its own base texture/source.
+    // Texture.from(image) (skipCache=false) returns the GLOBALLY shared Texture
+    // keyed by the image, so destroying it here would kill the entry another
+    // PixiTextureManager / renderer still references (see Texture.from signature
+    // in node_modules/pixi.js .../Texture.d.ts: (id, skipCache?)).
+    const baseTexture = Texture.from(sheet, true);
+    this.frameSheetTexture = baseTexture;
     const frameW = sheet.naturalWidth / config.cols;
     const frameH = sheet.naturalHeight / config.rows;
     this.frameTextures = [];
@@ -113,6 +142,36 @@ export class PixiHitEffectLayer extends Container {
         this.frameTextures.push(frame);
       }
     }
+  }
+
+  /**
+   * X3: free the GPU resources backing the current sprite-sheet frame textures.
+   * The frame textures are views sharing the base texture's source, so destroy
+   * them without their source (false) and destroy the source once via the base
+   * texture (true). Safe to call when nothing is built.
+   */
+  private destroyFrameTextures(): void {
+    // Detach any live sprite that still points at a frame texture we're about to
+    // destroy (a respack swap mid-playback). The effect stays alive; its sprite
+    // is recreated lazily on the next updateSpriteEffect against the new frames.
+    // processedKeys is intentionally left intact so already-hit notes don't
+    // re-spawn (and re-trigger hit sounds).
+    for (const e of this.hitEffects) {
+      if (e.spriteObj) {
+        this.removeChild(e.spriteObj);
+        e.spriteObj.destroy();
+        e.spriteObj = null;
+      }
+    }
+    for (const tex of this.frameTextures) {
+      tex.destroy(false);
+    }
+    this.frameTextures = [];
+    if (this.frameSheetTexture) {
+      this.frameSheetTexture.destroy(true);
+      this.frameSheetTexture = null;
+    }
+    this.frameSheetKey = null;
   }
 
   /**
@@ -306,6 +365,10 @@ export class PixiHitEffectLayer extends Container {
 
   override destroy(): void {
     this.reset();
+    // X3: super.destroy({children:true}) frees the per-effect Graphics/Sprite
+    // children, but the sprite-sheet frame textures are standalone (only
+    // referenced transiently by sprite.texture), so free them explicitly.
+    this.destroyFrameTextures();
     super.destroy({ children: true });
   }
 }

@@ -2,7 +2,7 @@ import { useChartStore } from "../../stores/chartStore";
 import type { Beat, BpmPoint } from "../../types/chart";
 import { beatToFloat } from "../../types/chart";
 import { Card, ActionButton, INPUT_STYLE } from "../common/UIKit";
-import { safeParseNumber } from "../common/FormFields";
+import { NumericInput } from "../common/FormFields";
 
 export function BpmListPanel() {
   const bpmList = useChartStore((s) => s.chart.bpm_list);
@@ -84,67 +84,45 @@ export function BpmListPanel() {
                 {idx}
               </span>
 
-              {/* Beat inputs */}
-              <input
-                style={{
-                  ...INPUT_STYLE,
-                  width: 36,
-                  textAlign: "center",
-                }}
-                type="number"
+              {/* Beat inputs — commit-on-blur, integer-normalised (L8) */}
+              <NumericInput
+                style={{ ...INPUT_STYLE, width: 36, textAlign: "center" }}
+                commitMode="blur"
+                integer
                 value={entry.beat[0]}
-                onChange={(e) =>
-                  { const n = safeParseNumber(e.target.value); if (n !== null) editBeat(idx, [Math.trunc(n), entry.beat[1], entry.beat[2]]); }
-                }
+                onChange={(v) => editBeat(idx, [v, entry.beat[1], entry.beat[2]])}
                 title="Whole beats"
               />
-              <input
-                style={{
-                  ...INPUT_STYLE,
-                  width: 28,
-                  textAlign: "center",
-                }}
-                type="number"
+              <NumericInput
+                style={{ ...INPUT_STYLE, width: 28, textAlign: "center" }}
+                commitMode="blur"
+                integer
                 min={0}
                 value={entry.beat[1]}
-                onChange={(e) =>
-                  { const n = safeParseNumber(e.target.value); if (n !== null) editBeat(idx, [entry.beat[0], Math.trunc(n), entry.beat[2]]); }
-                }
+                onChange={(v) => editBeat(idx, [entry.beat[0], v, entry.beat[2]])}
                 title="Numerator"
               />
               <span style={{ color: "var(--text-muted)", fontSize: 10 }}>/</span>
-              <input
-                style={{
-                  ...INPUT_STYLE,
-                  width: 28,
-                  textAlign: "center",
-                }}
-                type="number"
+              <NumericInput
+                style={{ ...INPUT_STYLE, width: 28, textAlign: "center" }}
+                commitMode="blur"
+                integer
                 min={1}
                 value={entry.beat[2]}
-                onChange={(e) =>
-                  editBeat(idx, [
-                    entry.beat[0],
-                    entry.beat[1],
-                    Math.max(1, parseInt(e.target.value) || 1),
-                  ])
-                }
+                onChange={(v) => editBeat(idx, [entry.beat[0], entry.beat[1], v])}
                 title="Denominator"
               />
 
               <span style={{ color: "var(--text-muted)", fontSize: 10 }}>@</span>
 
-              {/* BPM input */}
-              <input
-                style={{
-                  ...INPUT_STYLE,
-                  width: 60,
-                }}
-                type="number"
+              {/* BPM input — min 1 clamp is the non-positive guard (L8) */}
+              <NumericInput
+                style={{ ...INPUT_STYLE, width: 60 }}
+                commitMode="blur"
                 step="0.1"
                 min={1}
                 value={entry.bpm}
-                onChange={(e) => editBpm(idx, { bpm: parseFloat(e.target.value) || 120 })}
+                onChange={(v) => editBpm(idx, { bpm: v })}
                 title="BPM"
               />
 

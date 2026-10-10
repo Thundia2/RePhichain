@@ -160,6 +160,10 @@ export type LineEventValue =
   | { text_transition: { start: string; end: string; easing: EasingType } };
 
 export interface LineEvent {
+  /** Stable unique identifier for selection-by-identity and drag refs
+   *  (editorStore.selectedEventIds). Editor-only — assigned on
+   *  create/import/duplicate, not part of any export format. */
+  id?: string;
   kind: LineEventKind;
   start_beat: Beat;
   end_beat: Beat;
@@ -210,6 +214,11 @@ export interface CurveNoteTrack {
 // A judgment line is the core building block of a Phigros chart.
 // Notes fall toward it, and events control its position/rotation/opacity.
 export interface Line {
+  /** Stable unique identifier for selection-by-identity and group line refs
+   *  (editorStore.selectedLineId, GroupLineRef.lineId). Editor-only —
+   *  assigned on create/import/duplicate, survives reorder/sort, and is not
+   *  part of any export format. */
+  id?: string;
   name: string;
   notes: Note[];
   events: LineEvent[];

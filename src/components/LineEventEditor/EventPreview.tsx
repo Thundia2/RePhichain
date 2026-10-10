@@ -12,6 +12,7 @@ import { useEditorStore } from "../../stores/editorStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { GameRenderer } from "../../canvas/gameRenderer";
 import { BpmList } from "../../utils/bpmList";
+import { playbackOffsetSeconds } from "../../utils/playhead";
 
 interface EventPreviewProps {
   lineIndex: number;
@@ -101,7 +102,7 @@ export function EventPreview({ lineIndex }: EventPreviewProps) {
       const lines = showAllLines ? cs.chart.lines : [cs.chart.lines[lineIndex]].filter(Boolean);
 
       // Audio latency compensation for game preview visuals
-      const effectiveOffset = cs.chart.offset + ss.audioLatencyMs / 1000;
+      const effectiveOffset = playbackOffsetSeconds(true);
 
       renderer.render(
         lines,

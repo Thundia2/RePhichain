@@ -4,7 +4,6 @@
 // Sits between the canvas and keyframe bar. Contains:
 //   - Play/Pause + Stop buttons
 //   - Speed presets (0.25x, 0.5x, 0.75x, 1.0x)
-//   - Metronome toggle
 //   - Time display (formatted time + beat)
 //   - Custom styled time scrub slider
 //
@@ -14,9 +13,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAudioStore } from "../../stores/audioStore";
-import { useChartStore } from "../../stores/chartStore";
 import { audioEngine } from "../../audio/audioEngine";
-import { BpmList } from "../../utils/bpmList";
+import { getPlayheadBeat } from "../../utils/playhead";
 import { Pill } from "../common/UIKit";
 
 // ============================================================
@@ -39,7 +37,6 @@ export function TransportBar() {
   const loopStartBeat = useAudioStore((s) => s.loopStartBeat);
   const loopEndBeat = useAudioStore((s) => s.loopEndBeat);
 
-  const [metronome, setMetronome] = useState(false);
   const [displayTime, setDisplayTime] = useState(0);
   const [displayBeat, setDisplayBeat] = useState(0);
 
@@ -50,11 +47,10 @@ export function TransportBar() {
     let raf = 0;
     function tick() {
       const { currentTime } = useAudioStore.getState();
-      const cs = useChartStore.getState();
       setDisplayTime(currentTime);
       try {
-        const bpmList = new BpmList(cs.chart.bpm_list);
-        setDisplayBeat(bpmList.beatAtFloat(currentTime - cs.chart.offset));
+        // rAF tick reads the live clock imperatively → raw playhead beat.
+        setDisplayBeat(getPlayheadBeat());
       } catch {
         setDisplayBeat(0);
       }
@@ -76,7 +72,10 @@ export function TransportBar() {
   };
 
   const maxTime = Math.max(duration, 1);
-  const progress = (displayTime / maxTime) * 100;
+  // W5: clamp to [0,100]. displayTime can briefly exceed duration (Howler reports a
+  // currentTime slightly past the end, or duration is stale mid-load), which otherwise
+  // pushes the filled bar + thumb past the track and into the time label.
+  const progress = Math.max(0, Math.min(100, (displayTime / maxTime) * 100));
 
   return (
     <div
@@ -155,31 +154,6 @@ export function TransportBar() {
       {/* ── Divider ── */}
       <div style={{ width: 1, height: 16, background: "var(--border-color)", margin: "0 8px" }} />
 
-      {/* ── Metronome ── */}
-      <button
-        onClick={() => setMetronome(!metronome)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          padding: "3px 8px",
-          borderRadius: 6,
-          border: "none",
-          cursor: "pointer",
-          fontSize: 10,
-          fontFamily: "inherit",
-          background: metronome ? "rgba(108, 138, 255, 0.08)" : "transparent",
-          color: metronome ? "var(--accent-primary)" : "var(--text-muted)",
-          transition: "all 0.15s",
-        }}
-      >
-        <span style={{ fontSize: 12 }}>{"\u2669"}</span>
-        <span>Metro</span>
-      </button>
-
-      {/* ── Divider ── */}
-      <div style={{ width: 1, height: 16, background: "var(--border-color)", margin: "0 8px" }} />
-
       {/* ── Loop controls ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
         {/* Loop toggle */}
@@ -202,9 +176,7 @@ export function TransportBar() {
         {/* Set loop start */}
         <button
           onClick={() => {
-            const cs = useChartStore.getState();
-            const bpmList = new BpmList(cs.chart.bpm_list);
-            const beat = bpmList.beatAtFloat(useAudioStore.getState().currentTime - cs.chart.offset);
+            const beat = getPlayheadBeat();
             useAudioStore.getState().setLoopStart(beat);
           }}
           style={{
@@ -222,9 +194,7 @@ export function TransportBar() {
         {/* Set loop end */}
         <button
           onClick={() => {
-            const cs = useChartStore.getState();
-            const bpmList = new BpmList(cs.chart.bpm_list);
-            const beat = bpmList.beatAtFloat(useAudioStore.getState().currentTime - cs.chart.offset);
+            const beat = getPlayheadBeat();
             useAudioStore.getState().setLoopEnd(beat);
           }}
           style={{
@@ -286,7 +256,7 @@ export function TransportBar() {
 
       {/* ── Time scrub slider ── */}
       <div style={{ width: 260, display: "flex", alignItems: "center", gap: 6 }}>
-        <div style={{ position: "relative", flex: 1, height: 16, display: "flex", alignItems: "center" }}>
+        <div style={{ position: "relative", flex: 1, height: 16, display: "flex", alignItems: "center", overflow: "hidden" }}>
           {/* Track background */}
           <div
             style={{

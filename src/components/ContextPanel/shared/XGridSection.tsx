@@ -17,6 +17,7 @@
 
 import { useEditorStore } from "../../../stores/editorStore";
 import { getXSpacing, hasCenterLine } from "../../../utils/xSnap";
+import { NumericInput } from "../../common/FormFields";
 
 // ---- Tunables ----
 
@@ -120,15 +121,13 @@ export function XGridSection() {
           })}
         </div>
 
-        <input
-          type="number"
+        <NumericInput
+          commitMode="blur"
+          integer
           min={2}
           max={MAX_VERTICAL_LINES}
           value={verticalLines}
-          onChange={(e) => {
-            const v = parseInt(e.target.value);
-            if (!isNaN(v)) setVerticalLines(v);
-          }}
+          onChange={setVerticalLines}
           style={{
             width: 48, height: 22,
             padding: "0 6px",
@@ -142,8 +141,8 @@ export function XGridSection() {
             marginLeft: "auto",
             outline: "none",
           }}
-          onFocus={(e) => { e.target.style.borderColor = ACCENT; }}
-          onBlur={(e) => { e.target.style.borderColor = "var(--border-color)"; }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = ACCENT; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-color)"; }}
         />
       </div>
 

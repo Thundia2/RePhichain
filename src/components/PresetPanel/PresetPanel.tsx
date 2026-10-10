@@ -5,7 +5,7 @@
 import { useState, useMemo } from "react";
 import { BUILTIN_PRESETS } from "../../presets/builtinPresets";
 import { applyPresetAtPlayhead } from "../../utils/applyPreset";
-import { useEditorStore } from "../../stores/editorStore";
+import { useSelectedLineIndex } from "../../stores/selection";
 import { PresetCurvePreview } from "./PresetCurvePreview";
 import type { EventPreset } from "../../types/preset";
 
@@ -28,7 +28,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 export function PresetPanel() {
   const [filter, setFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const selectedLineIndex = useEditorStore((s) => s.selectedLineIndex);
+  const selectedLineIndex = useSelectedLineIndex();
 
   const filtered = useMemo(() => {
     let presets = BUILTIN_PRESETS;
