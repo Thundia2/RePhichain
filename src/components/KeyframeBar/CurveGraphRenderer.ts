@@ -12,6 +12,7 @@
 import type { LineEvent, LineEventKind, EasingType } from "../../types/chart";
 import { beatToFloat } from "../../types/chart";
 import { EVENT_COLORS } from "../../constants/eventColors";
+import { chromeTheme, monoFont } from "../../canvas/chromeTheme";
 import {
   type CurveViewport,
   beatToX,
@@ -111,7 +112,7 @@ export function renderCurveGraph(
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
   // ---- Background ----
-  ctx.fillStyle = "rgba(12, 12, 18, 0.95)";
+  ctx.fillStyle = chromeTheme().bgPrimary;
   ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
   // ---- Grid ----
@@ -144,7 +145,7 @@ export function renderCurveGraph(
     const laneEvents = events.filter((e) => e.kind === lane);
     if (laneEvents.length === 0) continue;
 
-    const color = EVENT_COLORS[lane] || "#888";
+    const color = EVENT_COLORS[lane] || chromeTheme().textSecondary;
 
     // Compute per-lane normalization if needed
     let laneViewport = viewport;
@@ -183,7 +184,7 @@ export function renderCurveGraph(
   // ---- Playhead ----
   const playheadX = beatToX(currentBeat, viewport, canvasWidth);
   if (playheadX >= 50 && playheadX <= canvasWidth - 10) {
-    ctx.strokeStyle = "rgba(108, 138, 255, 0.9)";
+    ctx.strokeStyle = chromeTheme().indicatorColor;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(playheadX, 0);
@@ -198,7 +199,7 @@ function drawGrid(
   canvasWidth: number,
   canvasHeight: number,
 ): void {
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+  ctx.strokeStyle = chromeTheme().beatLineSecondary;
   ctx.lineWidth = 1;
 
   // Vertical beat lines
@@ -215,8 +216,8 @@ function drawGrid(
     ctx.stroke();
 
     // Beat label
-    ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-    ctx.font = "9px monospace";
+    ctx.fillStyle = chromeTheme().textMuted;
+    ctx.font = monoFont(10);
     ctx.textAlign = "center";
     ctx.fillText(String(b), x, canvasHeight - 2);
   }
@@ -241,8 +242,8 @@ function drawValueLabels(
   viewport: CurveViewport,
   canvasHeight: number,
 ): void {
-  ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
-  ctx.font = "9px monospace";
+  ctx.fillStyle = chromeTheme().textSecondary;
+  ctx.font = monoFont(10);
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
 
@@ -358,7 +359,7 @@ function drawDiamond(
   ctx.rotate(Math.PI / 4);
 
   if (filled || hovered) {
-    ctx.fillStyle = hovered ? "#ffffff" : color;
+    ctx.fillStyle = hovered ? chromeTheme().textPrimary : color;
     ctx.fillRect(-size / 2, -size / 2, size, size);
   } else {
     ctx.strokeStyle = color;
