@@ -7,6 +7,7 @@
 // ============================================================
 
 import { Button } from "./Button";
+import { Tooltip } from "./Tooltip";
 
 /* ── Style Constants ── */
 
@@ -187,17 +188,17 @@ export function Pill({
   onClick: () => void;
   title?: string;
 }) {
-  return (
+  const pill = (
     <button
       type="button"
       aria-pressed={active}
-      title={title}
       onClick={onClick}
       className={active ? "ui-pill is-active" : "ui-pill"}
     >
       {children}
     </button>
   );
+  return title ? <Tooltip content={title}>{pill}</Tooltip> : pill;
 }
 
 /* ── Toggle ── */

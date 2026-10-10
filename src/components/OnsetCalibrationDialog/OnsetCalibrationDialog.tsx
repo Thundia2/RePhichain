@@ -40,6 +40,7 @@ import { Button } from "../common/Button";
 import { Icon } from "../common/Icon";
 import { Kbd } from "../common/Kbd";
 import { SegmentedControl } from "../common/SegmentedControl";
+import { Tooltip } from "../common/Tooltip";
 
 // ── Look ───────────────────────────────────────────────────────
 // Shared <Dialog> chrome; everything inside uses design tokens.
@@ -542,19 +543,21 @@ function AdvancedRow({
   format: (v: number) => string;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }} title={hint}>
-      <span style={{ ...ROW_LABEL_STYLE, minWidth: 64 }}>{label}</span>
-      <input
-        type="range" min={min} max={max} step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        style={{ flex: 1 }}
-        aria-label={label}
-      />
-      <span style={{ ...VALUE_STYLE, color: "var(--text-secondary)", minWidth: 48 }}>
-        {format(value)}
-      </span>
-    </div>
+    <Tooltip content={hint}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+        <span style={{ ...ROW_LABEL_STYLE, minWidth: 64 }}>{label}</span>
+        <input
+          type="range" min={min} max={max} step={step}
+          value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value))}
+          style={{ flex: 1 }}
+          aria-label={label}
+        />
+        <span style={{ ...VALUE_STYLE, color: "var(--text-secondary)", minWidth: 48 }}>
+          {format(value)}
+        </span>
+      </div>
+    </Tooltip>
   );
 }
 

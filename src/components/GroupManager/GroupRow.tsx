@@ -10,6 +10,7 @@
 import { Lock, LockOpen, Trash2, PenLine } from "lucide-react";
 import { Icon } from "../common/Icon";
 import { IconButton } from "../common/IconButton";
+import { Tooltip } from "../common/Tooltip";
 import type { EditorGroup } from "../../types/group";
 
 export interface GroupRowProps {
@@ -111,9 +112,11 @@ export function GroupRow({
 
       {/* Lock indicator */}
       {group.locked && (
-        <span role="img" aria-label="Locked" title="Locked" style={{ display: "inline-flex", color: "var(--text-secondary)" }}>
-          <Icon icon={Lock} size={12} />
-        </span>
+        <Tooltip content="Locked">
+          <span role="img" aria-label="Locked" style={{ display: "inline-flex", color: "var(--text-secondary)" }}>
+            <Icon icon={Lock} size={12} />
+          </span>
+        </Tooltip>
       )}
 
       {/* Active indicator */}

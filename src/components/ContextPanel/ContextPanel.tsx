@@ -8,6 +8,7 @@
 import { useCallback, useMemo, useRef, useEffect } from "react";
 import { useContextPanelMode, getModeTabs, MODE_CONFIG } from "../../hooks/useContextPanelMode";
 import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useContextPanelStore } from "../../stores/contextPanelStore";
 import { ContextPanelHeader } from "./ContextPanelHeader";
@@ -182,14 +183,13 @@ export function ContextPanel(props: ContextPanelProps) {
         <div ref={tabTrackRef} className="ui-segmented ui-segmented--block" role="tablist" aria-label={`${MODE_CONFIG[mode].label} panel`} style={{ overflowX: "auto", scrollbarWidth: "none" }}>
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
-            return (
+            const button = (
               <button
                 key={tab.id}
                 type="button"
                 role="tab"
                 aria-selected={isActive}
                 aria-label={tab.iconOnly ? tab.label : undefined}
-                title={tab.iconOnly ? tab.label : undefined}
                 data-active={isActive || undefined}
                 className={isActive ? "ui-segmented__opt is-selected" : "ui-segmented__opt"}
                 style={tab.iconOnly ? { flex: "0 0 auto", padding: "0 var(--space-6)" } : { flex: "1 0 auto" }}
@@ -199,6 +199,8 @@ export function ContextPanel(props: ContextPanelProps) {
                 {!tab.iconOnly && tab.label}
               </button>
             );
+            // Icon-only tabs are named by a tooltip.
+            return tab.iconOnly ? <Tooltip key={tab.id} content={tab.label} position="bottom">{button}</Tooltip> : button;
           })}
         </div>
       </div>

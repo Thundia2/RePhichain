@@ -9,6 +9,7 @@ import type React from "react";
 import { useState, useEffect, useRef } from "react";
 import type { Beat } from "../../types/chart";
 import { INPUT_STYLE, SELECT_STYLE } from "./UIKit";
+import { Tooltip } from "./Tooltip";
 
 const NUMERIC_STYLE: React.CSSProperties = { ...INPUT_STYLE, fontFamily: "var(--font-mono)" };
 
@@ -213,7 +214,7 @@ export function NumericInput({
     }
   };
 
-  return (
+  const input = (
     <input
       type="number"
       step={step}
@@ -221,7 +222,7 @@ export function NumericInput({
       max={max}
       placeholder={placeholder}
       disabled={disabled}
-      title={title}
+      aria-label={title}
       value={localValue}
       style={style}
       className={className}
@@ -255,6 +256,8 @@ export function NumericInput({
       }}
     />
   );
+  // `title` names the field and shows as the shared tooltip.
+  return title ? <Tooltip content={title}>{input}</Tooltip> : input;
 }
 
 /** Select dropdown field */
@@ -317,33 +320,39 @@ export function BeatField({
         {label}
       </span>
       <div className="flex gap-1 flex-1">
-        <input
-          className="w-10 px-1 py-0.5 text-xs text-center"
-          style={NUMERIC_STYLE}
-          type="number"
-          value={localWhole}
-          onChange={(e) => { setLocalWhole(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([Math.trunc(n), beat[1], beat[2]]); }}
-          title="Whole beats"
-        />
-        <input
-          className="w-10 px-1 py-0.5 text-xs text-center"
-          style={NUMERIC_STYLE}
-          type="number"
-          min={0}
-          value={localNum}
-          onChange={(e) => { setLocalNum(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([beat[0], Math.trunc(n), beat[2]]); }}
-          title="Numerator"
-        />
+        <Tooltip content="Whole beats">
+          <input
+            className="w-10 px-1 py-0.5 text-xs text-center"
+            style={NUMERIC_STYLE}
+            type="number"
+            value={localWhole}
+            onChange={(e) => { setLocalWhole(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([Math.trunc(n), beat[1], beat[2]]); }}
+            aria-label={`${label}: whole beats`}
+          />
+        </Tooltip>
+        <Tooltip content="Numerator">
+          <input
+            className="w-10 px-1 py-0.5 text-xs text-center"
+            style={NUMERIC_STYLE}
+            type="number"
+            min={0}
+            value={localNum}
+            onChange={(e) => { setLocalNum(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([beat[0], Math.trunc(n), beat[2]]); }}
+            aria-label={`${label}: numerator`}
+          />
+        </Tooltip>
         <span style={{ color: "var(--text-muted)" }}>/</span>
-        <input
-          className="w-10 px-1 py-0.5 text-xs text-center"
-          style={NUMERIC_STYLE}
-          type="number"
-          min={1}
-          value={localDen}
-          onChange={(e) => { setLocalDen(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([beat[0], beat[1], Math.max(1, Math.trunc(n))]); }}
-          title="Denominator"
-        />
+        <Tooltip content="Denominator">
+          <input
+            className="w-10 px-1 py-0.5 text-xs text-center"
+            style={NUMERIC_STYLE}
+            type="number"
+            min={1}
+            value={localDen}
+            onChange={(e) => { setLocalDen(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([beat[0], beat[1], Math.max(1, Math.trunc(n))]); }}
+            aria-label={`${label}: denominator`}
+          />
+        </Tooltip>
       </div>
     </label>
   );

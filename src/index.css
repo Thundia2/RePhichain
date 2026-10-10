@@ -576,7 +576,7 @@ input[type="color"]::-webkit-color-swatch {
   display: flex;
   width: 100%;
 }
-.ui-segmented--block > .ui-segmented__opt {
+.ui-segmented--block .ui-segmented__opt {
   flex: 1 1 0;
   min-width: 0;
 }

@@ -16,6 +16,7 @@ import { SectionHeader, EmptyState } from "../common/UIKit";
 import { Button } from "../common/Button";
 import { IconButton } from "../common/IconButton";
 import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
 
 const LIST_CARD_STYLE: React.CSSProperties = {
   backgroundColor: "var(--bg-active)",
@@ -37,24 +38,25 @@ function TextureThumb({ textureName }: { textureName: string }) {
 
   if (!url) {
     return (
-      <div
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: "var(--radius-md)",
-          background: "var(--bg-tertiary)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--text-secondary)",
-          flexShrink: 0,
-        }}
-        role="img"
-        aria-label={`${textureName} (not loaded)`}
-        title="Texture not loaded"
-      >
-        <Icon icon={ImageOff} size={14} />
-      </div>
+      <Tooltip content="Texture not loaded">
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: "var(--radius-md)",
+            background: "var(--bg-tertiary)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--text-secondary)",
+            flexShrink: 0,
+          }}
+          role="img"
+          aria-label={`${textureName} (not loaded)`}
+        >
+          <Icon icon={ImageOff} size={14} />
+        </div>
+      </Tooltip>
     );
   }
 

@@ -14,6 +14,7 @@ import {
   MosaicWindowContext,
 } from "react-mosaic-component";
 import type { PanelId } from "../../types/editor";
+import { Tooltip } from "./Tooltip";
 
 interface Props {
   panelId: PanelId;
@@ -52,12 +53,13 @@ export function CustomExpandButton({ panelId, isExpanded, onExpand, onOpenAsTab 
   // in index.css), so the button renders no text of its own.
   const label = isExpanded ? "Open panel in a tab" : "Expand panel";
   return (
-    <button
-      type="button"
-      className={`mosaic-default-control bp3-button bp3-minimal custom-expand-button ${isExpanded ? "is-expanded" : ""}`}
-      title={label}
-      aria-label={label}
-      onClick={handleClick}
-    />
+    <Tooltip content={label} position="bottom">
+      <button
+        type="button"
+        className={`mosaic-default-control bp3-button bp3-minimal custom-expand-button ${isExpanded ? "is-expanded" : ""}`}
+        aria-label={label}
+        onClick={handleClick}
+      />
+    </Tooltip>
   );
 }

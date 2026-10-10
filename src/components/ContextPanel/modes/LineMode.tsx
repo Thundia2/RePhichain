@@ -9,7 +9,7 @@
 // ============================================================
 
 import type React from "react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useId } from "react";
 import { ChevronRight, Copy, Minus, Plus, Spline, SquareDashed, Star, Trash2 } from "lucide-react";
 import { useEditorStore } from "../../../stores/editorStore";
 import { useSelectedLineIndex, setEventSelectionByIndex } from "../../../stores/selection";
@@ -100,6 +100,7 @@ function PatternConfigBanner() {
   const config = useEditorStore((s) => s.patternConfig);
   const setConfig = useEditorStore((s) => s.setPatternConfig);
   const expressionError = config.shape === "custom" ? validateExpression(config.expression ?? "") : null;
+  const expressionErrorId = useId();
 
   return (
     <div style={{
@@ -151,22 +152,29 @@ function PatternConfigBanner() {
 
       {/* Expression input — shown when "custom" shape is selected */}
       {config.shape === "custom" && (
-        <input
-          type="text"
-          aria-label="Pattern expression"
-          aria-invalid={expressionError ? true : undefined}
-          title={expressionError ?? undefined}
-          value={config.expression ?? ""}
-          onChange={(e) => setConfig({ expression: e.target.value })}
-          placeholder="300*sin(2*pi*t)"
-          spellCheck={false}
-          style={{
-            ...INPUT_STYLE,
-            width: "100%",
-            fontFamily: "var(--font-mono)",
-            border: `var(--rule) solid ${expressionError ? "var(--error)" : "var(--success)"}`,
-          }}
-        />
+        <>
+          <input
+            type="text"
+            aria-label="Pattern expression"
+            aria-invalid={expressionError ? true : undefined}
+            aria-describedby={expressionError ? expressionErrorId : undefined}
+            value={config.expression ?? ""}
+            onChange={(e) => setConfig({ expression: e.target.value })}
+            placeholder="300*sin(2*pi*t)"
+            spellCheck={false}
+            style={{
+              ...INPUT_STYLE,
+              width: "100%",
+              fontFamily: "var(--font-mono)",
+              border: `var(--rule) solid ${expressionError ? "var(--error)" : "var(--success)"}`,
+            }}
+          />
+          {expressionError && (
+            <div id={expressionErrorId} role="alert" style={{ fontSize: "var(--fs-caption)", color: "var(--error)" }}>
+              {expressionError}
+            </div>
+          )}
+        </>
       )}
 
       {/* Above/Below */}

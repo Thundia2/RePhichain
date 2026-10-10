@@ -24,6 +24,7 @@ import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
 import { Button } from "../common/Button";
 import { IconButton } from "../common/IconButton";
 import { SegmentedControl } from "../common/SegmentedControl";
+import { Tooltip } from "../common/Tooltip";
 import { chromeTheme, withAlpha } from "../../canvas/chromeTheme";
 import { RPE_EASING_MAP } from "../../utils/rpeImport";
 
@@ -411,18 +412,21 @@ function MiniKeyframeStrip({
   );
 
   return (
-    <canvas
-      ref={canvasRef}
-      onClick={handleClick}
-      title="Click to add keyframe"
-      style={{
-        display: "block",
-        width: "100%",
-        height: STRIP_HEIGHT,
-        cursor: "crosshair",
-        borderTop: "var(--rule) solid var(--separator)",
-      }}
-    />
+    <Tooltip content="Click to add keyframe">
+      <canvas
+        ref={canvasRef}
+        onClick={handleClick}
+        role="img"
+        aria-label="Click to add keyframe"
+        style={{
+          display: "block",
+          width: "100%",
+          height: STRIP_HEIGHT,
+          cursor: "crosshair",
+          borderTop: "var(--rule) solid var(--separator)",
+        }}
+      />
+    </Tooltip>
   );
 }
 
@@ -653,21 +657,23 @@ function KeyframeEventRow({
       </label>
 
       {/* Easing */}
-      <select
-        value={easingNum}
-        onChange={(e) => {
-          const num = parseInt(e.target.value);
-          if (!isNaN(num)) onUpdate({ easingType: num });
-        }}
-        style={{ ...SELECT_STYLE, width: 80, fontSize: "var(--fs-caption)" }}
-        title={`Easing: ${easingName}`}
-      >
-        {RPE_EASING_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+      <Tooltip content={`Easing: ${easingName}`}>
+        <select
+          value={easingNum}
+          onChange={(e) => {
+            const num = parseInt(e.target.value);
+            if (!isNaN(num)) onUpdate({ easingType: num });
+          }}
+          style={{ ...SELECT_STYLE, width: 80, fontSize: "var(--fs-caption)" }}
+          aria-label="Easing"
+        >
+          {RPE_EASING_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </Tooltip>
 
       {/* Remove button */}
       <IconButton

@@ -17,6 +17,7 @@ import { EASING_OPTIONS, NumericInput } from "../common/FormFields";
 import { INPUT_STYLE, SELECT_STYLE } from "../common/UIKit";
 import { Dialog } from "../common/Dialog";
 import { Button } from "../common/Button";
+import { Tooltip } from "../common/Tooltip";
 
 // ============================================================
 // Types
@@ -179,27 +180,30 @@ function KeyframeStrip({
         {channel.keyframes.map((kf) => {
           const left = (kf.beatOffset / totalBeats) * 100;
           const isSelected = selectedKeyframeId === kf.id;
+          const kfLabel = `Beat ${kf.beatOffset.toFixed(2)}, Value ${kf.useCurrent ? "$CURRENT" : kf.value}`;
           return (
-            <div
-              key={kf.id}
-              data-keyframe="true"
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full cursor-pointer"
-              style={{
-                left: `${left}%`,
-                width: isSelected ? 10 : 8,
-                height: isSelected ? 10 : 8,
-                backgroundColor: CHANNEL_COLORS[channel.kind],
-                border: isSelected
-                  ? "2px solid var(--text-primary)"
-                  : "var(--rule) solid color-mix(in srgb, var(--text-primary) 50%, transparent)",
-                zIndex: isSelected ? "var(--z-raised)" : undefined,
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectKeyframe(channel.kind, isSelected ? null : kf.id);
-              }}
-              title={`Beat ${kf.beatOffset.toFixed(2)}, Value ${kf.useCurrent ? "$CURRENT" : kf.value}`}
-            />
+            <Tooltip key={kf.id} content={kfLabel}>
+              <div
+                data-keyframe="true"
+                role="img"
+                aria-label={kfLabel}
+                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full cursor-pointer"
+                style={{
+                  left: `${left}%`,
+                  width: isSelected ? 10 : 8,
+                  height: isSelected ? 10 : 8,
+                  backgroundColor: CHANNEL_COLORS[channel.kind],
+                  border: isSelected
+                    ? "2px solid var(--text-primary)"
+                    : "var(--rule) solid color-mix(in srgb, var(--text-primary) 50%, transparent)",
+                  zIndex: isSelected ? "var(--z-raised)" : undefined,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectKeyframe(channel.kind, isSelected ? null : kf.id);
+                }}
+              />
+            </Tooltip>
           );
         })}
       </div>
@@ -273,18 +277,19 @@ function KeyframeEditor({
             onChange={(v) => onUpdate({ value: v })}
           />
         )}
-        <label
-          className="flex items-center gap-1 text-xs"
-          style={{ color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}
-          title="Use the line's current value"
-        >
-          <input
-            type="checkbox"
-            checked={keyframe.useCurrent}
-            onChange={(e) => onUpdate({ useCurrent: e.target.checked })}
-          />
-          $CUR
-        </label>
+        <Tooltip content="Use the line's current value">
+          <label
+            className="flex items-center gap-1 text-xs"
+            style={{ color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}
+          >
+            <input
+              type="checkbox"
+              checked={keyframe.useCurrent}
+              onChange={(e) => onUpdate({ useCurrent: e.target.checked })}
+            />
+            $CUR
+          </label>
+        </Tooltip>
       </label>
 
       {/* Easing */}

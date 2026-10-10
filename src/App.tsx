@@ -32,6 +32,7 @@ import { StatusBar } from "./components/StatusBar/StatusBar";
 import { QuickActionBar } from "./components/QuickActionBar/QuickActionBar";
 import { PanelPlaceholder } from "./components/common/PanelPlaceholder";
 import { CustomExpandButton } from "./components/common/CustomExpandButton";
+import { Tooltip } from "./components/common/Tooltip";
 import { GamePreview } from "./components/GamePreview/GamePreview";
 import { GamePreviewTab } from "./components/GamePreview/GamePreviewTab";
 import { Timeline } from "./components/Timeline/Timeline";
@@ -466,17 +467,17 @@ export default function App() {
                 toolbarControls={[
                   /* Collapse button — only visible when this panel is expanded */
                   expandedPanelId === id && (
-                    <button
-                      key="collapse"
-                      type="button"
-                      className="mosaic-default-control bp3-button bp3-minimal collapse-button"
-                      title="Restore layout"
-                      aria-label="Restore layout"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCollapse();
-                      }}
-                    />
+                    <Tooltip key="collapse" content="Restore layout">
+                      <button
+                        type="button"
+                        className="mosaic-default-control bp3-button bp3-minimal collapse-button"
+                        aria-label="Restore layout"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCollapse();
+                        }}
+                      />
+                    </Tooltip>
                   ),
                   <CustomExpandButton
                     key="expand"

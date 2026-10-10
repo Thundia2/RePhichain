@@ -12,6 +12,7 @@ import { EVENT_COLORS } from "../../constants/eventColors";
 import type { LineEventKind } from "../../types/chart";
 import { IconButton } from "../common/IconButton";
 import { Pill } from "../common/UIKit";
+import { Tooltip } from "../common/Tooltip";
 import { LANE_LABEL } from "./curveEditorUtils";
 
 const LANE_DEFS: { kind: LineEventKind; name: string }[] = [
@@ -88,17 +89,17 @@ export function KeyframeBarHeader() {
         {LANE_DEFS.map(({ kind, name }) => {
           const active = visibleLanes.includes(kind);
           return (
-            <button
-              key={kind}
-              type="button"
-              aria-pressed={active}
-              className={active ? "ui-segmented__opt is-selected" : "ui-segmented__opt"}
-              onClick={() => toggleLane(kind)}
-              title={`${name} curve`}
-            >
-              <LaneDot color={EVENT_COLORS[kind]} on={active} />
-              {LANE_LABEL[kind]}
-            </button>
+            <Tooltip key={kind} content={`${name} curve`}>
+              <button
+                type="button"
+                aria-pressed={active}
+                className={active ? "ui-segmented__opt is-selected" : "ui-segmented__opt"}
+                onClick={() => toggleLane(kind)}
+              >
+                <LaneDot color={EVENT_COLORS[kind]} on={active} />
+                {LANE_LABEL[kind]}
+              </button>
+            </Tooltip>
           );
         })}
       </div>

@@ -8,6 +8,7 @@
 import { useState, useMemo } from "react";
 import { Search } from "lucide-react";
 import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
 import { INPUT_STYLE } from "../common/UIKit";
 import { EVENT_KIND_META } from "../../constants/eventConfig";
 import { BUILTIN_PRESETS } from "../../presets/builtinPresets";
@@ -136,53 +137,53 @@ export function PresetPanel() {
         style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "var(--space-8)", alignContent: "start" }}
       >
         {filtered.map((preset) => (
-          <div
-            key={preset.id}
-            role="button"
-            tabIndex={0}
-            aria-disabled={selectedLineIndex === null}
-            style={{
-              backgroundColor: "var(--bg-active)",
-              borderRadius: "var(--radius-lg)",
-              padding: "var(--space-8)",
-              cursor: selectedLineIndex !== null ? "pointer" : "not-allowed",
-              opacity: selectedLineIndex !== null ? 1 : "var(--opacity-disabled)",
-            }}
-            onClick={() => handleApply(preset)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                handleApply(preset);
-              }
-            }}
-            title={preset.description}
-          >
-            <PresetCurvePreview preset={preset} width={120} height={36} />
-            <div style={{ fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--text-primary)", marginTop: "var(--space-4)" }}>
-              {preset.name}
+          <Tooltip key={preset.id} content={preset.description}>
+            <div
+              role="button"
+              tabIndex={0}
+              aria-disabled={selectedLineIndex === null}
+              style={{
+                backgroundColor: "var(--bg-active)",
+                borderRadius: "var(--radius-lg)",
+                padding: "var(--space-8)",
+                cursor: selectedLineIndex !== null ? "pointer" : "not-allowed",
+                opacity: selectedLineIndex !== null ? 1 : "var(--opacity-disabled)",
+              }}
+              onClick={() => handleApply(preset)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleApply(preset);
+                }
+              }}
+            >
+              <PresetCurvePreview preset={preset} width={120} height={36} />
+              <div style={{ fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--text-primary)", marginTop: "var(--space-4)" }}>
+                {preset.name}
+              </div>
+              <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginTop: "var(--space-2)" }}>
+                {preset.description}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)", marginTop: "var(--space-4)" }}>
+                {preset.channels.map((ch) => (
+                  <span
+                    key={ch}
+                    style={{
+                      fontSize: "var(--fs-badge)",
+                      lineHeight: "12px",
+                      padding: "1px var(--space-6)",
+                      borderRadius: "var(--radius-full)",
+                      backgroundColor: `color-mix(in srgb, ${CATEGORY_COLORS[preset.category ?? "compound"]} 14%, transparent)`,
+                      color: CATEGORY_COLORS[preset.category ?? "compound"],
+                      fontWeight: 600,
+                    }}
+                  >
+                    {EVENT_KIND_META[ch]?.label ?? ch}
+                  </span>
+                ))}
+              </div>
             </div>
-            <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginTop: "var(--space-2)" }}>
-              {preset.description}
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)", marginTop: "var(--space-4)" }}>
-              {preset.channels.map((ch) => (
-                <span
-                  key={ch}
-                  style={{
-                    fontSize: "var(--fs-badge)",
-                    lineHeight: "12px",
-                    padding: "1px var(--space-6)",
-                    borderRadius: "var(--radius-full)",
-                    backgroundColor: `color-mix(in srgb, ${CATEGORY_COLORS[preset.category ?? "compound"]} 14%, transparent)`,
-                    color: CATEGORY_COLORS[preset.category ?? "compound"],
-                    fontWeight: 600,
-                  }}
-                >
-                  {EVENT_KIND_META[ch]?.label ?? ch}
-                </span>
-              ))}
-            </div>
-          </div>
+          </Tooltip>
         ))}
         {filtered.length === 0 && (
           <div style={{ color: "var(--text-secondary)", gridColumn: "1 / -1", textAlign: "center", padding: "var(--space-16)" }}>

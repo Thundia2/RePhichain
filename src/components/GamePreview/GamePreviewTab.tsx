@@ -141,7 +141,6 @@ export function GamePreviewTab() {
               value={customW}
               onChange={(e) => setCustomW(e.target.value)}
               aria-label="Width ratio"
-              title="Width ratio"
             />
             <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)" }}>:</span>
             <input
@@ -149,7 +148,6 @@ export function GamePreviewTab() {
               value={customH}
               onChange={(e) => setCustomH(e.target.value)}
               aria-label="Height ratio"
-              title="Height ratio"
             />
           </div>
         )}

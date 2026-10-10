@@ -10,6 +10,7 @@ import { ChevronDown } from "lucide-react";
 import { useFavoritesStore } from "../../stores/favoritesStore";
 import { chromeTheme } from "../../canvas/chromeTheme";
 import { Icon } from "./Icon";
+import { Tooltip } from "./Tooltip";
 
 /** Sentence-case group label inside the popover. */
 const GROUP_LABEL_STYLE: React.CSSProperties = {
@@ -239,27 +240,36 @@ function EasingCell({
   isFav: boolean;
 }) {
   const shortName = easing.replace("ease_", "").replace(/_/g, " ");
+  const hint = (
+    <>
+      {easing.replace(/_/g, " ")}{isFav ? " (favorite)" : ""}
+      <br />
+      Right-click to {isFav ? "remove from" : "add to"} favorites
+    </>
+  );
   return (
-    <button
-      type="button"
-      className={selected ? undefined : "ui-hover"}
-      aria-pressed={selected}
-      onClick={() => onSelect(easing)}
-      onContextMenu={(e) => { e.preventDefault(); onToggleFav(easing); }}
-      title={`${easing.replace(/_/g, " ")}${isFav ? " (favorite)" : ""}\nRight-click to ${isFav ? "remove from" : "add to"} favorites`}
-      style={{
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
-        padding: "var(--space-2)", borderRadius: "var(--radius-md)", border: "none",
-        // Unselected cells take their hover wash from .ui-hover (no inline background).
-        background: selected ? "var(--accent-selected)" : undefined,
-        cursor: "pointer", width: 56, fontSize: "var(--fs-caption)",
-        color: selected ? "var(--accent-primary)" : "var(--text-secondary)", fontFamily: "inherit",
-      }}
-    >
-      <EasingThumb easing={easing} size={28} />
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 52 }}>
-        {shortName}
-      </span>
-    </button>
+    <Tooltip content={hint}>
+      <button
+        type="button"
+        className={selected ? undefined : "ui-hover"}
+        aria-pressed={selected}
+        onClick={() => onSelect(easing)}
+        onContextMenu={(e) => { e.preventDefault(); onToggleFav(easing); }}
+        aria-label={`${easing.replace(/_/g, " ")}${isFav ? ", favorite" : ""}`}
+        style={{
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
+          padding: "var(--space-2)", borderRadius: "var(--radius-md)", border: "none",
+          // Unselected cells take their hover wash from .ui-hover (no inline background).
+          background: selected ? "var(--accent-selected)" : undefined,
+          cursor: "pointer", width: 56, fontSize: "var(--fs-caption)",
+          color: selected ? "var(--accent-primary)" : "var(--text-secondary)", fontFamily: "inherit",
+        }}
+      >
+        <EasingThumb easing={easing} size={28} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 52 }}>
+          {shortName}
+        </span>
+      </button>
+    </Tooltip>
   );
 }

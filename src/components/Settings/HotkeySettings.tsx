@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback } from "react";
 import { RotateCcw, TriangleAlert } from "lucide-react";
 import { Button } from "../common/Button";
 import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
 import { showConfirm } from "../common/ConfirmDialog";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
@@ -171,30 +172,8 @@ export function HotkeySettings() {
                     </span>
 
                     {/* Key binding button */}
-                    <button
-                      type="button"
-                      className="ui-btn ui-btn--sm"
-                      aria-pressed={isCapturing}
-                      style={{
-                        minWidth: 100,
-                        fontFamily: "var(--font-mono)",
-                        backgroundColor: isCapturing
-                          ? "var(--accent-primary)"
-                          : conflictLabel
-                            ? "color-mix(in srgb, var(--error) 14%, transparent)"
-                            : undefined,
-                        color: isCapturing
-                          ? "var(--on-accent)"
-                          : conflictLabel
-                            ? "var(--error)"
-                            : isOverridden
-                              ? "var(--accent-primary)"
-                              : "var(--text-primary)",
-                      }}
-                      onClick={() =>
-                        setCapturingAction(isCapturing ? null : action)
-                      }
-                      title={
+                    <Tooltip
+                      content={
                         conflictLabel
                           ? `Conflict: same binding as "${conflictLabel}"`
                           : isCapturing
@@ -202,13 +181,38 @@ export function HotkeySettings() {
                             : "Click to rebind"
                       }
                     >
-                      {conflictLabel && !isCapturing && (
-                        <Icon icon={TriangleAlert} size={12} aria-hidden="true" />
-                      )}
-                      {isCapturing
-                        ? "Press a key…"
-                        : formatHotkeyDisplay(currentKey)}
-                    </button>
+                      <button
+                        type="button"
+                        className="ui-btn ui-btn--sm"
+                        aria-pressed={isCapturing}
+                        style={{
+                          minWidth: 100,
+                          fontFamily: "var(--font-mono)",
+                          backgroundColor: isCapturing
+                            ? "var(--accent-primary)"
+                            : conflictLabel
+                              ? "color-mix(in srgb, var(--error) 14%, transparent)"
+                              : undefined,
+                          color: isCapturing
+                            ? "var(--on-accent)"
+                            : conflictLabel
+                              ? "var(--error)"
+                              : isOverridden
+                                ? "var(--accent-primary)"
+                                : "var(--text-primary)",
+                        }}
+                        onClick={() =>
+                          setCapturingAction(isCapturing ? null : action)
+                        }
+                      >
+                        {conflictLabel && !isCapturing && (
+                          <Icon icon={TriangleAlert} size={12} aria-hidden="true" />
+                        )}
+                        {isCapturing
+                          ? "Press a key…"
+                          : formatHotkeyDisplay(currentKey)}
+                      </button>
+                    </Tooltip>
 
                     {/* Reset button (only visible if overridden) */}
                     <Button

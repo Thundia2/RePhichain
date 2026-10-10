@@ -43,6 +43,7 @@ import { LANE_LABEL } from "./curveEditorUtils";
 import { LaneDot } from "./KeyframeBarHeader";
 import { chromeTheme, monoFont, sansFont, withAlpha, seriesColor } from "../../canvas/chromeTheme";
 import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
 import { IconButton } from "../common/IconButton";
 import { Button } from "../common/Button";
 import { SegmentedControl } from "../common/SegmentedControl";
@@ -936,21 +937,21 @@ export function KeyframeBar() {
           style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}
         >
           {CORE_KINDS.map((kind) => (
-            <span
-              key={kind}
-              title={`${LANE_LABEL[kind]} lane`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "var(--space-4)",
-                fontSize: "var(--fs-caption)",
-                color: "var(--text-secondary)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              <LaneDot color={EVENT_COLORS[kind] || "var(--text-secondary)"} on />
-              {LANE_LABEL[kind] ?? KIND_SHORT[kind] ?? kind}
-            </span>
+            <Tooltip key={kind} content={`${LANE_LABEL[kind]} lane`}>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "var(--space-4)",
+                  fontSize: "var(--fs-caption)",
+                  color: "var(--text-secondary)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <LaneDot color={EVENT_COLORS[kind] || "var(--text-secondary)"} on />
+                {LANE_LABEL[kind] ?? KIND_SHORT[kind] ?? kind}
+              </span>
+            </Tooltip>
           ))}
         </div>
 

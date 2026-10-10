@@ -6,9 +6,11 @@
 // gets clipped by scrolling panels (in the trigger's own document, so
 // popped-out panels get their tooltips in their window). The wrapper uses
 // `display: contents`, so wrapping a control doesn't change layout.
+// The text is also the target's accessible description (like a native
+// title), unless it only repeats the target's own name.
 // ============================================================
 
-import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useRef, useEffect, useCallback, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Kbd } from "./Kbd";
 
@@ -38,6 +40,23 @@ export function Tooltip({
   const [host, setHost] = useState<HTMLElement | null>(null);
   const wrapRef = useRef<HTMLSpanElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const descId = useId();
+
+  // Link the target to the hidden description, as a native title would be.
+  useEffect(() => {
+    const target = wrapRef.current?.firstElementChild;
+    if (!target) return;
+    const name = (target.getAttribute("aria-label") ?? target.textContent ?? "").trim().toLowerCase();
+    const text = (wrapRef.current?.querySelector(`[id="${CSS.escape(descId)}"]`)?.textContent ?? "").trim().toLowerCase();
+    if (text === "" || name.includes(text)) return; // already in the name
+    const ids = (target.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
+    if (!ids.includes(descId)) target.setAttribute("aria-describedby", [...ids, descId].join(" "));
+    return () => {
+      const rest = (target.getAttribute("aria-describedby") ?? "").split(/\s+/).filter((id) => id && id !== descId);
+      if (rest.length) target.setAttribute("aria-describedby", rest.join(" "));
+      else target.removeAttribute("aria-describedby");
+    };
+  });
 
   const place = useCallback(() => {
     const target = wrapRef.current?.firstElementChild;
@@ -85,6 +104,7 @@ export function Tooltip({
       onBlur={hide}
     >
       {children}
+      <span id={descId} hidden>{content}</span>
       {coords &&
         createPortal(
           <div role="tooltip" className="ui-tooltip" style={coords}>

@@ -34,6 +34,7 @@ import { ContextBadge } from "../shared/ContextBadge";
 import { ToolGroup } from "../../common/ToolGroup";
 import { NoteGlyph } from "../../common/NoteGlyph";
 import { Icon } from "../../common/Icon";
+import { Tooltip } from "../../common/Tooltip";
 import { INPUT_STYLE, SELECT_STYLE } from "../../common/UIKit";
 
 // ---- Note kind visual config ----
@@ -160,13 +161,15 @@ function EditTab() {
               <span style={{ color: "var(--text-secondary)", marginLeft: "auto", fontFamily: "var(--font-mono)" }}>
                 x:{Math.round(note.x)}
               </span>
-              <span
-                title={note.above ? "Above" : "Below"}
-                aria-label={note.above ? "Above" : "Below"}
-                style={{ display: "inline-flex", color: note.above ? "var(--text-muted)" : "var(--accent-primary)" }}
-              >
-                <Icon icon={note.above ? ChevronUp : ChevronDown} size={12} />
-              </span>
+              <Tooltip content={note.above ? "Above" : "Below"}>
+                <span
+                  role="img"
+                  aria-label={note.above ? "Above" : "Below"}
+                  style={{ display: "inline-flex", color: note.above ? "var(--text-muted)" : "var(--accent-primary)" }}
+                >
+                  <Icon icon={note.above ? ChevronUp : ChevronDown} size={12} />
+                </span>
+              </Tooltip>
             </div>
           );
         })}

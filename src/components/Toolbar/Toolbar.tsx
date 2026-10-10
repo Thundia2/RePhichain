@@ -25,6 +25,7 @@ import { EVENT_COLORS } from "../../constants/eventColors";
 import { IconButton } from "../common/IconButton";
 import { Icon } from "../common/Icon";
 import { NoteGlyph } from "../common/NoteGlyph";
+import { Tooltip } from "../common/Tooltip";
 
 interface ToolDef {
   id: EditorTool;
@@ -190,21 +191,21 @@ export function Toolbar() {
         {GRID_PRESETS.map((n) => {
           const isActive = xSnapEnabled && verticalLines === n;
           return (
-            <button
-              key={n}
-              type="button"
-              role="radio"
-              aria-checked={isActive}
-              title={`${n}-line grid (step ${Math.round(1350 / (n - 1))})`}
-              className={isActive ? "ui-segmented__opt is-selected" : "ui-segmented__opt"}
-              style={{ width: "var(--control-lg)", padding: 0, fontFamily: "var(--font-mono)", ...(isActive ? { background: "var(--accent-primary)", color: "var(--on-accent)" } : null) }}
-              onClick={() => {
-                setVerticalLines(n);
-                if (!xSnapEnabled) toggleXSnap();
-              }}
-            >
-              {n}
-            </button>
+            <Tooltip key={n} content={`${n}-line grid (step ${Math.round(1350 / (n - 1))})`}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                className={isActive ? "ui-segmented__opt is-selected" : "ui-segmented__opt"}
+                style={{ width: "var(--control-lg)", padding: 0, fontFamily: "var(--font-mono)", ...(isActive ? { background: "var(--accent-primary)", color: "var(--on-accent)" } : null) }}
+                onClick={() => {
+                  setVerticalLines(n);
+                  if (!xSnapEnabled) toggleXSnap();
+                }}
+              >
+                {n}
+              </button>
+            </Tooltip>
           );
         })}
       </div>

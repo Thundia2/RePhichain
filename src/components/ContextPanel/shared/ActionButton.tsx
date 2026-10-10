@@ -3,16 +3,16 @@
 
 import type { LucideIcon } from "lucide-react";
 import { Icon } from "../../common/Icon";
+import { Tooltip } from "../../common/Tooltip";
 
 export function ActionButton({ icon, label, danger, onClick, disabled, title }: {
   icon: LucideIcon; label: string; danger?: boolean; onClick?: () => void; disabled?: boolean; title?: string;
 }) {
-  return (
+  const button = (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={title}
       className="ui-btn ui-btn--ghost ui-btn--row"
       style={danger ? { color: "var(--error)" } : undefined}
     >
@@ -20,4 +20,5 @@ export function ActionButton({ icon, label, danger, onClick, disabled, title }: 
       {label}
     </button>
   );
+  return title ? <Tooltip content={title}>{button}</Tooltip> : button;
 }

@@ -8,6 +8,7 @@
 import type React from "react";
 import type { LucideIcon } from "lucide-react";
 import { Icon } from "./Icon";
+import { Tooltip } from "./Tooltip";
 
 export interface SegmentOption<T extends string | number> {
   value: T;
@@ -54,14 +55,14 @@ export function SegmentedControl<T extends string | number>({
     <div role={role} aria-label={label} className={classes} style={style}>
       {options.map((opt) => {
         const selected = opt.value === value;
-        return (
+        const button = (
           <button
             key={String(opt.value)}
             type="button"
             role={itemRole}
             aria-checked={itemRole === "radio" ? selected : undefined}
             aria-selected={itemRole === "tab" ? selected : undefined}
-            title={opt.title}
+            aria-label={opt.title && !opt.label ? opt.title : undefined}
             disabled={opt.disabled}
             className={selected ? "ui-segmented__opt is-selected" : "ui-segmented__opt"}
             onClick={() => onChange(opt.value)}
@@ -70,6 +71,9 @@ export function SegmentedControl<T extends string | number>({
             {opt.label}
           </button>
         );
+        return opt.title ? (
+          <Tooltip key={String(opt.value)} content={opt.title}>{button}</Tooltip>
+        ) : button;
       })}
     </div>
   );

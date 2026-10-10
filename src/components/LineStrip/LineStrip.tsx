@@ -38,6 +38,7 @@ import { LINE_CATEGORY_COLORS, LINE_CATEGORY_LABELS } from "../LineList/lineCate
 import { autoCategorize } from "../LineList/lineCategories";
 import { Plus, Search } from "lucide-react";
 import { IconButton } from "../common/IconButton";
+import { Tooltip } from "../common/Tooltip";
 import { INPUT_STYLE } from "../common/UIKit";
 
 type LineActivity = "active" | "coming-soon" | "just-passed" | "long-passed" | "inactive";
@@ -450,68 +451,68 @@ export function LineStrip() {
         const lineGroups = groups.filter((g) => g.type === "line" && g.lines.some((l: { lineIndex: number }) => l.lineIndex === index));
 
         return (
-          <button
-            key={index}
-            type="button"
-            className="ui-segmented__opt"
-            data-line-index={index}
-            aria-pressed={isSelected}
-            onClick={(e) => {
-              if (e.ctrlKey || e.metaKey) {
-                toggleMultiSelectedLineByIndex(index);
-              } else {
-                selectLineByIndex(isSelected ? null : index);
-              }
-            }}
-            onDoubleClick={() => {
-              selectLineByIndex(index);
-              // Imperative read in a click handler → raw playhead beat (clamped to ≥0).
-              const currentBeat = getPlayheadBeat({ clampNonNegative: true });
-              openUnrolledLineEditor(index, line.name || `Line ${index + 1}`, currentBeat);
-            }}
-            style={{
-              height: "var(--control-md)",
-              minHeight: "var(--control-md)",
-              padding: "0 var(--space-8)",
-              borderRadius: "var(--radius-md)",
-              gap: "var(--space-4)",
-              flexShrink: 0,
-              overflow: "visible",
-              ...chipStyle,
-            }}
-            title={`${line.name || `Line ${index}`} — ${ACTIVITY_LABEL[activity]}${isRecurring ? " (recurring)" : ""}${isMultiSelected ? ", multi-selected" : ""}${lineGroups.length > 0 ? ` [${lineGroups.map((g) => g.name).join(", ")}]` : ""}`}
-          >
-            {category && LINE_CATEGORY_COLORS[category] && (
-              <span style={{
-                width: 6, height: 6, borderRadius: "var(--radius-full)",
-                background: LINE_CATEGORY_COLORS[category], flexShrink: 0,
-              }} />
-            )}
-            {lineGroups.map((g) => (
-              <span
-                key={g.id}
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "var(--radius-full)",
-                  background: g.color,
-                  flexShrink: 0,
-                }}
-              />
-            ))}
-            {line.name || `Untitled`}
-            <span
+          <Tooltip key={index} position="bottom" content={`${line.name || `Line ${index}`} — ${ACTIVITY_LABEL[activity]}${isRecurring ? " (recurring)" : ""}${isMultiSelected ? ", multi-selected" : ""}${lineGroups.length > 0 ? ` [${lineGroups.map((g) => g.name).join(", ")}]` : ""}`}>
+            <button
+              type="button"
+              className="ui-segmented__opt"
+              data-line-index={index}
+              aria-pressed={isSelected}
+              onClick={(e) => {
+                if (e.ctrlKey || e.metaKey) {
+                  toggleMultiSelectedLineByIndex(index);
+                } else {
+                  selectLineByIndex(isSelected ? null : index);
+                }
+              }}
+              onDoubleClick={() => {
+                selectLineByIndex(index);
+                // Imperative read in a click handler → raw playhead beat (clamped to ≥0).
+                const currentBeat = getPlayheadBeat({ clampNonNegative: true });
+                openUnrolledLineEditor(index, line.name || `Line ${index + 1}`, currentBeat);
+              }}
               style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--fs-caption)",
-                fontWeight: 400,
-                color: isSelected || isMultiSelected ? "inherit" : "var(--text-secondary)",
-                opacity: isSelected || isMultiSelected ? 0.75 : 1,
+                height: "var(--control-md)",
+                minHeight: "var(--control-md)",
+                padding: "0 var(--space-8)",
+                borderRadius: "var(--radius-md)",
+                gap: "var(--space-4)",
+                flexShrink: 0,
+                overflow: "visible",
+                ...chipStyle,
               }}
             >
-              {line.notes.length}
-            </span>
-          </button>
+              {category && LINE_CATEGORY_COLORS[category] && (
+                <span style={{
+                  width: 6, height: 6, borderRadius: "var(--radius-full)",
+                  background: LINE_CATEGORY_COLORS[category], flexShrink: 0,
+                }} />
+              )}
+              {lineGroups.map((g) => (
+                <span
+                  key={g.id}
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "var(--radius-full)",
+                    background: g.color,
+                    flexShrink: 0,
+                  }}
+                />
+              ))}
+              {line.name || `Untitled`}
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--fs-caption)",
+                  fontWeight: 400,
+                  color: isSelected || isMultiSelected ? "inherit" : "var(--text-secondary)",
+                  opacity: isSelected || isMultiSelected ? 0.75 : 1,
+                }}
+              >
+                {line.notes.length}
+              </span>
+            </button>
+          </Tooltip>
         );
       })}
       <IconButton

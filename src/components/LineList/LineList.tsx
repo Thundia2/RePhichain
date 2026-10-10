@@ -185,7 +185,6 @@ export function LineList() {
           }}
           value={lineSortMode}
           onChange={(e) => setLineSortMode(e.target.value as LineSortMode)}
-          title="Sort lines"
           aria-label="Sort lines"
         >
           <option value="chart_order">Chart order</option>
@@ -199,71 +198,73 @@ export function LineList() {
         className="flex items-center gap-1 px-1 py-0.5 border-b flex-wrap"
         style={{ borderColor: "var(--border-color)", color: "var(--text-secondary)" }}
       >
-        <button
-          type="button"
-          className="ui-hover px-1.5 py-0 rounded text-xs"
-          aria-pressed={categoryFilter === null}
-          style={{
-            backgroundColor: categoryFilter === null ? "var(--bg-active)" : undefined,
-            color: categoryFilter === null ? "var(--text-primary)" : undefined,
-            border: "none",
-            borderRadius: "var(--radius-sm)",
-            cursor: "pointer",
-          }}
-          onClick={() => setCategoryFilter(null)}
-          title="Show all lines"
-        >
-          All
-        </button>
-        {(["gameplay", "visual", "text", "helper"] as const).map((cat) => (
+        <Tooltip content="Show all lines">
           <button
-            key={cat}
             type="button"
-            className="ui-hover flex items-center gap-1 px-1 py-0 rounded text-xs"
-            aria-pressed={categoryFilter === cat}
-            aria-label={`${LINE_CATEGORY_LABELS[cat]}: ${categoryCounts[cat]} lines`}
+            className="ui-hover px-1.5 py-0 rounded text-xs"
+            aria-pressed={categoryFilter === null}
             style={{
-              backgroundColor: categoryFilter === cat
-                ? `color-mix(in srgb, ${LINE_CATEGORY_COLORS[cat]} 15%, transparent)`
-                : undefined,
-              color: categoryFilter === cat ? LINE_CATEGORY_COLORS[cat] : undefined,
+              backgroundColor: categoryFilter === null ? "var(--bg-active)" : undefined,
+              color: categoryFilter === null ? "var(--text-primary)" : undefined,
               border: "none",
               borderRadius: "var(--radius-sm)",
-              fontFamily: "var(--font-mono)",
               cursor: "pointer",
             }}
-            onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
-            title={LINE_CATEGORY_LABELS[cat]}
+            onClick={() => setCategoryFilter(null)}
           >
-            <span
-              aria-hidden="true"
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "var(--radius-full)",
-                backgroundColor: LINE_CATEGORY_COLORS[cat],
-                flexShrink: 0,
-              }}
-            />
-            {categoryCounts[cat]}
+            All
           </button>
+        </Tooltip>
+        {(["gameplay", "visual", "text", "helper"] as const).map((cat) => (
+          <Tooltip key={cat} content={LINE_CATEGORY_LABELS[cat]}>
+            <button
+              type="button"
+              className="ui-hover flex items-center gap-1 px-1 py-0 rounded text-xs"
+              aria-pressed={categoryFilter === cat}
+              aria-label={`${LINE_CATEGORY_LABELS[cat]}: ${categoryCounts[cat]} lines`}
+              style={{
+                backgroundColor: categoryFilter === cat
+                  ? `color-mix(in srgb, ${LINE_CATEGORY_COLORS[cat]} 15%, transparent)`
+                  : undefined,
+                color: categoryFilter === cat ? LINE_CATEGORY_COLORS[cat] : undefined,
+                border: "none",
+                borderRadius: "var(--radius-sm)",
+                fontFamily: "var(--font-mono)",
+                cursor: "pointer",
+              }}
+              onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "var(--radius-full)",
+                  backgroundColor: LINE_CATEGORY_COLORS[cat],
+                  flexShrink: 0,
+                }}
+              />
+              {categoryCounts[cat]}
+            </button>
+          </Tooltip>
         ))}
-        <button
-          type="button"
-          className="ui-btn ui-btn--ghost ui-btn--sm ml-auto"
-          onClick={() => {
-            for (let i = 0; i < lines.length; i++) {
-              if (!lines[i]._category) {
-                const cat = autoCategorize(lines[i]);
-                if (cat) editLine(i, { _category: cat });
+        <Tooltip content="Auto-categorize lines without a category">
+          <button
+            type="button"
+            className="ui-btn ui-btn--ghost ui-btn--sm ml-auto"
+            onClick={() => {
+              for (let i = 0; i < lines.length; i++) {
+                if (!lines[i]._category) {
+                  const cat = autoCategorize(lines[i]);
+                  if (cat) editLine(i, { _category: cat });
+                }
               }
-            }
-          }}
-          title="Auto-categorize lines without a category"
-        >
-          <Icon icon={WandSparkles} size={12} />
-          Auto
-        </button>
+            }}
+          >
+            <Icon icon={WandSparkles} size={12} />
+            Auto
+          </button>
+        </Tooltip>
       </div>
 
       {/* Line list */}
@@ -307,44 +308,54 @@ export function LineList() {
                   }}
                 >
                   {/* Category dot */}
-                  <span
-                    style={{
-                      display: "inline-block",
-                      width: 8,
-                      height: 8,
-                      borderRadius: "var(--radius-full)",
-                      backgroundColor: line._category
-                        ? LINE_CATEGORY_COLORS[line._category]
-                        : "transparent",
-                      border: line._category
-                        ? "none"
-                        : "var(--rule) solid var(--text-muted)",
-                      flexShrink: 0,
-                    }}
-                    title={line._category ? LINE_CATEGORY_LABELS[line._category] : "No category"}
-                  />
+                  <Tooltip content={line._category ? LINE_CATEGORY_LABELS[line._category] : "No category"}>
+                    <span
+                      role="img"
+                      aria-label={line._category ? LINE_CATEGORY_LABELS[line._category] : "No category"}
+                      style={{
+                        display: "inline-block",
+                        width: 8,
+                        height: 8,
+                        borderRadius: "var(--radius-full)",
+                        backgroundColor: line._category
+                          ? LINE_CATEGORY_COLORS[line._category]
+                          : "transparent",
+                        border: line._category
+                          ? "none"
+                          : "var(--rule) solid var(--text-muted)",
+                        flexShrink: 0,
+                      }}
+                    />
+                  </Tooltip>
                   {/* Visibility indicator (active_first mode) */}
                   {lineSortMode === "active_first" && isVisible !== null && (
-                    <span
-                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                      style={{
-                        backgroundColor: isVisible ? "var(--success)" : "var(--text-muted)",
-                      }}
-                      title={isVisible ? "Visible" : "Hidden"}
-                    />
+                    <Tooltip content={isVisible ? "Visible" : "Hidden"}>
+                      <span
+                        role="img"
+                        aria-label={isVisible ? "Visible" : "Hidden"}
+                        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                        style={{
+                          backgroundColor: isVisible ? "var(--success)" : "var(--text-muted)",
+                        }}
+                      />
+                    </Tooltip>
                   )}
                   <span className="flex-1 truncate" style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", minWidth: 0 }}>
                     {groups.filter((g) => g.type === "line" && g.lines.some((l: { lineIndex: number }) => l.lineIndex === idx)).map((g) => (
-                      <span
-                        key={g.id}
-                        style={{ width: 6, height: 6, borderRadius: "var(--radius-full)", background: g.color, flexShrink: 0 }}
-                        title={`Group: ${g.name}`}
-                      />
+                      <Tooltip key={g.id} content={`Group: ${g.name}`}>
+                        <span
+                          role="img"
+                          aria-label={`Group: ${g.name}`}
+                          style={{ width: 6, height: 6, borderRadius: "var(--radius-full)", background: g.color, flexShrink: 0 }}
+                        />
+                      </Tooltip>
                     ))}
                     {line.texture && (
-                      <span role="img" aria-label="Has texture" title="Has texture" style={{ display: "inline-flex", color: isSelected ? undefined : "var(--text-secondary)" }}>
-                        <Icon icon={ImageIcon} size={12} />
-                      </span>
+                      <Tooltip content="Has texture">
+                        <span role="img" aria-label="Has texture" style={{ display: "inline-flex", color: isSelected ? undefined : "var(--text-secondary)" }}>
+                          <Icon icon={ImageIcon} size={12} />
+                        </span>
+                      </Tooltip>
                     )}
                     <span className="truncate">{line.name || `Line ${idx + 1}`}</span>
                   </span>

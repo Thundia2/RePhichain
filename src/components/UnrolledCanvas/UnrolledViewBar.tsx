@@ -25,6 +25,7 @@
 import { useEditorStore } from "../../stores/editorStore";
 import type { LayerVisibility } from "../../stores/editorStore";
 import { SegmentedControl, type SegmentOption } from "../common/SegmentedControl";
+import { Tooltip } from "../common/Tooltip";
 
 const OPTIONS: SegmentOption<LayerVisibility>[] = [
   { value: "all", label: "All" },
@@ -48,27 +49,26 @@ function VisibilityGroup({
   title?: string;
 }) {
   return (
-    <div
-      style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}
-      title={title}
-    >
-      <span
-        style={{
-          fontSize: "var(--fs-control)",
-          fontWeight: 600,
-          color: "var(--text-secondary)",
-        }}
-      >
-        {label}
-      </span>
-      <SegmentedControl
-        label={`${label} visibility`}
-        size="sm"
-        options={OPTIONS}
-        value={value}
-        onChange={onChange}
-      />
-    </div>
+    <Tooltip content={title} disabled={!title}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+        <span
+          style={{
+            fontSize: "var(--fs-control)",
+            fontWeight: 600,
+            color: "var(--text-secondary)",
+          }}
+        >
+          {label}
+        </span>
+        <SegmentedControl
+          label={`${label} visibility`}
+          size="sm"
+          options={OPTIONS}
+          value={value}
+          onChange={onChange}
+        />
+      </div>
+    </Tooltip>
   );
 }
 
@@ -96,9 +96,9 @@ export function UnrolledViewBar() {
         value={noteVis}
         onChange={setNoteVis}
         title={
-          "Notes layer\n" +
-          "All: render and edit notes normally\n" +
-          "Ghost: dim and lock — keeps them as visual reference but no clicks land\n" +
+          "Notes layer · " +
+          "All: render and edit notes normally · " +
+          "Ghost: dim and lock — keeps them as visual reference but no clicks land · " +
           "None: hide entirely"
         }
       />
@@ -108,9 +108,9 @@ export function UnrolledViewBar() {
         value={eventVis}
         onChange={setEventVis}
         title={
-          "Events layer\n" +
-          "All: render and click events (color-coded by kind)\n" +
-          "Ghost: dim and lock — visual reference, no clicks\n" +
+          "Events layer · " +
+          "All: render and click events (color-coded by kind) · " +
+          "Ghost: dim and lock — visual reference, no clicks · " +
           "None: hide entirely (gutter collapses back to base width)"
         }
       />

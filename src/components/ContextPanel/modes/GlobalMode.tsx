@@ -47,6 +47,7 @@ import { PresetPanel } from "../../PresetPanel/PresetPanel";
 
 // ---- Design system primitives ----
 import { Icon } from "../../common/Icon";
+import { Tooltip } from "../../common/Tooltip";
 import { IconButton } from "../../common/IconButton";
 import { NoteGlyph } from "../../common/NoteGlyph";
 import { ToolGroup } from "../../common/ToolGroup";
@@ -461,24 +462,27 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
             {onsetAnalyzing ? "Analyzing…" : "Onsets"}
           </span>
           {onsetEnabled ? (
-            <input
-              type="range" min="0.5" max="8" step="0.1"
-              aria-label="Target onset density"
-              value={effectiveOnsetDensity}
-              onChange={(e) => {
-                // Phase B: persist the density per-chart via the chartStore
-                // (undo-able, serialized to chart.json). The global setting
-                // stays as the fallback for charts that haven't overridden it.
-                useChartStore.getState().setOnsetTargetDensity(parseFloat(e.target.value));
-              }}
-              style={SLIDER}
-              title={
+            <Tooltip
+              content={
                 `Target onset density: ${effectiveOnsetDensity.toFixed(1)}/sec. ` +
                 (chartOnsetTargetDensity !== undefined
                   ? "Saved to this chart."
                   : `Using global default (${onsetTargetDensity.toFixed(1)}/sec).`)
               }
-            />
+            >
+              <input
+                type="range" min="0.5" max="8" step="0.1"
+                aria-label="Target onset density"
+                value={effectiveOnsetDensity}
+                onChange={(e) => {
+                  // Phase B: persist the density per-chart via the chartStore
+                  // (undo-able, serialized to chart.json). The global setting
+                  // stays as the fallback for charts that haven't overridden it.
+                  useChartStore.getState().setOnsetTargetDensity(parseFloat(e.target.value));
+                }}
+                style={SLIDER}
+              />
+            </Tooltip>
           ) : <span style={{ flex: 1 }} />}
           {onsetEnabled && (
             <span style={READOUT}>
@@ -498,16 +502,17 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
         {onsetEnabled && (
           <div style={ROW}>
             <span style={{ ...CAPTION, minWidth: 72 }}>Min strength</span>
-            <input
-              type="range" min="0" max="1" step="0.01"
-              aria-label="Minimum onset strength"
-              value={onsetMinDisplayStrength}
-              onChange={(e) => useSettingsStore.getState().updateSettings({
-                onsetMinDisplayStrength: parseFloat(e.target.value),
-              })}
-              style={SLIDER}
-              title="Visual filter: hide markers with salience below this. Updates instantly, no re-analysis."
-            />
+            <Tooltip content="Visual filter: hide markers with salience below this. Updates instantly, no re-analysis.">
+              <input
+                type="range" min="0" max="1" step="0.01"
+                aria-label="Minimum onset strength"
+                value={onsetMinDisplayStrength}
+                onChange={(e) => useSettingsStore.getState().updateSettings({
+                  onsetMinDisplayStrength: parseFloat(e.target.value),
+                })}
+                style={SLIDER}
+              />
+            </Tooltip>
             <span style={READOUT}>
               {onsetMinDisplayStrength.toFixed(2)}
             </span>
@@ -516,16 +521,17 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
         {onsetEnabled && (
           <div style={ROW}>
             <span style={{ ...CAPTION, minWidth: 72 }}>Abs floor</span>
-            <input
-              type="range" min="0" max="1" step="0.01"
-              aria-label="Absolute threshold floor"
-              value={onsetAbsFloor}
-              onChange={(e) => useSettingsStore.getState().updateSettings({
-                onsetAbsFloor: parseFloat(e.target.value),
-              })}
-              style={SLIDER}
-              title="Absolute threshold floor. A peak must exceed this (and the rolling median + delta)."
-            />
+            <Tooltip content="Absolute threshold floor. A peak must exceed this (and the rolling median + delta).">
+              <input
+                type="range" min="0" max="1" step="0.01"
+                aria-label="Absolute threshold floor"
+                value={onsetAbsFloor}
+                onChange={(e) => useSettingsStore.getState().updateSettings({
+                  onsetAbsFloor: parseFloat(e.target.value),
+                })}
+                style={SLIDER}
+              />
+            </Tooltip>
             <span style={READOUT}>
               {onsetAbsFloor.toFixed(2)}
             </span>
@@ -534,16 +540,17 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
         {onsetEnabled && (
           <div style={ROW}>
             <span style={{ ...CAPTION, minWidth: 72 }}>Adaptive Δ</span>
-            <input
-              type="range" min="0" max="0.2" step="0.005"
-              aria-label="Adaptive threshold delta"
-              value={onsetAdaptiveDelta}
-              onChange={(e) => useSettingsStore.getState().updateSettings({
-                onsetAdaptiveDelta: parseFloat(e.target.value),
-              })}
-              style={SLIDER}
-              title="Delta added to the 1-second rolling median to form the adaptive threshold."
-            />
+            <Tooltip content="Delta added to the 1-second rolling median to form the adaptive threshold.">
+              <input
+                type="range" min="0" max="0.2" step="0.005"
+                aria-label="Adaptive threshold delta"
+                value={onsetAdaptiveDelta}
+                onChange={(e) => useSettingsStore.getState().updateSettings({
+                  onsetAdaptiveDelta: parseFloat(e.target.value),
+                })}
+                style={SLIDER}
+              />
+            </Tooltip>
             <span style={READOUT}>
               {onsetAdaptiveDelta.toFixed(3)}
             </span>

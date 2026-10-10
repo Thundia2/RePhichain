@@ -8,6 +8,7 @@ import { Star } from "lucide-react";
 import { useFavoritesStore } from "../../../stores/favoritesStore";
 import { chromeTheme } from "../../../canvas/chromeTheme";
 import { Icon } from "../../common/Icon";
+import { Tooltip } from "../../common/Tooltip";
 
 const EASING_FAMILIES = [
   { name: "Linear", easings: ["linear"] },
@@ -143,46 +144,46 @@ export function EasingStepGrid() {
             {family.easings.map((easing) => {
               const selected = favoriteEasings.includes(easing);
               return (
-                <button
-                  key={easing}
-                  type="button"
-                  className="ui-btn"
-                  aria-pressed={selected}
-                  title={selected ? "Remove from favorites" : "Add to favorites"}
-                  onClick={() => toggleFavorite(easing)}
-                  style={{
-                    position: "relative",
-                    flexDirection: "column",
-                    gap: "var(--space-2)",
-                    height: "auto",
-                    padding: "var(--space-4)",
-                    borderRadius: "var(--radius-md)",
-                    backgroundColor: selected ? "var(--accent-selected)" : "var(--bg-active)",
-                  }}
-                >
-                  <EasingThumb easing={easing} size={40} selected={selected} />
-                  <span
+                <Tooltip key={easing} content={selected ? "Remove from favorites" : "Add to favorites"}>
+                  <button
+                    type="button"
+                    className="ui-btn"
+                    aria-pressed={selected}
+                    onClick={() => toggleFavorite(easing)}
                     style={{
-                      fontSize: "var(--fs-caption)",
-                      fontWeight: 400,
-                      color: selected ? "var(--accent-primary)" : "var(--text-secondary)",
-                      whiteSpace: "nowrap",
-                      maxWidth: 56,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
+                      position: "relative",
+                      flexDirection: "column",
+                      gap: "var(--space-2)",
+                      height: "auto",
+                      padding: "var(--space-4)",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: selected ? "var(--accent-selected)" : "var(--bg-active)",
                     }}
                   >
-                    {formatEasingName(easing)}
-                  </span>
-                  {selected && (
-                    <Icon
-                      icon={Star}
-                      size={12}
-                      fill="currentColor"
-                      style={{ position: "absolute", top: "var(--space-4)", right: "var(--space-4)", color: "var(--accent-primary)" }}
-                    />
-                  )}
-                </button>
+                    <EasingThumb easing={easing} size={40} selected={selected} />
+                    <span
+                      style={{
+                        fontSize: "var(--fs-caption)",
+                        fontWeight: 400,
+                        color: selected ? "var(--accent-primary)" : "var(--text-secondary)",
+                        whiteSpace: "nowrap",
+                        maxWidth: 56,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {formatEasingName(easing)}
+                    </span>
+                    {selected && (
+                      <Icon
+                        icon={Star}
+                        size={12}
+                        fill="currentColor"
+                        style={{ position: "absolute", top: "var(--space-4)", right: "var(--space-4)", color: "var(--accent-primary)" }}
+                      />
+                    )}
+                  </button>
+                </Tooltip>
               );
             })}
           </div>

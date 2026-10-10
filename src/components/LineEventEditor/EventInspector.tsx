@@ -17,6 +17,7 @@ import { EVENT_COLORS } from "../../constants/eventColors";
 import { defaultEventValue, defaultEventTransition } from "../../constants/eventConfig";
 import { Plus } from "lucide-react";
 import { Button } from "../common/Button";
+import { Tooltip } from "../common/Tooltip";
 import { LANE_LABEL } from "../KeyframeBar/curveEditorUtils";
 
 const KIND_LABELS: Record<LineEventKind, string> = {
@@ -105,28 +106,28 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
           { kind: "opacity" as const, value: String(opacityVal) },
           { kind: "speed" as const, value: state.speed.toFixed(2) },
         ]).map(({ kind, value }) => (
-          <button
-            key={kind}
-            type="button"
-            aria-pressed={activeProperty === kind}
-            title={KIND_LABELS[kind]}
-            className="ui-hover flex items-center gap-2 py-0.5 px-1 w-full text-left"
-            style={{
-              border: "none",
-              borderRadius: "var(--radius-sm)",
-              font: "inherit",
-              cursor: "pointer",
-              background: activeProperty === kind ? "var(--accent-selected)" : undefined,
-            }}
-            onClick={() => useEditorStore.getState().setEventEditorActiveProperty(kind)}
-          >
-            <span
-              className="w-2 h-2 rounded-full flex-shrink-0"
-              style={{ backgroundColor: EVENT_COLORS[kind] }}
-            />
-            <span className="w-10" style={{ color: "var(--text-secondary)" }}>{LANE_LABEL[kind]}</span>
-            <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{value}</span>
-          </button>
+          <Tooltip key={kind} content={KIND_LABELS[kind]}>
+            <button
+              type="button"
+              aria-pressed={activeProperty === kind}
+              className="ui-hover flex items-center gap-2 py-0.5 px-1 w-full text-left"
+              style={{
+                border: "none",
+                borderRadius: "var(--radius-sm)",
+                font: "inherit",
+                cursor: "pointer",
+                background: activeProperty === kind ? "var(--accent-selected)" : undefined,
+              }}
+              onClick={() => useEditorStore.getState().setEventEditorActiveProperty(kind)}
+            >
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: EVENT_COLORS[kind] }}
+              />
+              <span className="w-10" style={{ color: "var(--text-secondary)" }}>{LANE_LABEL[kind]}</span>
+              <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{value}</span>
+            </button>
+          </Tooltip>
         ))}
       </div>
 

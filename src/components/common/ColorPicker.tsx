@@ -8,6 +8,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "./Button";
+import { Tooltip } from "./Tooltip";
 
 /** Small numeric / text input well. */
 const WELL_STYLE: React.CSSProperties = {
@@ -323,23 +324,23 @@ export function ColorPicker({ value, onChange, onClose }: ColorPickerProps) {
             {DEFAULT_SWATCHES.map((swatch, i) => {
               const hex = rgbToHex(swatch[0], swatch[1], swatch[2]);
               return (
-                <button
-                  key={i}
-                  type="button"
-                  title={hex}
-                  aria-label={`Use ${hex}`}
-                  onClick={() => onChange(swatch)}
-                  style={{
-                    width: 22,
-                    height: 22,
-                    padding: 0,
-                    borderRadius: "var(--radius-sm)",
-                    // Swatch fill is colour data, not chrome.
-                    backgroundColor: `rgb(${swatch[0]}, ${swatch[1]}, ${swatch[2]})`,
-                    border: "var(--hairline) solid var(--border-color)",
-                    cursor: "pointer",
-                  }}
-                />
+                <Tooltip key={i} content={hex}>
+                  <button
+                    type="button"
+                    aria-label={`Use ${hex}`}
+                    onClick={() => onChange(swatch)}
+                    style={{
+                      width: 22,
+                      height: 22,
+                      padding: 0,
+                      borderRadius: "var(--radius-sm)",
+                      // Swatch fill is colour data, not chrome.
+                      backgroundColor: `rgb(${swatch[0]}, ${swatch[1]}, ${swatch[2]})`,
+                      border: "var(--hairline) solid var(--border-color)",
+                      cursor: "pointer",
+                    }}
+                  />
+                </Tooltip>
               );
             })}
           </div>

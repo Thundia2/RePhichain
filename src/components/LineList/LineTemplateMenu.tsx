@@ -15,6 +15,7 @@ import type { LucideIcon } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { Icon } from "../common/Icon";
 import { IconButton } from "../common/IconButton";
+import { Tooltip } from "../common/Tooltip";
 import type { Line, LineEvent, Beat } from "../../types/chart";
 
 // A baseline-free line defaults to VISIBLE (DEFAULT_LINE_STATE.opacity=1), so a
@@ -155,17 +156,17 @@ export function LineTemplateMenu() {
           }}
         >
           {LINE_TEMPLATES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="menuitem"
-              className="ui-menu-item"
-              onClick={() => handleCreate(t)}
-              title={t.description}
-            >
-              <Icon icon={t.icon} size={14} style={{ color: "var(--text-secondary)" }} />
-              <span>{t.label}</span>
-            </button>
+            <Tooltip key={t.id} content={t.description} position="right">
+              <button
+                type="button"
+                role="menuitem"
+                className="ui-menu-item"
+                onClick={() => handleCreate(t)}
+              >
+                <Icon icon={t.icon} size={14} style={{ color: "var(--text-secondary)" }} />
+                <span>{t.label}</span>
+              </button>
+            </Tooltip>
           ))}
         </div>
       )}

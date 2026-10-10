@@ -11,6 +11,7 @@
 
 import { X } from "lucide-react";
 import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTabStore } from "../../stores/tabStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -147,18 +148,19 @@ export function TabBar() {
 
             {/* Close button — visible on hover/active */}
             {tab.closable && (
-              <span
-                className="tab-close"
-                role="button"
-                aria-label={`Close ${tab.label}`}
-                title="Close tab"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeTab(tab.id);
-                }}
-              >
-                <Icon icon={X} size={12} />
-              </span>
+              <Tooltip content="Close tab" position="bottom">
+                <span
+                  className="tab-close"
+                  role="button"
+                  aria-label={`Close ${tab.label}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeTab(tab.id);
+                  }}
+                >
+                  <Icon icon={X} size={12} />
+                </span>
+              </Tooltip>
             )}
           </button>
         );
