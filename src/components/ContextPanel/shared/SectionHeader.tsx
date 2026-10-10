@@ -1,16 +1,41 @@
-// Shared SectionHeader — small uppercase label with optional count badge and add button
-// Extracted from 5 duplicate definitions across ContextPanel mode files
+// Shared SectionHeader — sentence-case section label with optional count
+// badge and add button.
 
-export function SectionHeader({ label, count, onAdd }: { label: string; count?: number; onAdd?: () => void }) {
+import { Plus } from "lucide-react";
+import { IconButton } from "../../common/IconButton";
+
+export function SectionHeader({ label, count, onAdd, addLabel = "Add" }: {
+  label: string; count?: number; onAdd?: () => void; addLabel?: string;
+}) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 6px", cursor: "pointer", borderRadius: 4 }}>
-      <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 5 }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        minHeight: "var(--control-md)",
+        margin: "var(--space-12) 0 var(--space-6)",
+      }}
+    >
+      <span style={{ fontSize: "var(--fs-control)", lineHeight: "14px", fontWeight: 600, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
         {label}
-        {count !== undefined && <span style={{ fontSize: 9, padding: "0 5px", borderRadius: 8, fontWeight: 600 }}>{count}</span>}
+        {count !== undefined && (
+          <span
+            style={{
+              fontSize: "var(--fs-badge)",
+              lineHeight: "12px",
+              padding: "1px var(--space-6)",
+              borderRadius: "var(--radius-full)",
+              background: "var(--bg-active)",
+              color: "var(--text-secondary)",
+              fontWeight: 600,
+            }}
+          >
+            {count}
+          </span>
+        )}
       </span>
-      {onAdd && (
-        <button style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 14, fontFamily: "inherit", padding: "0 4px", borderRadius: 3, lineHeight: 1 }} onClick={onAdd}>+</button>
-      )}
+      {onAdd && <IconButton icon={Plus} label={addLabel} size="md" onClick={onAdd} />}
     </div>
   );
 }

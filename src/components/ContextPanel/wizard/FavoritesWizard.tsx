@@ -1,9 +1,14 @@
 // ============================================================
 // Favorites Wizard — First-open setup for easing, preset, and
-// shader favorites. Reopenable from command palette.
+// shader favorites. Reopenable from command palette. Rendered in
+// the shared Dialog chrome with a segmented step switcher.
 // ============================================================
 
 import { useState } from "react";
+import { Star } from "lucide-react";
+import { Dialog } from "../../common/Dialog";
+import { Button } from "../../common/Button";
+import { SegmentedControl } from "../../common/SegmentedControl";
 import { useFavoritesStore } from "../../../stores/favoritesStore";
 import { EasingStepGrid } from "./EasingStepGrid";
 import { PresetStepList } from "./PresetStepList";
@@ -46,178 +51,45 @@ export function FavoritesWizard() {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) handleClose();
-      }}
-    >
-      <div
-        style={{
-          width: 520,
-          maxHeight: "80vh",
-          backgroundColor: "var(--bg-secondary)",
-          border: "1px solid var(--border-color)",
-          borderRadius: 14,
-          boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          animation: "wizFadeIn 0.2s ease-out",
-        }}
-      >
-        <style>{`
-          @keyframes wizFadeIn {
-            from { opacity: 0; transform: scale(0.96); }
-            to { opacity: 1; transform: scale(1); }
-          }
-        `}</style>
-
-        {/* Header */}
-        <div
-          style={{
-            padding: "16px 20px 12px",
-            borderBottom: "1px solid var(--border-color)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
-                Configure Favorites
-              </div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                Pick your most-used items for quick access
-              </div>
-            </div>
-            <button
-              onClick={handleClose}
-              style={{
-                background: "none",
-                border: "none",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                fontSize: 16,
-                fontFamily: "inherit",
-                padding: "2px 6px",
-                borderRadius: 4,
-              }}
-            >
-              ✕
-            </button>
-          </div>
-
-          {/* Progress dots */}
-          <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-            {STEPS.map((s, i) => (
-              <div
-                key={s}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  cursor: "pointer",
-                }}
-                onClick={() => setStep(i)}
-              >
-                <div
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background:
-                      i === step
-                        ? "var(--accent-primary)"
-                        : i < step
-                          ? "var(--accent-primary)"
-                          : "var(--bg-active)",
-                    opacity: i === step ? 1 : 0.5,
-                    transition: "all 0.2s",
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: i === step ? "var(--accent-primary)" : "var(--text-muted)",
-                    fontWeight: i === step ? 600 : 400,
-                  }}
-                >
-                  {s}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div style={{ flex: 1, overflow: "auto", padding: "12px 20px" }}>
-          {step === 0 && <EasingStepGrid />}
-          {step === 1 && <PresetStepList />}
-          {step === 2 && <ShaderStepPlaceholder />}
-        </div>
-
-        {/* Footer */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 20px",
-            borderTop: "1px solid var(--border-color)",
-          }}
-        >
-          <button
-            onClick={handleSkip}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: 11,
-              fontFamily: "inherit",
-              padding: "6px 12px",
-            }}
-          >
+    <Dialog
+      title="Configure favorites"
+      icon={Star}
+      onClose={handleClose}
+      width={520}
+      height="80vh"
+      bodyStyle={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}
+      footer={
+        <>
+          <Button variant="ghost" onClick={handleSkip} style={{ marginRight: "auto" }}>
             Skip for now
-          </button>
-
-          <div style={{ display: "flex", gap: 8 }}>
-            {step > 0 && (
-              <button
-                onClick={handleBack}
-                style={{
-                  padding: "6px 16px",
-                  borderRadius: 6,
-                  border: "1px solid var(--border-color)",
-                  background: "var(--bg-active)",
-                  color: "var(--text-secondary)",
-                  cursor: "pointer",
-                  fontSize: 11,
-                  fontFamily: "inherit",
-                }}
-              >
-                Back
-              </button>
-            )}
-            <button
-              onClick={handleNext}
-              style={{
-                padding: "6px 20px",
-                borderRadius: 6,
-                border: "none",
-                background: "var(--accent-primary)",
-                color: "#fff",
-                cursor: "pointer",
-                fontSize: 11,
-                fontWeight: 600,
-                fontFamily: "inherit",
-              }}
-            >
-              {step === STEPS.length - 1 ? "Done" : "Next"}
-            </button>
-          </div>
+          </Button>
+          {step > 0 && <Button onClick={handleBack}>Back</Button>}
+          <Button variant="primary" onClick={handleNext}>
+            {step === STEPS.length - 1 ? "Done" : "Next"}
+          </Button>
+        </>
+      }
+    >
+      {/* Subtitle + step switcher */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
+        <div style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>
+          Pick your most-used items for quick access
         </div>
+        <SegmentedControl
+          label="Favorites wizard steps"
+          role="tablist"
+          options={STEPS.map((s, i) => ({ value: i, label: `${i + 1}. ${s}` }))}
+          value={step}
+          onChange={setStep}
+        />
       </div>
-    </div>
+
+      {/* Content */}
+      <div>
+        {step === 0 && <EasingStepGrid />}
+        {step === 1 && <PresetStepList />}
+        {step === 2 && <ShaderStepPlaceholder />}
+      </div>
+    </Dialog>
   );
 }

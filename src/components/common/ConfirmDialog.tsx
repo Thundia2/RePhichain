@@ -88,8 +88,15 @@ export function ConfirmDialog() {
       zIndex="calc(var(--z-modal) + 10)"
       footer={
         <>
-          <Button onClick={() => respond(false)}>{options.cancelLabel ?? "Cancel"}</Button>
-          <Button variant={options.danger ? "danger" : "primary"} onClick={() => respond(true)} data-autofocus>
+          {/* Destructive confirms start on Cancel, so a stray Enter can't trigger them. */}
+          <Button onClick={() => respond(false)} data-autofocus={options.danger || undefined}>
+            {options.cancelLabel ?? "Cancel"}
+          </Button>
+          <Button
+            variant={options.danger ? "danger" : "primary"}
+            onClick={() => respond(true)}
+            data-autofocus={!options.danger || undefined}
+          >
             {options.confirmLabel ?? "Confirm"}
           </Button>
         </>

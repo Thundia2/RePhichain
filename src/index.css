@@ -81,6 +81,15 @@
   --beat-line-primary: rgba(255, 255, 255, 0.25);
   --beat-line-secondary: rgba(255, 255, 255, 0.10);
   --canvas-bg: #000000;
+  /* Series: one colour per overlaid line / group member, in order */
+  --series-1: #ff6b6b;
+  --series-2: #4dabf7;
+  --series-3: #69db7c;
+  --series-4: #ffd43b;
+  --series-5: #da77f2;
+  --series-6: #38d9a9;
+  --series-7: #ffa94d;
+  --series-8: #748ffc;
 
   /* Type */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -191,9 +200,17 @@ input, textarea, [contenteditable="true"] {
 }
 
 /* Unified editor monospace font */
+/* Editor chrome is sans like the rest of the app; numbers, beats and
+   timecodes opt into --font-mono where they are rendered. */
 .unified-editor {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--fs-body);
+}
+
+/* Numeric fields read as values: mono with even-width figures. */
+input[type="number"] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -736,6 +753,16 @@ input[type="color"]::-webkit-color-swatch {
   to { opacity: 1; transform: none; }
 }
 
+/* Busy cue for work in progress (e.g. audio analysis). */
+.ui-pulse {
+  animation: ui-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ui-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
 /* ============================================================
    Panel styles (used by the docking system)
    ============================================================ */
@@ -986,4 +1013,11 @@ input[type="color"]::-webkit-color-swatch {
 .ui-pill.is-active {
   background: var(--accent-primary);
   color: var(--on-accent);
+}
+
+/* Custom scrubber (transport): show the focus ring on the thumb, since the
+   real range input is invisible on top of it. */
+.ui-scrub:focus-within .ui-scrub__thumb {
+  outline: var(--accent-edge) solid var(--accent-primary);
+  outline-offset: 1px;
 }

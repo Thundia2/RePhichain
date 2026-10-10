@@ -1,25 +1,56 @@
 // ============================================================
 // Status Bar — Bottom info strip (20px)
 //
-// Shows: Lines count, Notes count, Events count, Zoom %, editor label
+// Shows: "4 lines · 312 notes · 96 events", mark mode, the active
+// group, panel toggles, zoom and the editor view badge.
 // ============================================================
 
-import type React from "react";
+import { ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useGroupStore } from "../../stores/groupStore";
 import { useTabStore } from "../../stores/tabStore";
+import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
 
-const toggleBtnStyle: React.CSSProperties = {
-  background: "none",
-  border: "1px solid var(--border-color)",
-  borderRadius: 6,
-  color: "var(--text-muted)",
-  cursor: "pointer",
-  fontSize: 9,
-  padding: "1px 6px",
-  fontFamily: "inherit",
-};
+function StatusToggle({ label, icon, shortcut, tooltip, active, onClick }: {
+  label: string;
+  icon: typeof ChevronUp;
+  shortcut: string;
+  tooltip: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Tooltip content={tooltip} shortcut={shortcut}>
+      <button
+        type="button"
+        aria-pressed={active}
+        onClick={onClick}
+        className="ui-hover"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "var(--space-2)",
+          height: 16,
+          padding: "0 var(--space-4)",
+          border: "none",
+          borderRadius: "var(--radius-sm)",
+          background: "transparent",
+          color: active ? "var(--accent-primary)" : "var(--text-secondary)",
+          font: "inherit",
+          fontSize: "var(--fs-caption)",
+          cursor: "pointer",
+        }}
+      >
+        {label}
+        <Icon icon={icon} size={12} />
+      </button>
+    </Tooltip>
+  );
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 export function StatusBar() {
   const lineCount = useChartStore((s) => s.chart.lines.length);
@@ -42,62 +73,60 @@ export function StatusBar() {
 
   return (
     <div
+      role="status"
       style={{
-        height: 20,
+        height: "var(--statusbar-height)",
         display: "flex",
         alignItems: "center",
-        padding: "0 10px",
-        gap: 16,
+        padding: "0 var(--space-10)",
+        gap: "var(--space-12)",
         background: "var(--bg-primary)",
-        borderTop: "1px solid var(--border-color)",
-        fontSize: 9,
-        color: "var(--text-muted)",
+        borderTop: "var(--rule) solid var(--border-color)",
+        fontSize: "var(--fs-caption)",
+        color: "var(--text-secondary)",
         flexShrink: 0,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
       }}
     >
-      <span>Lines: {lineCount}</span>
-      <span>Notes: {totalNotes}</span>
-      <span>Events: {totalEvents}</span>
+      <span style={{ fontFamily: "var(--font-mono)" }}>
+        {plural(lineCount, "line")} · {plural(totalNotes, "note")} · {plural(totalEvents, "event")}
+      </span>
       {improvisationMode && (
         <>
-          <span style={{ color: "var(--error)", fontWeight: "bold" }}>MARK MODE</span>
-          <span style={{ color: "var(--text-secondary)", marginLeft: 4 }}>
-            Q=Tap  W=Drag  E=Flick  R=Hold  1-3=Misc
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-4)", color: "var(--error)", fontWeight: 600 }}>
+            <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "var(--radius-full)", background: "var(--error)" }} />
+            Mark mode
           </span>
+          <span>Q tap · W drag · E flick · R hold · 1–3 misc</span>
         </>
       )}
       {activeGroup && (
-        <span style={{ color: activeGroup.color, fontWeight: "bold" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-4)", color: "var(--text-primary)" }}>
+          <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "var(--radius-full)", background: activeGroup.color }} />
           Group: {activeGroup.name}
         </span>
       )}
       {!keyframeBarOpen && (
-        <button onClick={toggleKeyframeBar} style={toggleBtnStyle} title="Show keyframe bar (K)">
-          Keyframes {"\u25B4"}
-        </button>
+        <StatusToggle label="Keyframes" icon={ChevronUp} shortcut="K" tooltip="Show keyframe bar" onClick={toggleKeyframeBar} />
       )}
       {!keyframeBarOpen && !inspectorOpen && (
-        <button onClick={toggleInspector} style={toggleBtnStyle} title="Show inspector (I)">
-          Inspector {"\u25B8"}
-        </button>
+        <StatusToggle label="Inspector" icon={ChevronRight} shortcut="I" tooltip="Show inspector" onClick={toggleInspector} />
       )}
       {keyframeBarOpen && (
-        <button
+        <StatusToggle
+          label="Curves"
+          icon={curveEditorExpanded ? ChevronDown : ChevronUp}
+          shortcut="Shift+K"
+          tooltip={curveEditorExpanded ? "Collapse curve editor" : "Expand curve editor"}
+          active={curveEditorExpanded}
           onClick={toggleCurveEditorExpanded}
-          style={{
-            ...toggleBtnStyle,
-            color: curveEditorExpanded ? "var(--accent-primary)" : "var(--text-muted)",
-            borderColor: curveEditorExpanded ? "var(--accent-primary)" : "var(--border-color)",
-          }}
-          title={curveEditorExpanded ? "Collapse curve editor (Shift+K)" : "Expand curve editor (Shift+K)"}
-        >
-          Curves {curveEditorExpanded ? "\u25BE" : "\u25B4"}
-        </button>
+        />
       )}
       <div style={{ flex: 1 }} />
-      <span>Zoom: {(zoom * 100).toFixed(0)}%</span>
-      <span style={{ color: "var(--accent-primary)" }}>
-        {activeTabType === "unrolled_editor" ? "Unrolled Editor" : "Unified Editor"}
+      <span>Zoom {(zoom * 100).toFixed(0)}%</span>
+      <span className="tab-type-badge">
+        {activeTabType === "unrolled_editor" ? "Unrolled" : "Unified"}
       </span>
     </div>
   );

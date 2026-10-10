@@ -117,16 +117,16 @@ const PANEL_TITLES: Record<PanelId, string> = {
   "game-preview": "Preview",
   "timeline": "Timeline",
   "inspector": "Inspector",
-  "line-list": "Line List",
+  "line-list": "Lines",
   "toolbar": "Toolbar",
-  "timeline-settings": "Timeline Settings",
-  "bpm-list": "BPM List",
-  "chart-settings": "Chart Settings",
-  "hotkey-reference": "Hotkey Reference",
+  "timeline-settings": "Timeline settings",
+  "bpm-list": "BPM list",
+  "chart-settings": "Chart settings",
+  "hotkey-reference": "Hotkey reference",
   "validation": "Validation",
   "effects": "Effects",
   "textures": "Textures",
-  "group-manager": "Group Manager",
+  "group-manager": "Groups",
   "presets": "Presets",
 };
 
@@ -168,7 +168,7 @@ function renderPanel(id: PanelId) {
       content = <PresetPanel />;
       break;
     default:
-      return <PanelPlaceholder name={title} description="Coming soon" color="var(--text-muted)" />;
+      return <PanelPlaceholder name={title} description="Coming soon" color="var(--text-secondary)" />;
   }
   return <ErrorBoundary panelName={title}>{content}</ErrorBoundary>;
 }
@@ -468,8 +468,10 @@ export default function App() {
                   expandedPanelId === id && (
                     <button
                       key="collapse"
+                      type="button"
                       className="mosaic-default-control bp3-button bp3-minimal collapse-button"
-                      title="Collapse"
+                      title="Restore layout"
+                      aria-label="Restore layout"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleCollapse();

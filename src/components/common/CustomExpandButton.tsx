@@ -34,10 +34,10 @@ export function CustomExpandButton({ panelId, isExpanded, onExpand, onOpenAsTab 
       e.stopPropagation();
 
       if (isExpanded) {
-        // Already expanded → open as standalone tab
+        // Already expanded: open as standalone tab
         onOpenAsTab(panelId);
       } else {
-        // First click → expand (maximize) in mosaic
+        // First click: expand (maximize) in mosaic
         if (mosaicCtx?.mosaicActions && windowCtx?.mosaicWindowActions) {
           const path = windowCtx.mosaicWindowActions.getPath();
           mosaicCtx.mosaicActions.expand(path, 100);
@@ -48,10 +48,15 @@ export function CustomExpandButton({ panelId, isExpanded, onExpand, onOpenAsTab 
     [panelId, isExpanded, onExpand, onOpenAsTab, mosaicCtx, windowCtx],
   );
 
+  // Icon-only: the glyph is a CSS mask on ::before (see .custom-expand-button
+  // in index.css), so the button renders no text of its own.
+  const label = isExpanded ? "Open panel in a tab" : "Expand panel";
   return (
     <button
+      type="button"
       className={`mosaic-default-control bp3-button bp3-minimal custom-expand-button ${isExpanded ? "is-expanded" : ""}`}
-      title={isExpanded ? "Open in tab" : "Expand"}
+      title={label}
+      aria-label={label}
       onClick={handleClick}
     />
   );

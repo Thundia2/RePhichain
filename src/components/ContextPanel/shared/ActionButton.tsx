@@ -1,19 +1,22 @@
-// Shared ActionButton — full-width row button with icon and label
-// Extracted from 5 duplicate definitions across ContextPanel mode files
+// Shared ActionButton — full-width row button with icon and label.
+// Verbs first; a label that opens a dialog ends with "…".
 
-export function ActionButton({ icon, label, danger, onClick }: { icon: string; label: string; danger?: boolean; onClick?: () => void }) {
+import type { LucideIcon } from "lucide-react";
+import { Icon } from "../../common/Icon";
+
+export function ActionButton({ icon, label, danger, onClick, disabled, title }: {
+  icon: LucideIcon; label: string; danger?: boolean; onClick?: () => void; disabled?: boolean; title?: string;
+}) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      style={{
-        display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "6px 10px",
-        background: "none", border: "none", borderRadius: 5,
-        color: danger ? "var(--error, #ff4a6a)" : "var(--text-secondary)",
-        cursor: "pointer", fontSize: 11, fontFamily: "inherit", textAlign: "left",
-        transition: "all 0.12s",
-      }}
+      disabled={disabled}
+      title={title}
+      className="ui-btn ui-btn--ghost ui-btn--row"
+      style={danger ? { color: "var(--error)" } : undefined}
     >
-      <span style={{ fontSize: 13, width: 18, textAlign: "center" }}>{icon}</span>
+      <Icon icon={icon} />
       {label}
     </button>
   );

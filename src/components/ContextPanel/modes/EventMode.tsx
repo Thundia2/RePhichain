@@ -5,9 +5,12 @@
 // actions. Fixed Layer select reactivity (was using getState()
 // during render). Split interpolates values at playhead using
 // easing approximation.
+// Styling: quick actions are a ToolGroup of Lucide IconButtons; easing
+// chips are pills with a star toggle; the Hotkeys tab uses HotkeyList.
 // ============================================================
 
 import React, { useMemo } from "react";
+import { CircleDot, CopyPlus, Merge, Repeat, Scissors, Star, Trash2 } from "lucide-react";
 import { useEditorStore } from "../../../stores/editorStore";
 import { useSelectedLineIndex, useSelectedEventIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
@@ -18,9 +21,14 @@ import type { LineEvent, EasingType } from "../../../types/chart";
 import { beatToFloat, floatToBeat } from "../../../types/chart";
 import { EVENT_COLORS } from "../../../constants/eventConfig";
 import { NumericInput } from "../../common/FormFields";
+import { Icon } from "../../common/Icon";
+import { IconButton } from "../../common/IconButton";
+import { ToolGroup } from "../../common/ToolGroup";
+import { INPUT_STYLE, SELECT_STYLE } from "../../common/UIKit";
 
 // ---- Shared sub-components (extracted to shared/) ----
 import { HotkeyButton } from "../shared/HotkeyButton";
+import { HotkeyList, type HotkeySection } from "../shared/HotkeyList";
 import { SectionHeader } from "../shared/SectionHeader";
 import { ContextBadge } from "../shared/ContextBadge";
 
@@ -69,6 +77,14 @@ function getTransitionValues(event: LineEvent): { start: number; end: number } |
 
 function easingDisplayName(easing: string): string {
   return easing.replace(/^ease_/, "").replace(/_/g, " ");
+}
+
+/** "scale_x" → "Scale X", "x" → "X" (sentence case, axis letters upper-case). */
+function eventKindLabel(kind: string): string {
+  const words = kind.split("_");
+  return words
+    .map((w, i) => (w.length === 1 ? w.toUpperCase() : i === 0 ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
 }
 
 // ---- Props ----
@@ -256,31 +272,29 @@ function EditTab() {
   };
 
   const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "4px 6px", fontSize: 11, fontFamily: "inherit",
-    background: "var(--bg-primary)", border: "1px solid var(--border-color)",
-    borderRadius: 4, color: "var(--text-primary)", outline: "none",
+    ...INPUT_STYLE, width: "100%", fontFamily: "var(--font-mono)",
   };
+  const selectStyle: React.CSSProperties = { ...SELECT_STYLE, width: "100%" };
 
   const labelStyle: React.CSSProperties = {
-    fontSize: 9, fontWeight: 600, color: "var(--text-muted)", marginBottom: 2,
-    textTransform: "uppercase" as const, letterSpacing: "0.5px",
+    fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginBottom: "var(--space-2)",
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
       {/* Context badge */}
       <ContextBadge
-        icon={<span style={{ fontSize: 12, color: kindColor }}>{"\u25C9"}</span>}
-        label={`${event.kind} event${isBatch ? ` (+${selectedEventIndices.length - 1})` : ""}`}
+        icon={<span style={{ display: "inline-flex", color: kindColor }}><Icon icon={CircleDot} /></span>}
+        label={`${eventKindLabel(event.kind)} event${isBatch ? ` (+${selectedEventIndices.length - 1})` : ""}`}
         detail={`on ${line.name}`}
         variant="event"
       />
 
       {/* Timing section */}
-      <SectionHeader label="TIMING" />
-      <div style={{ display: "flex", gap: 4, padding: "0 4px" }}>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-          <label style={labelStyle}>Start Beat</label>
+      <SectionHeader label="Timing" />
+      <div style={{ display: "flex", gap: "var(--space-4)", padding: "0 var(--space-4)" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          <label style={labelStyle}>Start beat</label>
           <NumericInput
             style={inputStyle}
             step="0.25"
@@ -288,8 +302,8 @@ function EditTab() {
             onChange={(v) => handleEditBeat("start_beat", v)}
           />
         </div>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-          <label style={labelStyle}>End Beat</label>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          <label style={labelStyle}>End beat</label>
           <NumericInput
             style={inputStyle}
             step="0.25"
@@ -300,9 +314,9 @@ function EditTab() {
       </div>
 
       {/* Value section */}
-      <SectionHeader label="VALUE" />
-      <div style={{ display: "flex", gap: 4, padding: "0 4px" }}>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+      <SectionHeader label="Value" />
+      <div style={{ display: "flex", gap: "var(--space-4)", padding: "0 var(--space-4)" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
           <label style={labelStyle}>Start</label>
           <NumericInput
             style={inputStyle}
@@ -311,7 +325,7 @@ function EditTab() {
             onChange={(v) => handleEditTransition("start", v)}
           />
         </div>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
           <label style={labelStyle}>End</label>
           <NumericInput
             style={inputStyle}
@@ -323,12 +337,12 @@ function EditTab() {
       </div>
 
       {/* Easing section */}
-      <SectionHeader label="EASING" />
+      <SectionHeader label="Easing" />
       <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "0 4px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <label style={labelStyle}>Type</label>
           <select
-            style={{ ...inputStyle, appearance: "none" as const }}
+            style={selectStyle}
             value={easingStr}
             onChange={(e) => handleEasingSelect(e.target.value)}
           >
@@ -342,16 +356,16 @@ function EditTab() {
 
         {/* SVG curve preview */}
         <div style={{
-          height: 72, background: "var(--bg-primary)", borderRadius: 5,
-          border: "1px solid var(--border-color)", display: "flex",
+          height: 72, background: "var(--bg-tertiary)", borderRadius: "var(--radius-md)",
+          border: "var(--hairline) solid var(--border-color)", display: "flex",
           alignItems: "center", justifyContent: "center",
         }}>
           <EasingPreview easing={easingStr} width={120} height={60} color={kindColor} />
         </div>
 
         <div style={{ display: "flex", gap: 4 }}>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-            <label style={labelStyle}>Left Clip</label>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            <label style={labelStyle}>Left clip</label>
             <NumericInput
               style={inputStyle}
               step="0.05"
@@ -361,8 +375,8 @@ function EditTab() {
               onChange={(v) => handleEditEasingClip("left", v)}
             />
           </div>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-            <label style={labelStyle}>Right Clip</label>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            <label style={labelStyle}>Right clip</label>
             <NumericInput
               style={inputStyle}
               step="0.05"
@@ -376,9 +390,9 @@ function EditTab() {
       </div>
 
       {/* Advanced section */}
-      <SectionHeader label="ADVANCED" />
-      <div style={{ display: "flex", gap: 4, padding: "0 4px" }}>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+      <SectionHeader label="Advanced" />
+      <div style={{ display: "flex", gap: "var(--space-4)", padding: "0 var(--space-4)" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
           <label style={labelStyle}>Linkgroup</label>
           <input
             style={inputStyle}
@@ -390,10 +404,10 @@ function EditTab() {
             }}
           />
         </div>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
           <label style={labelStyle}>Layer</label>
           <select
-            style={{ ...inputStyle, appearance: "none" as const }}
+            style={selectStyle}
             value={eventEditorActiveLayer}
             onChange={(e) => useEditorStore.getState().setEventEditorActiveLayer(parseInt(e.target.value, 10))}
           >
@@ -408,14 +422,14 @@ function EditTab() {
       </div>
 
       {/* Quick action buttons */}
-      <SectionHeader label="QUICK ACTIONS" />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 3 }}>
-        <HotkeyButton icon={"\u2702"} label="Split" hotkey="S" onClick={handleSplit} />
-        <HotkeyButton icon={"\u2A06"} label="Merge" hotkey="M" onClick={handleMerge} />
-        <HotkeyButton icon={"\u21C5"} label="Swap" hotkey="W" onClick={handleSwap} />
-        <HotkeyButton icon={"\u2398"} label="Duplicate" hotkey="Ctrl+D" onClick={handleDuplicate} />
-        <HotkeyButton icon={"\u2716"} label="Delete" hotkey="Del" onClick={handleDelete} />
-      </div>
+      <SectionHeader label="Quick actions" />
+      <ToolGroup label="Quick actions">
+        <HotkeyButton icon={Scissors} label="Split at playhead" hotkey="S" onClick={handleSplit} />
+        <HotkeyButton icon={Merge} label="Merge" hotkey="M" onClick={handleMerge} />
+        <HotkeyButton icon={Repeat} label="Swap start and end" hotkey="W" onClick={handleSwap} />
+        <HotkeyButton icon={CopyPlus} label="Duplicate" hotkey="Ctrl+D" onClick={handleDuplicate} />
+        <HotkeyButton icon={Trash2} label="Delete" hotkey="Del" onClick={handleDelete} />
+      </ToolGroup>
     </div>
   );
 }
@@ -544,12 +558,12 @@ function EasingTab() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
       {/* Favorites section */}
       {favoriteEasings.length > 0 && (
         <>
-          <SectionHeader label="FAVORITES" count={favoriteEasings.length} />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: "0 4px" }}>
+          <SectionHeader label="Favorites" count={favoriteEasings.length} />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)", padding: "0 var(--space-4)" }}>
             {favoriteEasings.map((eas) => (
               <EasingChip
                 key={eas}
@@ -567,8 +581,8 @@ function EasingTab() {
       {/* All easings grouped by family */}
       {EASING_FAMILIES.map((family) => (
         <React.Fragment key={family.family}>
-          <SectionHeader label={family.family.toUpperCase()} />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: "0 4px" }}>
+          <SectionHeader label={family.family} />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)", padding: "0 var(--space-4)" }}>
             {family.easings.map((eas) => (
               <EasingChip
                 key={eas}
@@ -592,83 +606,82 @@ function EasingChip({ easing, isActive, isFavorite, onApply, onToggleFavorite }:
   easing: string; isActive: boolean; isFavorite: boolean;
   onApply: () => void; onToggleFavorite: () => void;
 }) {
+  const name = easingDisplayName(easing);
   return (
-    <div
-      onClick={onApply}
+    <span
       style={{
-        display: "flex", alignItems: "center", gap: 4,
-        padding: "4px 8px", borderRadius: 4, cursor: "pointer",
-        fontSize: 10, fontFamily: "inherit",
-        background: isActive ? "rgba(108,138,255,0.15)" : "var(--bg-primary)",
-        border: isActive ? "1px solid var(--accent-primary)" : "1px solid var(--border-color)",
-        color: isActive ? "var(--accent-primary)" : "var(--text-secondary)",
-        transition: "all 0.12s",
+        display: "inline-flex", alignItems: "center",
+        borderRadius: "var(--radius-md)",
+        background: isActive ? "var(--accent-selected)" : "var(--bg-active)",
       }}
     >
-      <span style={{ fontWeight: isActive ? 600 : 400 }}>
-        {easingDisplayName(easing)}
-      </span>
-      <span
-        onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-        style={{ fontSize: 10, cursor: "pointer", opacity: isFavorite ? 1 : 0.3, lineHeight: 1 }}
+      <button
+        type="button"
+        aria-pressed={isActive}
+        onClick={onApply}
+        className="ui-hover"
+        style={{
+          border: "none", cursor: "pointer",
+          padding: "var(--space-4) var(--space-4) var(--space-4) var(--space-8)",
+          borderRadius: "var(--radius-md)",
+          fontFamily: "inherit", fontSize: "var(--fs-caption)",
+          fontWeight: isActive ? 600 : 400,
+          color: isActive ? "var(--accent-primary)" : "var(--text-secondary)",
+        }}
       >
-        {isFavorite ? "\u2605" : "\u2606"}
-      </span>
-    </div>
+        {name}
+      </button>
+      <IconButton
+        label={isFavorite ? `Remove ${name} from favorites` : `Add ${name} to favorites`}
+        size="sm"
+        active={isFavorite}
+        onClick={onToggleFavorite}
+        style={{ marginRight: "var(--space-2)" }}
+      >
+        <Icon icon={Star} size={12} fill={isFavorite ? "currentColor" : "none"} />
+      </IconButton>
+    </span>
   );
 }
 
 // ---- Hotkeys sub-tab ----
 
-const EVENT_HOTKEY_SECTIONS = [
+const EVENT_HOTKEY_SECTIONS: HotkeySection[] = [
   {
-    title: "EVENT EDITING",
+    title: "Event editing",
     keys: [
-      { icon: "S", label: "Split", hotkey: "S" },
-      { icon: "M", label: "Merge", hotkey: "M" },
-      { icon: "W", label: "Swap vals", hotkey: "W" },
-      { icon: "D", label: "Duplicate", hotkey: "Ctrl+D" },
-      { icon: "\u232B", label: "Delete", hotkey: "Del" },
-      { icon: "L", label: "Lock const", hotkey: "L" },
+      { label: "Split", hotkey: "S" },
+      { label: "Merge", hotkey: "M" },
+      { label: "Swap values", hotkey: "W" },
+      { label: "Duplicate", hotkey: "Ctrl+D" },
+      { label: "Delete", hotkey: "Del" },
+      { label: "Lock constant", hotkey: "L" },
     ],
   },
   {
-    title: "EASING",
+    title: "Easing",
     keys: [
-      { icon: "1", label: "Linear", hotkey: "Ctrl+1" },
-      { icon: "2", label: "Out quad", hotkey: "Ctrl+2" },
-      { icon: "3", label: "In/Out sine", hotkey: "Ctrl+3" },
-      { icon: "4", label: "Out back", hotkey: "Ctrl+4" },
-      { icon: "5", label: "Out bounce", hotkey: "Ctrl+5" },
-      { icon: "E", label: "Easing picker", hotkey: "Ctrl+E" },
+      { label: "Linear", hotkey: "Ctrl+1" },
+      { label: "Out quad", hotkey: "Ctrl+2" },
+      { label: "In-out sine", hotkey: "Ctrl+3" },
+      { label: "Out back", hotkey: "Ctrl+4" },
+      { label: "Out bounce", hotkey: "Ctrl+5" },
+      { label: "Open easing picker", hotkey: "Ctrl+E" },
     ],
   },
   {
-    title: "NAVIGATION",
+    title: "Navigation",
     keys: [
-      { icon: "\u2190", label: "Prev event", hotkey: "\u2190" },
-      { icon: "\u2192", label: "Next event", hotkey: "\u2192" },
-      { icon: "\u2191", label: "Prev kind", hotkey: "\u2191" },
-      { icon: "\u2193", label: "Next kind", hotkey: "\u2193" },
-      { icon: "Tab", label: "Cycle kind", hotkey: "Tab" },
-      { icon: "G", label: "Go to beat", hotkey: "Ctrl+G" },
+      { label: "Previous event", hotkey: "Left" },
+      { label: "Next event", hotkey: "Right" },
+      { label: "Previous kind", hotkey: "Up" },
+      { label: "Next kind", hotkey: "Down" },
+      { label: "Cycle kind", hotkey: "Tab" },
+      { label: "Go to beat", hotkey: "Ctrl+G" },
     ],
   },
 ];
 
 function EventHotkeys() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {EVENT_HOTKEY_SECTIONS.map((section) => (
-        <React.Fragment key={section.title}>
-          <SectionHeader label={section.title} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 3 }}>
-            {section.keys.map((k) => (
-              <HotkeyButton key={k.label} icon={k.icon} label={k.label} hotkey={k.hotkey} />
-            ))}
-          </div>
-        </React.Fragment>
-      ))}
-    </div>
-  );
+  return <HotkeyList sections={EVENT_HOTKEY_SECTIONS} />;
 }

@@ -19,7 +19,6 @@ export const INPUT_STYLE: React.CSSProperties = {
   border: "0.5px solid var(--border-color)",
   backgroundColor: "var(--bg-tertiary)",
   color: "var(--text-primary)",
-  fontFamily: "inherit",
   boxSizing: "border-box",
 };
 

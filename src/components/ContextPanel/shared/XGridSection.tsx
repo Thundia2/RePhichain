@@ -2,31 +2,32 @@
 // XGridSection — Shared X-axis grid/snap control panel
 //
 // Used by both LineMode and GlobalMode in the ContextPanel.
-// Replaces the duplicated X SNAP sections with a unified,
-// modernised UI matching the PhiChain design system.
+// Replaces the duplicated X SNAP sections with a unified UI in the
+// PhiChain design system: a filled bg-active block (no border),
+// the UIKit Toggle and an accent SegmentedControl.
 //
 // Features:
-//   - Pill-style toggle (visibility + snap coupled, RPE parity)
-//   - Preset buttons [11, 21, 31, 17] (real-world charter values)
+//   - Toggle (visibility + snap coupled, RPE parity)
+//   - Preset segments [11, 21, 31, 17] (real-world charter values)
 //   - Arbitrary N input (2..256)
-//   - Spacing readout + even-N warning status pill
+//   - Spacing readout + even-N warning status line
 //
 // Recent change: Created as part of X grid system rewrite.
 // Replaces lanes→verticalLines convention, fixes center-line bug.
 // ============================================================
 
+import { CircleCheck, TriangleAlert } from "lucide-react";
 import { useEditorStore } from "../../../stores/editorStore";
 import { getXSpacing, hasCenterLine } from "../../../utils/xSnap";
 import { NumericInput } from "../../common/FormFields";
+import { Toggle, INPUT_STYLE } from "../../common/UIKit";
+import { SegmentedControl } from "../../common/SegmentedControl";
+import { Icon } from "../../common/Icon";
 
 // ---- Tunables ----
 
 const N_PRESETS = [11, 21, 31, 17] as const;
 const MAX_VERTICAL_LINES = 256;
-const ACCENT = "#8b5cf6";
-const ACCENT_SOFT = "rgba(139, 92, 246, 0.15)";
-const ACCENT_BORDER = "rgba(139, 92, 246, 0.4)";
-const ACCENT_TEXT = "#b89eff";
 
 // ---- Component ----
 
@@ -39,87 +40,45 @@ export function XGridSection() {
   const spacing = getXSpacing(verticalLines);
   const spacingDisplay = spacing % 1 === 0 ? spacing.toFixed(0) : spacing.toFixed(2);
   const hasCenter = hasCenterLine(verticalLines);
+  const presetValue = (N_PRESETS as readonly number[]).includes(verticalLines) ? verticalLines : null;
 
   return (
     <div style={{
-      background: "var(--bg-tertiary)",
-      borderRadius: 5,
-      padding: "10px 12px",
-      borderLeft: `2px solid ${ACCENT}`,
+      background: "var(--bg-active)",
+      borderRadius: "var(--radius-lg)",
+      padding: "var(--space-10) var(--space-12)",
+      display: "flex",
+      flexDirection: "column",
+      gap: "var(--space-8)",
     }}>
-      {/* Row 1: Toggle + label + spacing readout */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        {/* Pill-style toggle switch */}
-        <button
-          onClick={toggleXSnap}
-          style={{
-            width: 28, height: 18,
-            borderRadius: 9,
-            background: xSnapEnabled ? "rgba(139, 92, 246, 0.25)" : "var(--bg-active)",
-            cursor: "pointer",
-            position: "relative",
-            transition: "background 0.15s",
-            border: "none",
-            flexShrink: 0,
-            padding: 0,
-          }}
-        >
-          {/* Toggle knob */}
-          <span style={{
-            position: "absolute",
-            top: 2, left: 2,
-            width: 14, height: 14,
-            borderRadius: "50%",
-            background: xSnapEnabled ? ACCENT : "var(--text-muted)",
-            transition: "transform 0.15s, background 0.15s",
-            transform: xSnapEnabled ? "translateX(10px)" : "translateX(0)",
-          }} />
-        </button>
-
-        <span style={{ fontSize: 11, color: "var(--text-primary)", fontWeight: 600, flex: 1 }}>
+      {/* Row 1: label + spacing readout + toggle */}
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+        <span style={{ fontSize: "var(--fs-control)", color: "var(--text-primary)", fontWeight: 600, flex: 1 }}>
           X grid
         </span>
-
         <span style={{
-          fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
-          fontSize: 10,
-          color: "var(--text-muted)",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--fs-caption)",
+          color: "var(--text-secondary)",
         }}>
           {verticalLines} lines · {spacingDisplay}
         </span>
+        <Toggle checked={xSnapEnabled} onChange={() => toggleXSnap()} label="X grid snap" />
       </div>
 
-      {/* Row 2: Preset buttons + arbitrary N input */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <div style={{ display: "flex", gap: 3 }}>
-          {N_PRESETS.map((n) => {
-            const isActive = verticalLines === n;
-            return (
-              <button
-                key={n}
-                onClick={() => {
-                  setVerticalLines(n);
-                  if (!xSnapEnabled) toggleXSnap();
-                }}
-                style={{
-                  width: 26, height: 22,
-                  fontSize: 10,
-                  borderRadius: 3,
-                  border: isActive ? `1px solid ${ACCENT_BORDER}` : "1px solid transparent",
-                  background: isActive ? ACCENT_SOFT : "var(--bg-active)",
-                  color: isActive ? ACCENT_TEXT : "var(--text-secondary)",
-                  cursor: "pointer",
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontWeight: 600,
-                  transition: "all 0.1s",
-                  padding: 0,
-                }}
-              >
-                {n}
-              </button>
-            );
-          })}
-        </div>
+      {/* Row 2: preset segments + arbitrary N input */}
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+        <SegmentedControl
+          label="Grid line presets"
+          tone="accent"
+          size="sm"
+          options={N_PRESETS.map((n) => ({ value: n, label: <span style={{ fontFamily: "var(--font-mono)" }}>{n}</span> }))}
+          value={presetValue}
+          onChange={(n) => {
+            setVerticalLines(n);
+            if (!xSnapEnabled) toggleXSnap();
+          }}
+        />
 
         <NumericInput
           commitMode="blur"
@@ -128,47 +87,31 @@ export function XGridSection() {
           max={MAX_VERTICAL_LINES}
           value={verticalLines}
           onChange={setVerticalLines}
+          title="Vertical grid lines (2–256)"
           style={{
-            width: 48, height: 22,
-            padding: "0 6px",
-            background: "var(--bg-active)",
-            border: "1px solid var(--border-color)",
-            borderRadius: 3,
-            color: "var(--text-primary)",
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 10,
+            ...INPUT_STYLE,
+            width: 48,
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--fs-caption)",
             textAlign: "center",
             marginLeft: "auto",
-            outline: "none",
           }}
-          onFocus={(e) => { e.currentTarget.style.borderColor = ACCENT; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-color)"; }}
         />
       </div>
 
-      {/* Status indicator — center line warning */}
+      {/* Status line — center line warning */}
       <div style={{
-        marginTop: 8,
-        padding: "6px 8px",
-        borderRadius: 3,
-        fontSize: 10,
+        fontSize: "var(--fs-caption)",
         display: "flex",
         alignItems: "center",
-        gap: 6,
-        background: hasCenter ? "rgba(74, 255, 122, 0.07)" : "rgba(255, 212, 59, 0.07)",
-        color: hasCenter ? "#6fc78a" : "#ddb842",
+        gap: "var(--space-6)",
+        color: hasCenter ? "var(--success)" : "var(--warning)",
       }}>
-        {/* Status dot */}
-        <span style={{
-          width: 6, height: 6,
-          borderRadius: "50%",
-          background: "currentColor",
-          flexShrink: 0,
-        }} />
+        <Icon icon={hasCenter ? CircleCheck : TriangleAlert} size={12} />
         <span>
           {hasCenter
-            ? "N is odd \u2014 center line at X=0 is snappable"
-            : "N is even \u2014 no snap point at X=0"}
+            ? "N is odd — center line at X=0 is snappable"
+            : "N is even — no snap point at X=0"}
         </span>
       </div>
     </div>

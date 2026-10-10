@@ -23,6 +23,7 @@ import {
 import { getPlayheadBeat } from "../../utils/playhead";
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import { renderCurveGraph, type OverlayLine } from "./CurveGraphRenderer";
+import { seriesColor } from "../../canvas/chromeTheme";
 import {
   type CurveViewport,
   computeAutoRange,
@@ -154,7 +155,6 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
       // Reuses the existing timelineOverlayLines state from editorStore
       const overlayData: OverlayLine[] = [];
       if (es.timelineOverlayEnabled && es.timelineOverlayLines.length > 0) {
-        const OVERLAY_COLORS = ["#ff6b6b", "#51cf66", "#ffd43b", "#cc5de8", "#4dabf7", "#38d9a9", "#ffa94d", "#748ffc"];
         for (let oi = 0; oi < es.timelineOverlayLines.length; oi++) {
           const overlayIdx = es.timelineOverlayLines[oi];
           // Don't overlay the currently selected line on itself
@@ -163,7 +163,7 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
           if (overlayLine) {
             overlayData.push({
               events: overlayLine.events,
-              color: OVERLAY_COLORS[oi % OVERLAY_COLORS.length],
+              color: seriesColor(oi),
               label: overlayLine.name,
             });
           }

@@ -7,7 +7,7 @@
 // closure that calls the appropriate store methods. The hook
 // accepts callback props for dialogs and panel toggles.
 //
-// Recent change: Added "Rename Tab" (F2) to View menu for
+// Recent change: Added "Rename tab" (F2) to View menu for
 // inline tab renaming via command palette or keyboard shortcut.
 // ============================================================
 
@@ -93,10 +93,10 @@ export function useMenus(
     {
       label: "File",
       items: [
-        { label: "New Chart...", shortcut: "Ctrl+N", action: onNewChart },
+        { label: "New chart…", shortcut: "Ctrl+N", action: onNewChart },
         { separator: true, label: "" },
         {
-          label: "Save Project",
+          label: "Save project",
           shortcut: "Ctrl+S",
           disabled: !isLoaded,
           action: async () => {
@@ -112,14 +112,14 @@ export function useMenus(
             }
           },
         },
-        { label: "Close Project", disabled: !isLoaded, action: closeProject },
+        { label: "Close project", disabled: !isLoaded, action: closeProject },
         { separator: true, label: "" },
         {
-          label: "Import Chart...",
+          label: "Import chart…",
           action: () => triggerImportChart(),
         },
         {
-          label: "Import extra.json...",
+          label: "Import extra.json…",
           action: () => {
             const input = document.createElement("input");
             input.type = "file";
@@ -160,7 +160,7 @@ export function useMenus(
           action: async () => {
             const cs = useChartStore.getState();
             if (cs.isDirty) {
-              const confirmed = await showConfirm("You have unsaved changes. Quit anyway?");
+              const confirmed = await showConfirm("Your unsaved changes will be lost.", { title: "Quit without saving?", confirmLabel: "Quit", danger: true });
               if (!confirmed) return;
             }
             window.close();
@@ -188,7 +188,7 @@ export function useMenus(
         }},
         { separator: true, label: "" },
         {
-          label: "Create Group from Selection",
+          label: "Create group from selection",
           shortcut: "Ctrl+Shift+G",
           disabled: !isLoaded,
           action: () => {
@@ -206,28 +206,28 @@ export function useMenus(
           },
         },
         {
-          label: "Exit Group Mode",
+          label: "Exit group mode",
           disabled: !useGroupStore.getState().activeGroupId,
           action: () => useGroupStore.getState().exitGroupEditMode(),
         },
         { separator: true, label: "" },
         {
-          label: "Parametric Trajectory...",
+          label: "Parametric trajectory…",
           disabled: !isLoaded,
           action: () => onShowParametric?.(),
         },
         {
-          label: "Spin / Rotation...",
+          label: "Spin / rotation…",
           disabled: !isLoaded,
           action: () => onShowSpinGenerator?.(),
         },
         {
-          label: "Shake / Oscillation...",
+          label: "Shake / oscillation…",
           disabled: !isLoaded,
           action: () => onShowShakeGenerator?.(),
         },
         {
-          label: "Improvisation Mode",
+          label: "Improvisation mode",
           shortcut: "Shift+I",
           disabled: !isLoaded,
           action: () => {
@@ -236,48 +236,48 @@ export function useMenus(
         },
         { separator: true, label: "" },
         {
-          label: "Create Multiple Lines...",
+          label: "Create multiple lines…",
           disabled: !isLoaded,
           action: () => onShowBatchLine?.(),
         },
         {
-          label: "Lyrics Sync...",
+          label: "Lyrics sync…",
           disabled: !isLoaded,
           action: () => onShowLyricsSync?.(),
         },
         {
-          label: "Note Pattern...",
+          label: "Note pattern…",
           disabled: !isLoaded,
           action: () => onShowNotePattern?.(),
         },
         { separator: true, label: "" },
         {
-          label: "Paste Special...",
+          label: "Paste special…",
           shortcut: "Ctrl+Alt+V",
           disabled: !isLoaded,
           action: () => onShowPasteSpecial?.(),
         },
         {
-          label: "Go to Beat...",
+          label: "Go to beat…",
           shortcut: "Ctrl+G", // L7: go_to_beat moved ctrl+j → ctrl+g (registry default)
           disabled: !isLoaded,
           action: () => onShowGoToBeat?.(),
         },
         {
-          label: "Onset Calibration...",
+          label: "Onset calibration…",
           shortcut: "Ctrl+Shift+O",
           disabled: !isLoaded,
           action: () => onShowOnsetCalibration?.(),
         },
         { separator: true, label: "" },
         {
-          label: "Split Event at Playhead",
+          label: "Split event at playhead",
           disabled: !isLoaded,
           // Shared with the split_event hotkey (L7). grep splitSelectedEventsAtPlayhead.
           action: () => splitSelectedEventsAtPlayhead(),
         },
         {
-          label: "Duplicate Event After",
+          label: "Duplicate event after",
           disabled: !isLoaded,
           action: () => {
             // Clone selected events and place immediately after their end beat
@@ -307,18 +307,18 @@ export function useMenus(
       label: "View",
       items: [
         {
-          label: "Unified Editor",
+          label: "Unified editor",
           disabled: !isLoaded,
           action: () => openUnifiedEditor(),
         },
         {
-          label: "Unrolled Editor",
+          label: "Unrolled editor",
           shortcut: "Ctrl+Shift+U",
           disabled: !isLoaded,
           action: () => openUnrolledEditor(),
         },
         {
-          label: "Classic Editor",
+          label: "Classic editor",
           disabled: !isLoaded,
           action: () => {
             const ts = useTabStore.getState();
@@ -338,7 +338,7 @@ export function useMenus(
         },
         { separator: true, label: "" },
         {
-          label: "Rename Tab",
+          label: "Rename tab",
           shortcut: "F2",
           action: () => {
             useTabStore.getState().startRenameTab();
@@ -351,24 +351,24 @@ export function useMenus(
         { separator: true, label: "" },
         { label: "Inspector", action: () => onTogglePanel?.("inspector") },
         { label: "Toolbar", action: () => onTogglePanel?.("toolbar") },
-        { label: "Timeline Settings", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("timeline-settings") },
-        { label: "BPM List", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("bpm-list") },
-        { label: "Chart Settings", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("chart-settings") },
+        { label: "Timeline settings", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("timeline-settings") },
+        { label: "BPM list", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("bpm-list") },
+        { label: "Chart settings", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("chart-settings") },
         { label: "Validation", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("validation") },
         { label: "Textures", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("textures") },
         { label: "Groups", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("group-manager") },
         { label: "Presets", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("presets") },
-        { label: "Game Preview", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("game-preview") },
-        { label: "Hotkey Reference", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("hotkey-reference") },
+        { label: "Game preview", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("game-preview") },
+        { label: "Hotkey reference", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("hotkey-reference") },
         { separator: true, label: "" },
-        { label: "Apply Default Layout", action: onResetLayout },
+        { label: "Apply default layout", action: onResetLayout },
       ],
     },
     {
       label: "Export",
       items: [
         {
-          label: "Export as Official JSON",
+          label: "Export as official JSON",
           disabled: !isLoaded,
           action: async () => {
             try {
@@ -434,7 +434,7 @@ export function useMenus(
           },
         },
         {
-          label: "Export as PEZ (ZIP bundle)...",
+          label: "Export as PEZ (ZIP bundle)…",
           disabled: !isLoaded,
           action: async () => {
             try {
@@ -443,7 +443,7 @@ export function useMenus(
               const meta = cs.meta;
 
               let musicFile: File | null = null;
-              const musicConfirm = await showConfirm("Include a music file in the PEZ bundle?");
+              const musicConfirm = await showConfirm("Pick an audio file to bundle with the chart, or skip it.", { title: "Include a music file?", confirmLabel: "Choose file…", cancelLabel: "Skip" });
               if (musicConfirm) {
                 musicFile = await pickFile(".mp3,.ogg,.wav,.flac");
               }
@@ -451,7 +451,7 @@ export function useMenus(
               let illustrationFile: File | null = null;
               const hasLoadedIllustration = cs.illustrationImage !== null;
               if (!hasLoadedIllustration) {
-                const illuConfirm = await showConfirm("Include an illustration file in the PEZ bundle?");
+                const illuConfirm = await showConfirm("Pick an image to bundle with the chart, or skip it.", { title: "Include an illustration?", confirmLabel: "Choose file…", cancelLabel: "Skip" });
                 if (illuConfirm) {
                   illustrationFile = await pickFile(".png,.jpg,.jpeg,.bmp,.webp");
                 }
@@ -486,12 +486,12 @@ export function useMenus(
         },
         { separator: true, label: "" },
         {
-          label: "Export Diff...",
+          label: "Export diff…",
           disabled: !isLoaded,
           action: () => onShowExportDiff?.(),
         },
         {
-          label: "Selective Export...",
+          label: "Selective export…",
           disabled: !isLoaded,
           action: () => onShowSelectiveExport?.(),
         },

@@ -4,7 +4,10 @@
 // ============================================================
 
 import { useRef, useEffect } from "react";
+import { Star } from "lucide-react";
 import { useFavoritesStore } from "../../../stores/favoritesStore";
+import { chromeTheme } from "../../../canvas/chromeTheme";
+import { Icon } from "../../common/Icon";
 
 const EASING_FAMILIES = [
   { name: "Linear", easings: ["linear"] },
@@ -77,10 +80,11 @@ function EasingThumb({ easing, size = 40, selected }: { easing: string; size?: n
     const W = canvas.width, H = canvas.height;
     const pad = 4;
 
+    const t = chromeTheme();
     ctx.clearRect(0, 0, W, H);
 
     // Diagonal guide
-    ctx.strokeStyle = "#333";
+    ctx.strokeStyle = t.borderColor;
     ctx.lineWidth = 0.5;
     ctx.setLineDash([2, 2]);
     ctx.beginPath();
@@ -90,12 +94,12 @@ function EasingThumb({ easing, size = 40, selected }: { easing: string; size?: n
     ctx.setLineDash([]);
 
     // Curve
-    ctx.strokeStyle = selected ? "#6c8aff" : "#888";
+    ctx.strokeStyle = selected ? t.accentPrimary : t.textSecondary;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let i = 0; i <= W - 2 * pad; i++) {
-      const t = i / (W - 2 * pad);
-      const v = evalEasing(easing, t);
+      const p = i / (W - 2 * pad);
+      const v = evalEasing(easing, p);
       const x = pad + i;
       const y = H - pad - v * (H - 2 * pad);
       if (i === 0) ctx.moveTo(x, y);
@@ -108,10 +112,9 @@ function EasingThumb({ easing, size = 40, selected }: { easing: string; size?: n
 }
 
 function formatEasingName(name: string): string {
-  return name
-    .replace("ease_", "")
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  // Sentence case: "ease_in_out_sine" → "In out sine"
+  const words = name.replace("ease_", "").replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 export function EasingStepGrid() {
@@ -120,56 +123,51 @@ export function EasingStepGrid() {
 
   return (
     <div>
-      <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 10 }}>
+      <div style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)", marginBottom: "var(--space-10)" }}>
         Select your favorite easings. They'll appear at the top of easing pickers for quick access.
       </div>
 
       {EASING_FAMILIES.map((family) => (
-        <div key={family.name} style={{ marginBottom: 10 }}>
+        <div key={family.name} style={{ marginBottom: "var(--space-10)" }}>
           <div
             style={{
-              fontSize: 9,
+              fontSize: "var(--fs-control)",
               fontWeight: 600,
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-              letterSpacing: "0.5px",
-              padding: "4px 0",
+              color: "var(--text-secondary)",
+              padding: "var(--space-4) 0",
             }}
           >
             {family.name}
           </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "var(--space-6)", flexWrap: "wrap" }}>
             {family.easings.map((easing) => {
               const selected = favoriteEasings.includes(easing);
               return (
                 <button
                   key={easing}
+                  type="button"
+                  className="ui-btn"
+                  aria-pressed={selected}
+                  title={selected ? "Remove from favorites" : "Add to favorites"}
                   onClick={() => toggleFavorite(easing)}
                   style={{
-                    display: "flex",
+                    position: "relative",
                     flexDirection: "column",
-                    alignItems: "center",
-                    gap: 3,
-                    padding: 4,
-                    borderRadius: 6,
-                    border: selected
-                      ? "1px solid var(--accent-primary)"
-                      : "1px solid var(--border-color)",
-                    background: selected
-                      ? "rgba(108,138,255,0.08)"
-                      : "var(--bg-primary)",
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    transition: "all 0.15s",
+                    gap: "var(--space-2)",
+                    height: "auto",
+                    padding: "var(--space-4)",
+                    borderRadius: "var(--radius-md)",
+                    backgroundColor: selected ? "var(--accent-selected)" : "var(--bg-active)",
                   }}
                 >
                   <EasingThumb easing={easing} size={40} selected={selected} />
                   <span
                     style={{
-                      fontSize: 8,
-                      color: selected ? "var(--accent-primary)" : "var(--text-muted)",
+                      fontSize: "var(--fs-caption)",
+                      fontWeight: 400,
+                      color: selected ? "var(--accent-primary)" : "var(--text-secondary)",
                       whiteSpace: "nowrap",
-                      maxWidth: 52,
+                      maxWidth: 56,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                     }}
@@ -177,7 +175,12 @@ export function EasingStepGrid() {
                     {formatEasingName(easing)}
                   </span>
                   {selected && (
-                    <span style={{ fontSize: 10, color: "var(--accent-primary)" }}>★</span>
+                    <Icon
+                      icon={Star}
+                      size={12}
+                      fill="currentColor"
+                      style={{ position: "absolute", top: "var(--space-4)", right: "var(--space-4)", color: "var(--accent-primary)" }}
+                    />
                   )}
                 </button>
               );

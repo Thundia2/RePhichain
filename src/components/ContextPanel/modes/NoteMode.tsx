@@ -6,9 +6,16 @@
 // Implemented all 15 BatchTab operations: Flip, Mirror, Quantize,
 // Distribute, Strum, Align L/R/Center, Space Y/X, Rotate, Scale,
 // Shift X/Y, Reset. All use batchEditNotes for single undo entry.
+// Styling: action rows are ToolGroups of Lucide IconButtons; note types
+// use NoteGlyph; the Hotkeys tab uses the shared HotkeyList.
 // ============================================================
 
-import React from "react";
+import type React from "react";
+import {
+  AlignCenter, AlignHorizontalSpaceAround, AlignLeft, AlignRight, ArrowLeftRight, ArrowRightLeft,
+  ArrowUpDown, ChevronDown, ChevronUp, ClipboardPaste, Copy, Layers, Magnet, MoveHorizontal,
+  MoveVertical, RotateCcw, RotateCw, Scaling, Spline, Trash2, UnfoldHorizontal,
+} from "lucide-react";
 import { useEditorStore } from "../../../stores/editorStore";
 import { useSelectedLineIndex, useSelectedNoteIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
@@ -20,17 +27,22 @@ import type { NoteKind, Note, CurveNoteTrack } from "../../../types/chart";
 
 // ---- Shared sub-components (extracted to shared/) ----
 import { HotkeyButton } from "../shared/HotkeyButton";
+import { HotkeyList, type HotkeySection } from "../shared/HotkeyList";
 import { SectionHeader } from "../shared/SectionHeader";
 import { ActionButton } from "../shared/ActionButton";
 import { ContextBadge } from "../shared/ContextBadge";
+import { ToolGroup } from "../../common/ToolGroup";
+import { NoteGlyph } from "../../common/NoteGlyph";
+import { Icon } from "../../common/Icon";
+import { INPUT_STYLE, SELECT_STYLE } from "../../common/UIKit";
 
 // ---- Note kind visual config ----
 
-const NOTE_KIND_CONFIG: Record<NoteKind, { color: string; label: string; icon: string }> = {
-  tap: { color: "#48b5ff", label: "Tap", icon: "\u25C6" },
-  drag: { color: "#ffd24a", label: "Drag", icon: "\u25C8" },
-  hold: { color: "#4aff7a", label: "Hold", icon: "\u2503" },
-  flick: { color: "#ff4a6a", label: "Flick", icon: "\u25B2" },
+const NOTE_KIND_CONFIG: Record<NoteKind, { color: string; label: string }> = {
+  tap: { color: "var(--note-tap)", label: "Tap" },
+  drag: { color: "var(--note-drag)", label: "Drag" },
+  hold: { color: "var(--note-hold)", label: "Hold" },
+  flick: { color: "var(--note-flick)", label: "Flick" },
 };
 
 // ---- Helpers ----
@@ -103,53 +115,57 @@ function EditTab() {
   };
 
   const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "4px 6px", fontSize: 11, fontFamily: "inherit",
-    background: "var(--bg-primary)", border: "1px solid var(--border-color)",
-    borderRadius: 4, color: "var(--text-primary)", outline: "none",
+    ...INPUT_STYLE, width: "100%", fontFamily: "var(--font-mono)",
   };
 
   const labelStyle: React.CSSProperties = {
-    fontSize: 9, fontWeight: 600, color: "var(--text-muted)", marginBottom: 2,
-    textTransform: "uppercase" as const, letterSpacing: "0.5px",
+    fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginBottom: "var(--space-2)",
   };
 
+  // Show the note type's glyph when every selected note shares one type
+  const firstKind = selectedNotes[0].note.kind;
+  const singleKind = selectedNotes.every(({ note }) => note.kind === firstKind);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
       {/* Context badge */}
       <ContextBadge
-        icon={<span style={{ fontSize: 12 }}>{"\u25C6"}</span>}
+        icon={singleKind ? <NoteGlyph kind={firstKind} size={14} /> : Layers}
         label={isBatch ? `${selectedNotes.length} notes selected` : "1 note selected"}
         detail={`on ${line.name}`}
         variant="note"
       />
 
       {/* Note list */}
-      <SectionHeader label="SELECTED NOTES" count={selectedNotes.length} />
-      <div style={{ maxHeight: 160, overflowY: "auto", borderRadius: 5, border: "1px solid var(--border-color)" }}>
-        {selectedNotes.map(({ note, index }) => {
+      <SectionHeader label="Selected notes" count={selectedNotes.length} />
+      <div style={{ maxHeight: 160, overflowY: "auto", borderRadius: "var(--radius-lg)", background: "var(--bg-active)" }}>
+        {selectedNotes.map(({ note, index }, i) => {
           const config = NOTE_KIND_CONFIG[note.kind];
           return (
             <div
               key={index}
               style={{
-                display: "flex", alignItems: "center", gap: 6, padding: "4px 8px",
-                fontSize: 10, borderBottom: "1px solid rgba(42,42,53,0.5)",
+                display: "flex", alignItems: "center", gap: "var(--space-6)", padding: "var(--space-4) var(--space-8)",
+                fontSize: "var(--fs-caption)",
+                borderBottom: i === selectedNotes.length - 1 ? "none" : "var(--rule) solid var(--separator)",
               }}
             >
-              <span style={{
-                fontSize: 8, padding: "1px 5px", borderRadius: 3,
-                background: config.color, color: "#000", fontWeight: 700,
-              }}>
+              <NoteGlyph kind={note.kind} size={12} />
+              <span style={{ color: config.color, fontWeight: 600, minWidth: 30 }}>
                 {config.label}
               </span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", color: "var(--text-secondary)" }}>
+              <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
                 b{formatBeat(note.beat)}
               </span>
-              <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontFamily: "'JetBrains Mono', monospace" }}>
+              <span style={{ color: "var(--text-secondary)", marginLeft: "auto", fontFamily: "var(--font-mono)" }}>
                 x:{Math.round(note.x)}
               </span>
-              <span style={{ fontSize: 8, color: note.above ? "var(--text-muted)" : "#cc5de8" }}>
-                {note.above ? "\u25B2" : "\u25BC"}
+              <span
+                title={note.above ? "Above" : "Below"}
+                aria-label={note.above ? "Above" : "Below"}
+                style={{ display: "inline-flex", color: note.above ? "var(--text-muted)" : "var(--accent-primary)" }}
+              >
+                <Icon icon={note.above ? ChevronUp : ChevronDown} size={12} />
               </span>
             </div>
           );
@@ -157,19 +173,19 @@ function EditTab() {
       </div>
 
       {/* Batch edit fields */}
-      <SectionHeader label="BATCH EDIT" />
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 4px" }}>
+      <SectionHeader label="Batch edit" />
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)", padding: "0 var(--space-4)" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <label style={labelStyle}>Side</label>
           <select
-            style={{ ...inputStyle, appearance: "none" as const }}
+            style={{ ...SELECT_STYLE, width: "100%" }}
             value=""
             onChange={(e) => {
               if (e.target.value === "above") handleBatchEdit({ above: true });
               else if (e.target.value === "below") handleBatchEdit({ above: false });
             }}
           >
-            <option value="">-- Set side --</option>
+            <option value="">Set side…</option>
             <option value="above">Above</option>
             <option value="below">Below</option>
           </select>
@@ -223,23 +239,23 @@ function EditTab() {
               onChange={(e) => handleBatchEdit({ fake: e.target.checked })}
               style={{ accentColor: "var(--accent-primary)" }}
             />
-            <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>Fake</span>
+            <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>Fake</span>
           </div>
         </div>
       </div>
 
       {/* Quick action buttons */}
-      <SectionHeader label="QUICK ACTIONS" />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 3 }}>
-        <HotkeyButton icon={"\u21C5"} label="Flip" hotkey="F" onClick={handleFlip} />
-        <HotkeyButton icon={"\u21C4"} label="Mirror" hotkey="M" onClick={handleMirror} />
-        <HotkeyButton icon={"\u2398"} label="Copy" hotkey="Ctrl+C" onClick={() => performCopy()} />
-        <HotkeyButton icon={"\u2399"} label="Paste Sp." hotkey="Ctrl+Shift+V" onClick={() => useDialogStore.getState().openDialog("paste-special")} />
-        <HotkeyButton icon={"\u2716"} label="Delete" hotkey="Del" onClick={handleDelete} />
-      </div>
+      <SectionHeader label="Quick actions" />
+      <ToolGroup label="Quick actions">
+        <HotkeyButton icon={ArrowUpDown} label="Flip side" hotkey="F" onClick={handleFlip} />
+        <HotkeyButton icon={ArrowLeftRight} label="Mirror X" hotkey="M" onClick={handleMirror} />
+        <HotkeyButton icon={Copy} label="Copy" hotkey="Ctrl+C" onClick={() => performCopy()} />
+        <HotkeyButton icon={ClipboardPaste} label="Paste special…" hotkey="Ctrl+Shift+V" onClick={() => useDialogStore.getState().openDialog("paste-special")} />
+        <HotkeyButton icon={Trash2} label="Delete" hotkey="Del" onClick={handleDelete} />
+      </ToolGroup>
 
       {/* Create curve track from exactly 2 selected notes */}
-      <ActionButton icon={"\u223F"} label="Create curve track from selection" onClick={() => {
+      <ActionButton icon={Spline} label="Create curve track from selection" onClick={() => {
         if (selectedNotes.length !== 2) {
           useToastStore.getState().addToast({ message: "Select exactly 2 notes to create a curve track", type: "warning" });
           return;
@@ -481,88 +497,74 @@ function BatchTab() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <SectionHeader label="BATCH OPERATIONS" />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 3 }}>
-        <HotkeyButton icon={"\u21C5"} label="Flip" hotkey="F" onClick={handleFlip} />
-        <HotkeyButton icon={"\u21C4"} label="Mirror" hotkey="M" onClick={handleMirror} />
-        <HotkeyButton icon={"\u2261"} label="Quantize" hotkey="Q" onClick={handleQuantize} />
-        <HotkeyButton icon={"\u2263"} label="Distribute" hotkey="Ctrl+D" onClick={handleDistribute} />
-        <HotkeyButton icon={"\u2502"} label="Strum" hotkey="Ctrl+U" onClick={handleStrum} />
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
+      <SectionHeader label="Batch operations" />
+      <ToolGroup label="Batch operations">
+        <HotkeyButton icon={ArrowUpDown} label="Flip side" hotkey="F" onClick={handleFlip} />
+        <HotkeyButton icon={ArrowLeftRight} label="Mirror X" hotkey="M" onClick={handleMirror} />
+        <HotkeyButton icon={Magnet} label="Quantize" hotkey="Q" onClick={handleQuantize} />
+        <HotkeyButton icon={AlignHorizontalSpaceAround} label="Distribute" hotkey="Ctrl+D" onClick={handleDistribute} />
+        <HotkeyButton icon={UnfoldHorizontal} label="Strum" hotkey="Ctrl+U" onClick={handleStrum} />
+      </ToolGroup>
 
-      <SectionHeader label="ALIGNMENT" />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 3 }}>
-        <HotkeyButton icon={"\u25C0"} label="Align L" hotkey="Alt+L" onClick={handleAlignLeft} />
-        <HotkeyButton icon={"\u25B6"} label="Align R" hotkey="Alt+R" onClick={handleAlignRight} />
-        <HotkeyButton icon={"\u25CF"} label="Center" hotkey="Alt+C" onClick={handleCenter} />
-        <HotkeyButton icon={"\u2195"} label="Space Y" hotkey="Alt+Y" onClick={handleSpaceY} />
-        <HotkeyButton icon={"\u2194"} label="Space X" hotkey="Alt+X" onClick={handleSpaceX} />
-      </div>
+      <SectionHeader label="Alignment" />
+      <ToolGroup label="Alignment">
+        <HotkeyButton icon={AlignLeft} label="Align left" hotkey="Alt+L" onClick={handleAlignLeft} />
+        <HotkeyButton icon={AlignRight} label="Align right" hotkey="Alt+R" onClick={handleAlignRight} />
+        <HotkeyButton icon={AlignCenter} label="Align center" hotkey="Alt+C" onClick={handleCenter} />
+        <HotkeyButton icon={MoveVertical} label="Space vertically" hotkey="Alt+Y" onClick={handleSpaceY} />
+        <HotkeyButton icon={MoveHorizontal} label="Space horizontally" hotkey="Alt+X" onClick={handleSpaceX} />
+      </ToolGroup>
 
-      <SectionHeader label="TRANSFORM" />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 3 }}>
-        <HotkeyButton icon={"\u21BB"} label="Rotate" hotkey="R" onClick={handleRotate} />
-        <HotkeyButton icon={"\u2922"} label="Scale" hotkey="S" onClick={handleScale} />
-        <HotkeyButton icon={"\u2BA8"} label="Shift X" hotkey="Shift+X" onClick={handleShiftX} />
-        <HotkeyButton icon={"\u2BA9"} label="Shift Y" hotkey="Shift+Y" onClick={handleShiftY} />
-        <HotkeyButton icon={"\u2300"} label="Reset" hotkey="Ctrl+R" onClick={handleReset} />
-      </div>
+      <SectionHeader label="Transform" />
+      <ToolGroup label="Transform">
+        <HotkeyButton icon={RotateCw} label="Rotate 90°" hotkey="R" onClick={handleRotate} />
+        <HotkeyButton icon={Scaling} label="Scale X 2×" hotkey="S" onClick={handleScale} />
+        <HotkeyButton icon={ArrowRightLeft} label="Shift X" hotkey="Shift+X" onClick={handleShiftX} />
+        <HotkeyButton icon={ArrowUpDown} label="Shift beat" hotkey="Shift+Y" onClick={handleShiftY} />
+        <HotkeyButton icon={RotateCcw} label="Reset properties" hotkey="Ctrl+R" onClick={handleReset} />
+      </ToolGroup>
     </div>
   );
 }
 
 // ---- Hotkeys sub-tab ----
 
-const NOTE_HOTKEY_SECTIONS = [
+const NOTE_HOTKEY_SECTIONS: HotkeySection[] = [
   {
-    title: "NOTE SELECTION",
+    title: "Note selection",
     keys: [
-      { icon: "A", label: "Select all", hotkey: "Ctrl+A" },
-      { icon: "\u21E7", label: "Extend sel.", hotkey: "Shift+Click" },
-      { icon: "\u21C5", label: "Flip side", hotkey: "F" },
-      { icon: "\u21C4", label: "Mirror X", hotkey: "M" },
-      { icon: "\u232B", label: "Delete", hotkey: "Del" },
-      { icon: "D", label: "Duplicate", hotkey: "Ctrl+D" },
+      { label: "Select all", hotkey: "Ctrl+A" },
+      { label: "Extend selection", hotkey: "Shift+Click" },
+      { label: "Flip side", hotkey: "F" },
+      { label: "Mirror X", hotkey: "M" },
+      { label: "Delete", hotkey: "Del" },
+      { label: "Duplicate", hotkey: "Ctrl+D" },
     ],
   },
   {
-    title: "NOTE TYPES",
+    title: "Note types",
     keys: [
-      { icon: "1", label: "To Tap", hotkey: "Ctrl+1" },
-      { icon: "2", label: "To Drag", hotkey: "Ctrl+2" },
-      { icon: "3", label: "To Flick", hotkey: "Ctrl+3" },
-      { icon: "4", label: "To Hold", hotkey: "Ctrl+4" },
-      { icon: "T", label: "Toggle fake", hotkey: "Ctrl+F" },
-      { icon: "\u223F", label: "Curve track", hotkey: "Ctrl+K" },
+      { label: "Convert to tap", hotkey: "Ctrl+1" },
+      { label: "Convert to drag", hotkey: "Ctrl+2" },
+      { label: "Convert to flick", hotkey: "Ctrl+3" },
+      { label: "Convert to hold", hotkey: "Ctrl+4" },
+      { label: "Toggle fake", hotkey: "Ctrl+F" },
+      { label: "Create curve track", hotkey: "Ctrl+K" },
     ],
   },
   {
-    title: "NAVIGATION",
+    title: "Navigation",
     keys: [
-      { icon: "\u2190", label: "Prev note", hotkey: "\u2190" },
-      { icon: "\u2192", label: "Next note", hotkey: "\u2192" },
-      { icon: "\u2191", label: "Prev line", hotkey: "\u2191" },
-      { icon: "\u2193", label: "Next line", hotkey: "\u2193" },
-      { icon: "J", label: "Jump to beat", hotkey: "Ctrl+J" },
-      { icon: "G", label: "Go to beat", hotkey: "Ctrl+G" },
+      { label: "Previous note", hotkey: "Left" },
+      { label: "Next note", hotkey: "Right" },
+      { label: "Previous line", hotkey: "Up" },
+      { label: "Next line", hotkey: "Down" },
+      { label: "Go to beat", hotkey: "Ctrl+G" },
     ],
   },
 ];
 
 function NoteHotkeys() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {NOTE_HOTKEY_SECTIONS.map((section) => (
-        <React.Fragment key={section.title}>
-          <SectionHeader label={section.title} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 3 }}>
-            {section.keys.map((k) => (
-              <HotkeyButton key={k.label} icon={k.icon} label={k.label} hotkey={k.hotkey} />
-            ))}
-          </div>
-        </React.Fragment>
-      ))}
-    </div>
-  );
+  return <HotkeyList sections={NOTE_HOTKEY_SECTIONS} />;
 }

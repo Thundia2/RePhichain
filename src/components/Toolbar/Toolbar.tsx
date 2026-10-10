@@ -1,98 +1,79 @@
 // ============================================================
-// Toolbar — Left vertical tool strip (42px)
+// Toolbar — Left vertical tool rail (44px)
 //
-// Compact tool buttons with tool-specific accent colors.
-// Includes drawer toggle button at the bottom.
+// Icon-only tools: note tools show their NoteGlyph, the rest use
+// Lucide icons. Names and shortcuts live in the tooltip. The active
+// tool is accent-selected with an accent icon.
 //
 // Recent change: removed the Pattern (Ctrl+G) toolbar button (the
 // hotkey itself remains active in useHotkeys.ts) and added a 9-button
 // event-placement section below the note tools — only visible when
 // the active tab is an unrolled editor. Each event tool maps to a
-// `place_event_<kind>` EditorTool variant and is color-coded via
-// EVENT_COLORS. Keyboard shortcuts (⇪Q .. ⇪O) require CapsLock — see
-// the matching CapsLock-gated handlers in useHotkeys.ts.
+// `place_event_<kind>` EditorTool variant and is colour-coded via
+// EVENT_COLORS. Keyboard shortcuts (CapsLock+Q .. CapsLock+O) require
+// CapsLock — see the matching CapsLock-gated handlers in useHotkeys.ts.
 // ============================================================
 
+import type React from "react";
+import { Diamond, Eraser, Footprints, Magnet, MousePointer2, PanelBottom, Rows3, Timer } from "lucide-react";
 import { useEditorStore } from "../../stores/editorStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTabStore } from "../../stores/tabStore";
 import type { EditorTool } from "../../types/editor";
+import type { NoteKind } from "../../types/chart";
 import { EVENT_COLORS } from "../../constants/eventColors";
+import { IconButton } from "../common/IconButton";
+import { Icon } from "../common/Icon";
+import { NoteGlyph } from "../common/NoteGlyph";
 
 interface ToolDef {
   id: EditorTool;
   label: string;
-  icon: string;
   shortcut: string;
-  color: string;
+  glyph: React.ReactNode;
 }
 
+const NOTE_TOOL = (kind: NoteKind, label: string, shortcut: string): ToolDef => ({
+  id: `place_${kind}` as EditorTool,
+  label,
+  shortcut,
+  glyph: <NoteGlyph kind={kind} />,
+});
+
 const TOOLS: ToolDef[] = [
-  { id: "select", label: "Select", icon: "◇", shortcut: "V", color: "#a0aec0" },
-  { id: "place_tap", label: "Tap", icon: "●", shortcut: "Q", color: "#48b5ff" },
-  { id: "place_drag", label: "Drag", icon: "◆", shortcut: "W", color: "#ffd24a" },
-  { id: "place_flick", label: "Flick", icon: "▲", shortcut: "E", color: "#ff4a6a" },
-  { id: "place_hold", label: "Hold", icon: "▮", shortcut: "R", color: "#4aff7a" },
-  { id: "eraser", label: "Eraser", icon: "✕", shortcut: "X", color: "#ff8a8a" },
+  { id: "select", label: "Select", shortcut: "V", glyph: <Icon icon={MousePointer2} size={16} /> },
+  NOTE_TOOL("tap", "Tap note", "Q"),
+  NOTE_TOOL("drag", "Drag note", "W"),
+  NOTE_TOOL("flick", "Flick note", "E"),
+  NOTE_TOOL("hold", "Hold note", "R"),
+  { id: "eraser", label: "Eraser", shortcut: "X", glyph: <Icon icon={Eraser} size={16} /> },
 ];
 
 // Event-placement tools — shown only on unrolled tabs. Order mirrors
-// the QWERTY top row (Q W E R T Y U I O), all CapsLock-gated. The ⇪
-// glyph (U+21EA) is the standard CapsLock symbol.
+// the QWERTY top row (Q W E R T Y U I O), all CapsLock-gated.
+const EVENT_TOOL = (id: EditorTool, label: string, key: string, color: string): ToolDef => ({
+  id,
+  label,
+  shortcut: `CapsLock+${key}`,
+  glyph: <Icon icon={Diamond} size={16} style={{ color, fill: color, fillOpacity: 0.25 }} />,
+});
+
 const EVENT_TOOLS: ToolDef[] = [
-  { id: "place_event_x",        label: "X Position event",  icon: "◆", shortcut: "⇪Q", color: EVENT_COLORS.x },
-  { id: "place_event_y",        label: "Y Position event",  icon: "◆", shortcut: "⇪W", color: EVENT_COLORS.y },
-  { id: "place_event_rotation", label: "Rotation event",    icon: "◆", shortcut: "⇪E", color: EVENT_COLORS.rotation },
-  { id: "place_event_opacity",  label: "Opacity event",     icon: "◆", shortcut: "⇪R", color: EVENT_COLORS.opacity },
-  { id: "place_event_speed",    label: "Speed event",       icon: "◆", shortcut: "⇪T", color: EVENT_COLORS.speed },
-  { id: "place_event_scale_x",  label: "Scale X event",     icon: "◆", shortcut: "⇪Y", color: EVENT_COLORS.scale_x },
-  { id: "place_event_scale_y",  label: "Scale Y event",     icon: "◆", shortcut: "⇪U", color: EVENT_COLORS.scale_y },
-  { id: "place_event_color",    label: "Color event",       icon: "◆", shortcut: "⇪I", color: EVENT_COLORS.color },
-  { id: "place_event_text",     label: "Text event",        icon: "◆", shortcut: "⇪O", color: EVENT_COLORS.text },
+  EVENT_TOOL("place_event_x", "X position event", "Q", EVENT_COLORS.x),
+  EVENT_TOOL("place_event_y", "Y position event", "W", EVENT_COLORS.y),
+  EVENT_TOOL("place_event_rotation", "Rotation event", "E", EVENT_COLORS.rotation),
+  EVENT_TOOL("place_event_opacity", "Opacity event", "R", EVENT_COLORS.opacity),
+  EVENT_TOOL("place_event_speed", "Speed event", "T", EVENT_COLORS.speed),
+  EVENT_TOOL("place_event_scale_x", "Scale X event", "Y", EVENT_COLORS.scale_x),
+  EVENT_TOOL("place_event_scale_y", "Scale Y event", "U", EVENT_COLORS.scale_y),
+  EVENT_TOOL("place_event_color", "Colour event", "I", EVENT_COLORS.color),
+  EVENT_TOOL("place_event_text", "Text event", "O", EVENT_COLORS.text),
 ];
 
-/**
- * Single tool button. Extracted because note tools and event tools
- * render identical chrome — only the data (id/icon/color/shortcut)
- * differs. Active state colors the left border + tinted background
- * with the tool's own accent.
- */
-function ToolButton({
-  tool, isActive, onClick,
-}: {
-  tool: ToolDef;
-  isActive: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      key={tool.id}
-      onClick={onClick}
-      title={`${tool.label} (${tool.shortcut})`}
-      style={{
-        width: 36,
-        height: 34,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 1,
-        border: "none",
-        borderRadius: 6,
-        cursor: "pointer",
-        background: isActive ? `${tool.color}18` : "transparent",
-        borderLeft: isActive ? `2px solid ${tool.color}` : "2px solid transparent",
-        color: isActive ? tool.color : "#666",
-        fontSize: 14,
-        transition: "all 0.15s",
-        fontFamily: "inherit",
-        padding: 0,
-      }}
-    >
-      <span>{tool.icon}</span>
-      <span style={{ fontSize: 7, opacity: 0.6 }}>{tool.shortcut}</span>
-    </button>
-  );
+const GRID_PRESETS = [11, 21, 31, 17] as const;
+
+function RailDivider() {
+  return <div aria-hidden="true" style={{ width: 20, height: 1, margin: "var(--space-4) 0", background: "var(--border-color)", flexShrink: 0 }} />;
 }
 
 export function Toolbar() {
@@ -121,24 +102,34 @@ export function Toolbar() {
 
   return (
     <div
+      role="toolbar"
+      aria-label="Tools"
+      aria-orientation="vertical"
       style={{
-        width: 42,
+        width: "var(--rail-width)",
         display: "flex",
         flexDirection: "column",
-        gap: 2,
-        padding: "6px 3px",
+        alignItems: "center",
+        gap: "var(--space-2)",
+        padding: "var(--space-8) 0",
         background: "var(--bg-secondary)",
-        borderRight: "1px solid var(--border-color)",
+        borderRight: "var(--rule) solid var(--border-color)",
         flexShrink: 0,
+        overflowY: "auto",
+        overflowX: "hidden",
       }}
     >
       {TOOLS.map((tool) => (
-        <ToolButton
+        <IconButton
           key={tool.id}
-          tool={tool}
-          isActive={activeTool === tool.id}
+          label={tool.label}
+          shortcut={tool.shortcut}
+          tooltipPosition="right"
+          active={activeTool === tool.id}
           onClick={() => setTool(tool.id)}
-        />
+        >
+          {tool.glyph}
+        </IconButton>
       ))}
 
       {/* Event-placement tools — unrolled-only.
@@ -148,177 +139,97 @@ export function Toolbar() {
           unified canvas just ignores the click — no error path). */}
       {isUnrolledTab && (
         <>
-          <div style={{ height: 1, margin: "3px 6px", background: "var(--border-color)" }} />
+          <RailDivider />
           {EVENT_TOOLS.map((tool) => (
-            <ToolButton
+            <IconButton
               key={tool.id}
-              tool={tool}
-              isActive={activeTool === tool.id}
+              label={tool.label}
+              shortcut={tool.shortcut}
+              tooltipPosition="right"
+              active={activeTool === tool.id}
               onClick={() => setTool(tool.id)}
-            />
+            >
+              {tool.glyph}
+            </IconButton>
           ))}
         </>
       )}
 
-      {/* Divider */}
-      <div style={{ height: 1, margin: "3px 6px", background: "var(--border-color)" }} />
+      <RailDivider />
 
-      {/* Beat Sync toggle */}
-      <button
+      <IconButton
+        icon={Timer}
+        label="Beat sync: place notes at the current beat"
+        shortcut="T"
+        tooltipPosition="right"
+        active={beatSyncPlacement}
         onClick={toggleBeatSync}
-        title="Beat Sync (T) — place notes at current beat"
-        style={{
-          width: 36,
-          height: 34,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 1,
-          border: "none",
-          borderRadius: 6,
-          cursor: "pointer",
-          background: beatSyncPlacement ? "#e8a84818" : "transparent",
-          borderLeft: beatSyncPlacement ? "2px solid #e8a848" : "2px solid transparent",
-          color: beatSyncPlacement ? "#e8a848" : "#666",
-          fontSize: 14,
-          transition: "all 0.15s",
-          fontFamily: "inherit",
-          padding: 0,
-        }}
-      >
-        <span>◷</span>
-        <span style={{ fontSize: 7, opacity: 0.6 }}>T</span>
-      </button>
-
-      {/* Step Record toggle */}
-      <button
+      />
+      <IconButton
+        icon={Footprints}
+        label="Step record: advance the beat on each click"
+        shortcut="S"
+        tooltipPosition="right"
+        active={stepRecordActive}
         onClick={toggleStepRecord}
-        title={`Step Record (S) — auto-advance beat on each click`}
-        style={{
-          width: 36,
-          height: 34,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 1,
-          border: "none",
-          borderRadius: 6,
-          cursor: "pointer",
-          background: stepRecordActive ? "#22d3ee18" : "transparent",
-          borderLeft: stepRecordActive ? "2px solid #22d3ee" : "2px solid transparent",
-          color: stepRecordActive ? "#22d3ee" : "#666",
-          fontSize: 14,
-          transition: "all 0.15s",
-          fontFamily: "inherit",
-          padding: 0,
-        }}
-      >
-        <span>{"\u23E9"}</span>
-        <span style={{ fontSize: 7, opacity: 0.6 }}>S</span>
-      </button>
+      />
 
-      {/* Divider */}
-      <div style={{ height: 1, margin: "3px 6px", background: "var(--border-color)" }} />
+      <RailDivider />
 
-      {/* X Snap toggle */}
-      <button
+      <IconButton
+        icon={Magnet}
+        label={`X snap to ${verticalLines}-line grid`}
+        shortcut="Shift+X"
+        tooltipPosition="right"
+        active={xSnapEnabled}
         onClick={toggleXSnap}
-        title={`X Snap (Shift+X) — snap notes to vertical grid (${verticalLines} lines)`}
-        style={{
-          width: 36,
-          height: 28,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          border: "none",
-          borderRadius: 6,
-          cursor: "pointer",
-          background: xSnapEnabled ? "#8b5cf618" : "transparent",
-          borderLeft: xSnapEnabled ? "2px solid #8b5cf6" : "2px solid transparent",
-          color: xSnapEnabled ? "#8b5cf6" : "#666",
-          fontSize: 10,
-          fontWeight: xSnapEnabled ? 700 : 400,
-          transition: "all 0.15s",
-          fontFamily: "inherit",
-          padding: 0,
-        }}
-      >
-        ⊞
-      </button>
+      />
 
-      {/* Vertical line preset pills — set line count AND enable snap in one click */}
-      {([11, 21, 31, 17] as const).map((n) => {
-        const isActive = xSnapEnabled && verticalLines === n;
-        return (
-          <button
-            key={n}
-            onClick={() => {
-              setVerticalLines(n);
-              if (!xSnapEnabled) toggleXSnap();
-            }}
-            title={`${n}-line grid (step ${Math.round(1350 / (n - 1))})`}
-            style={{
-              width: 36,
-              height: 20,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              border: "none",
-              borderRadius: 4,
-              cursor: "pointer",
-              background: isActive ? "#8b5cf618" : "transparent",
-              color: isActive ? "#8b5cf6" : "#555",
-              fontSize: 9,
-              fontWeight: isActive ? 700 : 400,
-              fontFamily: "inherit",
-              padding: 0,
-              transition: "all 0.15s",
-            }}
-          >
-            {n}
-          </button>
-        );
-      })}
+      {/* Vertical line presets — set line count AND enable snap in one click */}
+      <div role="radiogroup" aria-label="X snap grid" className="ui-segmented ui-segmented--sm" style={{ flexDirection: "column", flexShrink: 0 }}>
+        {GRID_PRESETS.map((n) => {
+          const isActive = xSnapEnabled && verticalLines === n;
+          return (
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={isActive}
+              title={`${n}-line grid (step ${Math.round(1350 / (n - 1))})`}
+              className={isActive ? "ui-segmented__opt is-selected" : "ui-segmented__opt"}
+              style={{ width: "var(--control-lg)", padding: 0, fontFamily: "var(--font-mono)", ...(isActive ? { background: "var(--accent-primary)", color: "var(--on-accent)" } : null) }}
+              onClick={() => {
+                setVerticalLines(n);
+                if (!xSnapEnabled) toggleXSnap();
+              }}
+            >
+              {n}
+            </button>
+          );
+        })}
+      </div>
 
-      {/* Divider — separates X snap section from beat grid toggle */}
-      <div style={{ height: 1, margin: "3px 6px", background: "var(--border-color)" }} />
+      <RailDivider />
 
-      {/* Beat Grid toggle — show beat subdivisions perpendicular to line */}
-      <button
+      <IconButton
+        icon={Rows3}
+        label="Beat grid: show beat subdivisions across the line"
+        tooltipPosition="right"
+        active={showBeatGrid}
         onClick={() => {
           const ss = useSettingsStore.getState();
           ss.updateSettings({ showBeatGrid: !ss.showBeatGrid });
         }}
-        title="Beat Grid — show beat subdivisions perpendicular to line"
-        style={{
-          width: 36,
-          height: 28,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          border: "none",
-          borderRadius: 6,
-          cursor: "pointer",
-          background: showBeatGrid ? "#6c8aff18" : "transparent",
-          borderLeft: showBeatGrid ? "2px solid #6c8aff" : "2px solid transparent",
-          color: showBeatGrid ? "#6c8aff" : "#666",
-          fontSize: 10,
-          fontWeight: showBeatGrid ? 700 : 400,
-          transition: "all 0.15s",
-          fontFamily: "inherit",
-          padding: 0,
-        }}
-      >
-        ⊥
-      </button>
+      />
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Panel Drawer toggle (☰) */}
-      <button
+      <IconButton
+        icon={PanelBottom}
+        label={canvasActivePanelId ? "Hide panels" : "Show panels"}
+        tooltipPosition="right"
+        active={!!canvasActivePanelId}
         onClick={() => {
           if (canvasActivePanelId) {
             setCanvasActivePanel(null);
@@ -326,26 +237,7 @@ export function Toolbar() {
             setCanvasActivePanel("timeline");
           }
         }}
-        title="Panels"
-        style={{
-          width: 36,
-          height: 30,
-          border: "none",
-          borderRadius: 6,
-          cursor: "pointer",
-          background: canvasActivePanelId ? "#6c8aff18" : "transparent",
-          color: canvasActivePanelId ? "var(--accent-primary)" : "#555",
-          fontSize: 14,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: "inherit",
-          padding: 0,
-          transition: "all 0.15s",
-        }}
-      >
-        ☰
-      </button>
+      />
     </div>
   );
 }

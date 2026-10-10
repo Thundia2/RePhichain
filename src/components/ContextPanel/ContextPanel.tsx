@@ -6,7 +6,8 @@
 // ============================================================
 
 import { useCallback, useMemo, useRef, useEffect } from "react";
-import { useContextPanelMode, getModeTabs } from "../../hooks/useContextPanelMode";
+import { useContextPanelMode, getModeTabs, MODE_CONFIG } from "../../hooks/useContextPanelMode";
+import { Icon } from "../common/Icon";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useContextPanelStore } from "../../stores/contextPanelStore";
 import { ContextPanelHeader } from "./ContextPanelHeader";
@@ -87,6 +88,12 @@ export function ContextPanel(props: ContextPanelProps) {
     }
   }, [fadeKey]);
 
+  // Keep the active tab visible when the track scrolls sideways
+  const tabTrackRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    tabTrackRef.current?.querySelector<HTMLElement>("[data-active]")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activeTab, mode]);
+
   // Handle tab click
   const handleTabClick = useCallback(
     (tabId: string) => {
@@ -109,7 +116,7 @@ export function ContextPanel(props: ContextPanelProps) {
 
   // Build the content for the active tab
   // Collect all action callbacks to pass down to GlobalMode and MiscToolsTab
-  const actionProps = {
+  const actionProps = useMemo(() => ({
     onShowPasteSpecial: props.onShowPasteSpecial,
     onShowRecordReview: props.onShowRecordReview,
     onShowExportDiff: props.onShowExportDiff,
@@ -120,7 +127,18 @@ export function ContextPanel(props: ContextPanelProps) {
     onShowParametric: props.onShowParametric,
     onShowSpinGenerator: props.onShowSpinGenerator,
     onShowShakeGenerator: props.onShowShakeGenerator,
-  };
+  }), [
+    props.onShowPasteSpecial,
+    props.onShowRecordReview,
+    props.onShowExportDiff,
+    props.onShowSelectiveExport,
+    props.onShowGoToBeat,
+    props.onShowBatchLine,
+    props.onShowLyricsSync,
+    props.onShowParametric,
+    props.onShowSpinGenerator,
+    props.onShowShakeGenerator,
+  ]);
 
   const content = useMemo(() => {
     // AI tab is shared across all modes — renders the same chat interface
@@ -149,7 +167,7 @@ export function ContextPanel(props: ContextPanelProps) {
       }}
     >
       {/* Scoped fade animation */}
-      <style>{`@keyframes ctxFadeIn { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: none; } }`}</style>
+      <style>{`@keyframes ctxFadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
 
       {/* Header */}
       <ContextPanelHeader
@@ -159,30 +177,30 @@ export function ContextPanel(props: ContextPanelProps) {
         onPinnedItemClick={handlePinnedItemClick}
       />
 
-      {/* Tab bar */}
-      <div
-        style={{
-          height: 28,
-          display: "flex",
-          alignItems: "stretch",
-          background: "var(--bg-secondary)",
-          borderBottom: "1px solid var(--border-color)",
-          flexShrink: 0,
-          overflowX: "auto",
-          overflowY: "hidden",
-        }}
-      >
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <TabButton
-              key={tab.id}
-              label={tab.label}
-              isActive={isActive}
-              onClick={() => handleTabClick(tab.id)}
-            />
-          );
-        })}
+      {/* Tab bar — segmented control; scrolls sideways when a mode has many tabs */}
+      <div style={{ padding: "var(--space-8) var(--space-8) 0", flexShrink: 0 }}>
+        <div ref={tabTrackRef} className="ui-segmented ui-segmented--block" role="tablist" aria-label={`${MODE_CONFIG[mode].label} panel`} style={{ overflowX: "auto", scrollbarWidth: "none" }}>
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-label={tab.iconOnly ? tab.label : undefined}
+                title={tab.iconOnly ? tab.label : undefined}
+                data-active={isActive || undefined}
+                className={isActive ? "ui-segmented__opt is-selected" : "ui-segmented__opt"}
+                style={tab.iconOnly ? { flex: "0 0 auto", padding: "0 var(--space-6)" } : { flex: "1 0 auto" }}
+                onClick={() => handleTabClick(tab.id)}
+              >
+                {tab.icon && <Icon icon={tab.icon} size={12} />}
+                {!tab.iconOnly && tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Content area */}
@@ -193,8 +211,8 @@ export function ContextPanel(props: ContextPanelProps) {
           flex: 1,
           overflowY: "auto",
           overflowX: "hidden",
-          padding: 8,
-          animation: "ctxFadeIn 0.18s ease-out",
+          padding: "0 var(--space-8) var(--space-8)",
+          animation: "ctxFadeIn var(--dur-fast) ease-out",
         }}
       >
         {/* Step recording banner — appears in ALL modes when active */}
@@ -204,56 +222,3 @@ export function ContextPanel(props: ContextPanelProps) {
     </div>
   );
 }
-
-// ---- Tab button ----
-
-function TabButton({
-  label,
-  isActive,
-  onClick,
-}: {
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "0 10px",
-        height: "100%",
-        fontSize: 11,
-        fontWeight: isActive ? 600 : 400,
-        fontFamily: "inherit",
-        cursor: "pointer",
-        border: "none",
-        borderBottom: isActive
-          ? "2px solid var(--accent-primary)"
-          : "2px solid transparent",
-        background: isActive ? "var(--bg-secondary)" : "transparent",
-        color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
-        whiteSpace: "nowrap",
-        transition: "color 0.12s, background 0.12s, border-color 0.12s",
-      }}
-      onMouseEnter={(e) => {
-        if (!isActive) {
-          (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
-          (e.currentTarget as HTMLElement).style.background =
-            "rgba(255,255,255,0.03)";
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!isActive) {
-          (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
-          (e.currentTarget as HTMLElement).style.background = "transparent";
-        }
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-

@@ -5,20 +5,33 @@
 // then apply staggered copies of the leader's latest event.
 // ============================================================
 
+import type React from "react";
 import { useState, useMemo, useEffect } from "react";
 import { useMultiSelectedLineIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { createStaggeredEvents, generateEvenOffsets } from "../../../utils/batchEventOffset";
 import type { LineEventKind } from "../../../types/chart";
 import { NumericInput } from "../../common/FormFields";
+import { Button } from "../../common/Button";
+import { SegmentedControl } from "../../common/SegmentedControl";
+import { EmptyState, INPUT_STYLE, SELECT_STYLE } from "../../common/UIKit";
 
 const CHANNEL_OPTIONS: { kind: LineEventKind; label: string; color: string }[] = [
-  { kind: "x", label: "X", color: "var(--event-x, #ff6b6b)" },
-  { kind: "y", label: "Y", color: "var(--event-y, #51cf66)" },
-  { kind: "rotation", label: "Rotation", color: "var(--event-rotation, #ffd43b)" },
-  { kind: "opacity", label: "Opacity", color: "var(--event-opacity, #cc5de8)" },
-  { kind: "speed", label: "Speed", color: "var(--event-speed, #4dabf7)" },
+  { kind: "x", label: "X", color: "var(--event-x)" },
+  { kind: "y", label: "Y", color: "var(--event-y)" },
+  { kind: "rotation", label: "Rotation", color: "var(--event-rotation)" },
+  { kind: "opacity", label: "Opacity", color: "var(--event-opacity)" },
+  { kind: "speed", label: "Speed", color: "var(--event-speed)" },
 ];
+
+const SECTION_LABEL: React.CSSProperties = {
+  fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--text-secondary)", padding: "var(--space-4) 0",
+};
+
+const OFFSET_INPUT: React.CSSProperties = {
+  ...INPUT_STYLE, height: "var(--control-sm)", padding: "0 var(--space-4)",
+  fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", textAlign: "center",
+};
 
 export function BatchOffsetEditor() {
   const multiSelectedLineIndices = useMultiSelectedLineIndices();
@@ -75,35 +88,21 @@ export function BatchOffsetEditor() {
   };
 
   if (multiSelectedLineIndices.length < 2) {
-    return (
-      <div style={{ padding: "20px 8px", textAlign: "center", color: "var(--text-muted)", fontSize: 11 }}>
-        Select 2 or more lines to use batch offset editing
-      </div>
-    );
+    return <EmptyState>Select 2 or more lines to use batch offset editing</EmptyState>;
   }
 
   return (
     <div>
       {/* Leader selector */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-secondary)", padding: "4px 6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-          Leader Line
-        </div>
+      <div style={{ marginBottom: "var(--space-10)" }}>
+        <label htmlFor="batch-offset-leader" style={{ ...SECTION_LABEL, display: "block" }}>
+          Leader line
+        </label>
         <select
+          id="batch-offset-leader"
           value={leaderIndex ?? ""}
           onChange={(e) => setLeaderIndex(Number(e.target.value))}
-          style={{
-            width: "100%",
-            padding: "4px 8px",
-            borderRadius: 6,
-            fontSize: 11,
-            border: "0.5px solid var(--border-color)",
-            backgroundColor: "var(--bg-tertiary)",
-            color: "var(--text-primary)",
-            outline: "none",
-            fontFamily: "inherit",
-            cursor: "pointer",
-          }}
+          style={{ ...SELECT_STYLE, width: "100%" }}
         >
           {multiSelectedLineIndices.map((idx) => (
             <option key={idx} value={idx}>
@@ -114,45 +113,32 @@ export function BatchOffsetEditor() {
       </div>
 
       {/* Channel selector */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-secondary)", padding: "4px 6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-          Event Channel
-        </div>
-        <div style={{ display: "flex", gap: 3, padding: "2px 6px" }}>
-          {CHANNEL_OPTIONS.map((opt) => (
-            <button
-              key={opt.kind}
-              onClick={() => setChannel(opt.kind)}
-              style={{
-                padding: "3px 8px",
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 600,
-                fontFamily: "inherit",
-                cursor: "pointer",
-                border: channel === opt.kind
-                  ? `1px solid ${opt.color}`
-                  : "1px solid var(--border-color)",
-                background: channel === opt.kind
-                  ? `${opt.color}18`
-                  : "var(--bg-primary)",
-                color: channel === opt.kind ? opt.color : "var(--text-muted)",
-                transition: "all 0.12s",
-              }}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+      <div style={{ marginBottom: "var(--space-10)" }}>
+        <div style={SECTION_LABEL}>Event channel</div>
+        <SegmentedControl
+          label="Event channel"
+          size="sm"
+          options={CHANNEL_OPTIONS.map((opt) => ({
+            value: opt.kind,
+            label: (
+              <>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: opt.color, flexShrink: 0 }} />
+                {opt.label}
+              </>
+            ),
+          }))}
+          value={channel}
+          onChange={setChannel}
+        />
       </div>
 
       {/* Follower list with offsets */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 6px" }}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+      <div style={{ marginBottom: "var(--space-10)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-6)", padding: "var(--space-4) 0" }}>
+          <span style={{ fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--text-secondary)" }}>
             Followers ({followers.length})
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
             <NumericInput
               commitMode="blur"
               value={spacing}
@@ -160,108 +146,62 @@ export function BatchOffsetEditor() {
               step={0.25}
               min={0.1}
               fallback={0.5}
-              style={{
-                width: 48,
-                padding: "2px 4px",
-                borderRadius: 4,
-                fontSize: 10,
-                border: "0.5px solid var(--border-color)",
-                backgroundColor: "var(--bg-tertiary)",
-                color: "var(--text-primary)",
-                outline: "none",
-                fontFamily: "'JetBrains Mono', monospace",
-                textAlign: "center",
-              }}
+              title="Stagger spacing (beats)"
+              style={{ ...OFFSET_INPUT, width: 48 }}
             />
-            <button
-              onClick={handleAutoStagger}
-              style={{
-                padding: "2px 6px",
-                borderRadius: 4,
-                fontSize: 9,
-                border: "1px solid var(--border-color)",
-                background: "var(--bg-active)",
-                color: "var(--text-secondary)",
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
+            <Button size="sm" onClick={handleAutoStagger} title="Evenly space follower offsets by this spacing">
               Auto
-            </button>
+            </Button>
           </div>
         </div>
 
-        {followers.map((lineIdx) => (
-          <div
-            key={lineIdx}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "5px 8px",
-              borderRadius: 5,
-              background: "var(--bg-primary)",
-              border: "1px solid var(--border-color)",
-              marginBottom: 3,
-              marginLeft: 6,
-              marginRight: 6,
-            }}
-          >
-            <span style={{ fontSize: 10, color: "var(--accent-primary)", flex: 1 }}>
-              Line {lineIdx}
-            </span>
-            <span style={{ fontSize: 9, color: "var(--text-muted)" }}>
-              {chart?.lines[lineIdx]?.name || ""}
-            </span>
-            <span style={{ fontSize: 9, color: "var(--text-muted)" }}>+</span>
-            <NumericInput
-              commitMode="blur"
-              value={offsets[lineIdx] ?? 0}
-              onChange={(v) =>
-                setOffsets((prev) => ({ ...prev, [lineIdx]: v }))
-              }
-              step={0.25}
-              fallback={0}
+        <div style={{ background: "var(--bg-active)", borderRadius: "var(--radius-xl)", overflow: "hidden" }}>
+          {followers.map((lineIdx, i) => (
+            <div
+              key={lineIdx}
               style={{
-                width: 52,
-                padding: "2px 4px",
-                borderRadius: 4,
-                fontSize: 10,
-                border: "0.5px solid var(--border-color)",
-                backgroundColor: "var(--bg-tertiary)",
-                color: "var(--text-primary)",
-                outline: "none",
-                fontFamily: "'JetBrains Mono', monospace",
-                textAlign: "center",
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--space-6)",
+                padding: "var(--space-4) var(--space-10)",
+                borderBottom: i < followers.length - 1 ? "var(--rule) solid var(--separator)" : "none",
+                fontSize: "var(--fs-caption)",
               }}
-            />
-            <span style={{ fontSize: 9, color: "var(--text-muted)" }}>beats</span>
-          </div>
-        ))}
+            >
+              <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
+                Line {lineIdx}
+              </span>
+              <span style={{ flex: 1, minWidth: 0, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {chart?.lines[lineIdx]?.name || ""}
+              </span>
+              <span style={{ color: "var(--text-secondary)" }}>+</span>
+              <NumericInput
+                commitMode="blur"
+                value={offsets[lineIdx] ?? 0}
+                onChange={(v) =>
+                  setOffsets((prev) => ({ ...prev, [lineIdx]: v }))
+                }
+                step={0.25}
+                fallback={0}
+                title={`Beat offset for line ${lineIdx}`}
+                style={{ ...OFFSET_INPUT, width: 52 }}
+              />
+              <span style={{ color: "var(--text-secondary)" }}>beats</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Apply button */}
-      <div style={{ padding: "6px 6px" }}>
-        <button
-          onClick={handleApply}
-          disabled={leaderIndex === null || followers.length === 0}
-          style={{
-            width: "100%",
-            padding: "7px 16px",
-            borderRadius: 6,
-            border: "none",
-            background: leaderIndex !== null ? "var(--accent-primary)" : "var(--bg-active)",
-            color: leaderIndex !== null ? "#fff" : "var(--text-muted)",
-            cursor: leaderIndex !== null ? "pointer" : "default",
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: "inherit",
-            transition: "all 0.15s",
-          }}
-        >
-          Apply Stagger
-        </button>
-      </div>
+      <Button
+        variant="primary"
+        size="lg"
+        block
+        onClick={handleApply}
+        disabled={leaderIndex === null || followers.length === 0}
+      >
+        Apply stagger
+      </Button>
     </div>
   );
 }

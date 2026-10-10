@@ -3,7 +3,8 @@
 //
 // Shows a label (and optional shortcut chip) on hover or keyboard
 // focus. Rendered in a portal with fixed positioning so it never
-// gets clipped by scrolling panels. The wrapper uses
+// gets clipped by scrolling panels (in the trigger's own document, so
+// popped-out panels get their tooltips in their window). The wrapper uses
 // `display: contents`, so wrapping a control doesn't change layout.
 // ============================================================
 
@@ -33,6 +34,8 @@ export function Tooltip({
   disabled,
 }: TooltipProps) {
   const [coords, setCoords] = useState<{ left: number; top: number; transform: string } | null>(null);
+  // Portal into the trigger's own document, so tooltips work in popped-out windows too.
+  const [host, setHost] = useState<HTMLElement | null>(null);
   const wrapRef = useRef<HTMLSpanElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -40,6 +43,7 @@ export function Tooltip({
     const target = wrapRef.current?.firstElementChild;
     if (!target) return;
     const r = target.getBoundingClientRect();
+    setHost(target.ownerDocument.body);
     switch (position) {
       case "bottom":
         setCoords({ left: r.left + r.width / 2, top: r.bottom + GAP, transform: "translateX(-50%)" });
@@ -87,7 +91,7 @@ export function Tooltip({
             <span>{content}</span>
             {shortcut && <Kbd>{shortcut}</Kbd>}
           </div>,
-          document.body,
+          host ?? document.body,
         )}
     </span>
   );

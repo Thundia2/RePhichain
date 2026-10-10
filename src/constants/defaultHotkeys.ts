@@ -122,10 +122,10 @@ export function formatHotkeyDisplay(key: string): string {
       if (p === "space") return "Space";
       if (p === "delete") return "Del";
       if (p === "backspace") return "Backspace";
-      if (p === "up") return "\u2191";
-      if (p === "down") return "\u2193";
-      if (p === "left") return "\u2190";
-      if (p === "right") return "\u2192";
+      if (p === "up") return "Up";
+      if (p === "down") return "Down";
+      if (p === "left") return "Left";
+      if (p === "right") return "Right";
       return p.toUpperCase();
     })
     .join("+");

@@ -53,7 +53,7 @@ export interface ShakePreset {
 
 export const SHAKE_PRESETS: ShakePreset[] = [
   {
-    name: "Light Tremor",
+    name: "Light tremor",
     description: "Subtle rapid vibration — good for tension buildup",
     config: {
       kind: "x", amplitude: 5, frequency: 8, durationBeats: 1,
@@ -61,7 +61,7 @@ export const SHAKE_PRESETS: ShakePreset[] = [
     },
   },
   {
-    name: "Heavy Quake",
+    name: "Heavy quake",
     description: "Strong shake with fast decay — impact moments",
     config: {
       kind: "x", amplitude: 25, frequency: 6, durationBeats: 2,
@@ -69,7 +69,7 @@ export const SHAKE_PRESETS: ShakePreset[] = [
     },
   },
   {
-    name: "Decaying Buzz",
+    name: "Decaying buzz",
     description: "High-frequency vibration that fades out linearly",
     config: {
       kind: "x", amplitude: 8, frequency: 12, durationBeats: 3,
@@ -77,7 +77,7 @@ export const SHAKE_PRESETS: ShakePreset[] = [
     },
   },
   {
-    name: "Y Bounce",
+    name: "Y bounce",
     description: "Vertical bounce — good for drop sections",
     config: {
       kind: "y", amplitude: 15, frequency: 4, durationBeats: 2,
@@ -85,7 +85,7 @@ export const SHAKE_PRESETS: ShakePreset[] = [
     },
   },
   {
-    name: "Rotation Wobble",
+    name: "Rotation wobble",
     description: "Line rocks back and forth — +/-3 degrees, gentle decay",
     config: {
       kind: "rotation", amplitude: 3, frequency: 4, durationBeats: 2,
@@ -93,7 +93,7 @@ export const SHAKE_PRESETS: ShakePreset[] = [
     },
   },
   {
-    name: "Violent Spin Shake",
+    name: "Violent spin shake",
     description: "Aggressive rotation shake — +/-8 degrees, high frequency",
     config: {
       kind: "rotation", amplitude: 8, frequency: 8, durationBeats: 1,

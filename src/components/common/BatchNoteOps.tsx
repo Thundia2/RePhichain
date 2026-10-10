@@ -2,11 +2,13 @@
 // Batch Note Operations
 //
 // Reusable component for multi-note editing operations:
-// Distribute X, Offset X, Set All Kind, Flip All.
+// Distribute X, Offset X, Set all kind, Flip all.
 // Used by UnifiedInspector and FloatingInspector.
 // ============================================================
 
 import { useState, useCallback } from "react";
+import { AlignHorizontalSpaceAround, Minus, Plus, FlipVertical2 } from "lucide-react";
+import { Button } from "./Button";
 import { Field, SelectField, safeParseNumber } from "./FormFields";
 import { useChartStore } from "../../stores/chartStore";
 import { useSelectedLineIndex, useSelectedNoteIndices } from "../../stores/selection";
@@ -14,7 +16,7 @@ import { distributeX, offsetX } from "../../utils/batchNoteOps";
 import type { NoteKind } from "../../types/chart";
 
 const NOTE_KIND_OPTIONS = [
-  { value: "", label: "— Set all —" },
+  { value: "", label: "Set all" },
   { value: "tap", label: "Tap" },
   { value: "drag", label: "Drag" },
   { value: "flick", label: "Flick" },
@@ -61,54 +63,46 @@ export function BatchNoteOps() {
   if (noteCount < 2) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
       <div style={{
-        fontSize: 11, fontWeight: "bold", color: "var(--text-primary)",
-        borderBottom: "1px solid var(--border-color)", paddingBottom: 4,
+        fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--text-primary)",
+        borderBottom: "var(--rule) solid var(--separator)", paddingBottom: "var(--space-4)",
       }}>
         Batch ({noteCount} notes)
       </div>
 
       {/* Distribute X */}
-      <div style={{ display: "flex", gap: 4, alignItems: "flex-end" }}>
+      <div style={{ display: "flex", gap: "var(--space-4)", alignItems: "flex-end" }}>
         <Field label="From X" value={distStartX} onChange={(v) => {
           const n = safeParseNumber(v); if (n !== null) setDistStartX(n);
         }} />
         <Field label="To X" value={distEndX} onChange={(v) => {
           const n = safeParseNumber(v); if (n !== null) setDistEndX(n);
         }} />
-        <button onClick={handleDistributeX} disabled={noteCount < 2} style={{
-          padding: "3px 8px", fontSize: 10, borderRadius: 3, border: "none",
-          background: "var(--accent-primary)", color: "#fff",
-          cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-        }}>Distribute</button>
+        <Button variant="primary" size="sm" icon={AlignHorizontalSpaceAround} onClick={handleDistributeX} disabled={noteCount < 2}>
+          Distribute
+        </Button>
       </div>
 
       {/* Offset X */}
-      <div style={{ display: "flex", gap: 4, alignItems: "flex-end" }}>
+      <div style={{ display: "flex", gap: "var(--space-4)", alignItems: "flex-end" }}>
         <Field label="Offset" value={offsetDelta} onChange={(v) => {
           const n = safeParseNumber(v); if (n !== null) setOffsetDelta(n);
         }} />
-        <button onClick={() => handleOffsetX(-offsetDelta)} style={{
-          padding: "3px 8px", fontSize: 10, borderRadius: 3, border: "none",
-          background: "var(--bg-active)", color: "var(--text-primary)",
-          cursor: "pointer", fontFamily: "inherit",
-        }}>-X</button>
-        <button onClick={() => handleOffsetX(offsetDelta)} style={{
-          padding: "3px 8px", fontSize: 10, borderRadius: 3, border: "none",
-          background: "var(--bg-active)", color: "var(--text-primary)",
-          cursor: "pointer", fontFamily: "inherit",
-        }}>+X</button>
+        <Button size="sm" icon={Minus} onClick={() => handleOffsetX(-offsetDelta)} title="Shift X by minus the offset" aria-label="Offset X negative">
+          X
+        </Button>
+        <Button size="sm" icon={Plus} onClick={() => handleOffsetX(offsetDelta)} title="Shift X by the offset" aria-label="Offset X positive">
+          X
+        </Button>
       </div>
 
-      {/* Set Kind / Flip */}
-      <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+      {/* Set kind / Flip */}
+      <div style={{ display: "flex", gap: "var(--space-8)", alignItems: "flex-end" }}>
         <SelectField label="Kind" value="" options={NOTE_KIND_OPTIONS} onChange={handleSetKind} />
-        <button onClick={handleFlipAll} style={{
-          padding: "3px 8px", fontSize: 10, borderRadius: 3, border: "none",
-          background: "var(--bg-active)", color: "var(--text-primary)",
-          cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-        }}>Flip</button>
+        <Button size="sm" icon={FlipVertical2} onClick={handleFlipAll} title="Flip above/below">
+          Flip
+        </Button>
       </div>
     </div>
   );
