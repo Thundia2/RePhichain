@@ -121,7 +121,7 @@ export function SelectiveExportDialog({ open, onClose }: SelectiveExportDialogPr
   const inputStyle = {
     backgroundColor: "var(--bg-active)",
     color: "var(--text-primary)",
-    border: "1px solid var(--border-primary)",
+    border: "1px solid var(--border-color)",
   };
 
   return (
@@ -190,7 +190,7 @@ export function SelectiveExportDialog({ open, onClose }: SelectiveExportDialogPr
           </div>
           <div
             className="max-h-32 overflow-y-auto rounded p-1"
-            style={{ backgroundColor: "var(--bg-active)", border: "1px solid var(--border-primary)" }}
+            style={{ backgroundColor: "var(--bg-active)", border: "1px solid var(--border-color)" }}
           >
             {chart.lines.map((line, idx) => (
               <label key={idx} className="flex items-center gap-2 px-1 py-0.5 text-xs cursor-pointer hover:bg-white/5 rounded">

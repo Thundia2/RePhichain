@@ -885,7 +885,7 @@ export function KeyframeBar() {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        background: "var(--bg-accent)",
+        background: "var(--bg-secondary)",
         borderTop: "1px solid var(--border-color)",
         flexShrink: 0,
       }}

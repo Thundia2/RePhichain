@@ -165,7 +165,7 @@ export function ContextPanel(props: ContextPanelProps) {
           height: 28,
           display: "flex",
           alignItems: "stretch",
-          background: "var(--bg-accent)",
+          background: "var(--bg-secondary)",
           borderBottom: "1px solid var(--border-color)",
           flexShrink: 0,
           overflowX: "auto",

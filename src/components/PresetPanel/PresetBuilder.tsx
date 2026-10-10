@@ -116,7 +116,7 @@ function KeyframeStrip({
         className="relative h-6 rounded cursor-crosshair"
         style={{
           backgroundColor: "var(--bg-active)",
-          border: "1px solid var(--border-primary)",
+          border: "1px solid var(--border-color)",
         }}
         onClick={handleStripClick}
       >
@@ -128,7 +128,7 @@ function KeyframeStrip({
             style={{
               left: `${(i / totalBeats) * 100}%`,
               width: 1,
-              backgroundColor: "var(--border-primary)",
+              backgroundColor: "var(--border-color)",
               opacity: 0.5,
             }}
           />
@@ -205,7 +205,7 @@ function KeyframeEditor({
   return (
     <div
       className="rounded p-2 space-y-2"
-      style={{ backgroundColor: "var(--bg-active)", border: "1px solid var(--border-primary)" }}
+      style={{ backgroundColor: "var(--bg-active)", border: "1px solid var(--border-color)" }}
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium" style={{ color: CHANNEL_COLORS[kind] }}>
@@ -230,7 +230,7 @@ function KeyframeEditor({
           style={{
             backgroundColor: "var(--bg-secondary)",
             color: "var(--text-primary)",
-            border: "1px solid var(--border-primary)",
+            border: "1px solid var(--border-color)",
           }}
           commitMode="blur"
           step="0.25"
@@ -256,7 +256,7 @@ function KeyframeEditor({
             style={{
               backgroundColor: "var(--bg-secondary)",
               color: "var(--text-primary)",
-              border: "1px solid var(--border-primary)",
+              border: "1px solid var(--border-color)",
             }}
             commitMode="blur"
             step="0.1"
@@ -285,7 +285,7 @@ function KeyframeEditor({
           style={{
             backgroundColor: "var(--bg-secondary)",
             color: "var(--text-primary)",
-            border: "1px solid var(--border-primary)",
+            border: "1px solid var(--border-color)",
           }}
           value={typeof keyframe.easing === "string" ? keyframe.easing : "linear"}
           onChange={(e) => onUpdate({ easing: e.target.value as EasingType })}
@@ -486,7 +486,7 @@ export function PresetBuilder({ onClose }: { onClose: () => void }) {
     >
       <div
         className="rounded-lg p-4 w-[520px] max-h-[85vh] overflow-y-auto"
-        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-primary)" }}
+        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-color)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
@@ -504,7 +504,7 @@ export function PresetBuilder({ onClose }: { onClose: () => void }) {
               style={{
                 backgroundColor: "var(--bg-active)",
                 color: "var(--text-primary)",
-                border: "1px solid var(--border-primary)",
+                border: "1px solid var(--border-color)",
               }}
               type="text"
               value={name}
@@ -520,7 +520,7 @@ export function PresetBuilder({ onClose }: { onClose: () => void }) {
               style={{
                 backgroundColor: "var(--bg-active)",
                 color: "var(--text-primary)",
-                border: "1px solid var(--border-primary)",
+                border: "1px solid var(--border-color)",
               }}
               type="text"
               value={description}
@@ -537,7 +537,7 @@ export function PresetBuilder({ onClose }: { onClose: () => void }) {
               style={{
                 backgroundColor: "var(--bg-active)",
                 color: "var(--text-primary)",
-                border: "1px solid var(--border-primary)",
+                border: "1px solid var(--border-color)",
               }}
               commitMode="blur"
               integer
@@ -568,7 +568,7 @@ export function PresetBuilder({ onClose }: { onClose: () => void }) {
                   style={{
                     backgroundColor: isEnabled ? CHANNEL_COLORS[kind] : "var(--bg-active)",
                     color: isEnabled ? "white" : "var(--text-secondary)",
-                    border: isEnabled ? "none" : "1px solid var(--border-primary)",
+                    border: isEnabled ? "none" : "1px solid var(--border-color)",
                   }}
                   onClick={() => toggleChannel(kind)}
                 >
