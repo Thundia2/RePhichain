@@ -4,14 +4,20 @@
 // Interactive SVG animations that demonstrate editor concepts:
 // coordinate system, note falling, event transitions, easing
 // curves. Each animation is self-contained and driven by
-// useAnimationLoop from guideComponents.
+// useAnimationLoop from guideComponents. Notes and events keep
+// their identity colours; frames, guides and labels use tokens.
 // ============================================================
 
 import { useRef, useEffect, useState } from "react";
 import { useAnimationLoop, EasingMini } from "./guideComponents";
+import { SegmentedControl } from "../common/SegmentedControl";
+import { Pill } from "../common/UIKit";
 import { NOTE_TYPES, easingFns, EASING_NAMES, EASING_FAMILIES } from "./guideData";
 
 const PI = Math.PI;
+
+/** Monospace SVG text (values, coordinates). */
+const MONO = { fontFamily: "var(--font-mono)" } as const;
 
 // ---- Coordinate System (Canvas tab) ----
 
@@ -56,13 +62,13 @@ export function CanvasCoordAnimation({ active }: { active: boolean }) {
   return (
     <svg width="100%" height="200" viewBox="0 0 300 200" style={{ display: "block", margin: "0 auto" }}>
       <rect x="30" y="10" width="240" height="180" fill="var(--bg-primary)" stroke="var(--border-color)" strokeWidth="1" rx="4" />
-      <line x1="150" y1="10" x2="150" y2="190" stroke="#333" strokeWidth="0.5" strokeDasharray="3,3" />
-      <line x1="30" y1="100" x2="270" y2="100" stroke="#333" strokeWidth="0.5" strokeDasharray="3,3" />
-      <text x="150" y="8" textAnchor="middle" fill="#51cf66" fontSize="8">+450</text>
-      <text x="150" y="198" textAnchor="middle" fill="#ff6b6b" fontSize="8">-450</text>
-      <text x="274" y="103" textAnchor="start" fill="#51cf66" fontSize="8">+675</text>
-      <text x="26" y="103" textAnchor="end" fill="#ff6b6b" fontSize="8">-675</text>
-      <text x="160" y="96" fill="#555" fontSize="7">(0, 0)</text>
+      <line x1="150" y1="10" x2="150" y2="190" stroke="var(--border-color)" strokeWidth="0.5" strokeDasharray="3,3" />
+      <line x1="30" y1="100" x2="270" y2="100" stroke="var(--border-color)" strokeWidth="0.5" strokeDasharray="3,3" />
+      <text x="150" y="8" textAnchor="middle" fill="var(--text-secondary)" fontSize="10" style={MONO}>+450</text>
+      <text x="150" y="199" textAnchor="middle" fill="var(--text-secondary)" fontSize="10" style={MONO}>-450</text>
+      <text x="274" y="103" textAnchor="start" fill="var(--text-secondary)" fontSize="10" style={MONO}>+675</text>
+      <text x="26" y="103" textAnchor="end" fill="var(--text-secondary)" fontSize="10" style={MONO}>-675</text>
+      <text x="158" y="95" fill="var(--text-secondary)" fontSize="10" style={MONO}>(0, 0)</text>
       <g ref={trailRef}>
         {[0.15, 0.1, 0.06, 0.03].map((op, i) => (
           <circle key={i} cx="150" cy="100" r="3" fill="var(--accent-primary)" opacity={op} />
@@ -72,9 +78,9 @@ export function CanvasCoordAnimation({ active }: { active: boolean }) {
         <line x1="-25" y1="0" x2="25" y2="0" stroke="var(--accent-primary)" strokeWidth="2.5" strokeLinecap="round" />
         <circle cx="0" cy="0" r="2.5" fill="var(--accent-primary)" />
       </g>
-      <rect x="105" y="172" width="90" height="18" rx="4" fill="var(--bg-active)" opacity="0.85" />
-      <text ref={labelXRef} x="128" y="184" textAnchor="middle" fill="#ff6b6b" fontSize="9" fontFamily="monospace">X: 0</text>
-      <text ref={labelYRef} x="172" y="184" textAnchor="middle" fill="#51cf66" fontSize="9" fontFamily="monospace">Y: 0</text>
+      <rect x="95" y="171" width="110" height="18" rx="4" fill="var(--bg-active)" opacity="0.85" />
+      <text ref={labelXRef} x="125" y="184" textAnchor="middle" fill="var(--event-x)" fontSize="10" style={MONO}>X: 0</text>
+      <text ref={labelYRef} x="175" y="184" textAnchor="middle" fill="var(--event-y)" fontSize="10" style={MONO}>Y: 0</text>
     </svg>
   );
 }
@@ -116,10 +122,10 @@ export function AboveBelowAnimation({ active }: { active: boolean }) {
   return (
     <svg width="100%" height="120" viewBox="0 0 240 120" style={{ display: "block" }}>
       <line x1="50" y1="60" x2="190" y2="60" stroke="var(--accent-primary)" strokeWidth="2" />
-      <rect ref={aboveRef} x="95" y="15" width="20" height="8" rx="2" fill="#48b5ff" />
-      <text x="75" y="20" fill="var(--text-muted)" fontSize="8">above</text>
-      <rect ref={belowRef} x="125" y="105" width="20" height="8" rx="2" fill="#48b5ff" />
-      <text x="155" y="112" fill="var(--text-muted)" fontSize="8">below</text>
+      <rect ref={aboveRef} x="95" y="15" width="20" height="8" rx="2" fill="var(--note-tap)" />
+      <text x="90" y="21" textAnchor="end" fill="var(--text-secondary)" fontSize="10">Above</text>
+      <rect ref={belowRef} x="125" y="105" width="20" height="8" rx="2" fill="var(--note-tap)" />
+      <text x="152" y="113" fill="var(--text-secondary)" fontSize="10">Below</text>
       <circle ref={flashRef} cx="120" cy="60" r="3" fill="white" opacity="0" />
     </svg>
   );
@@ -174,11 +180,11 @@ export function NoteFallingAnimation({ active }: { active: boolean }) {
       {NOTE_TYPES.map((n, i) => (
         <g key={n.kind}>
           <line x1={10 + i * laneW + 4} y1={lineY} x2={10 + (i + 1) * laneW - 4} y2={lineY} stroke={n.color} strokeWidth="2" opacity="0.5" />
-          <text x={10 + i * laneW + laneW / 2} y="155" textAnchor="middle" fill={n.color} fontSize="9" fontWeight="bold">{n.kind.toUpperCase()}</text>
+          <text x={10 + i * laneW + laneW / 2} y="155" textAnchor="middle" fill={n.color} fontSize="10" fontWeight="600">{n.label}</text>
           <circle ref={el => { flashRefs.current[i] = el; }} cx={10 + i * laneW + laneW / 2} cy={lineY} r="3" fill="white" opacity="0" />
         </g>
       ))}
-      <rect ref={holdBarRef} x={10 + 3 * laneW + laneW / 2 - 5} y={lineY} width="10" height="0" rx="2" fill="#4aff7a" opacity="0.4" />
+      <rect ref={holdBarRef} x={10 + 3 * laneW + laneW / 2 - 5} y={lineY} width="10" height="0" rx="2" fill="var(--note-hold)" opacity="0.4" />
       {NOTE_TYPES.map((n, i) => (
         <g key={n.kind} ref={el => { noteRefs.current[i] = el; }}>
           {n.kind === "tap" && <circle cx={10 + i * laneW + laneW / 2} cy={0} r="6" fill={n.color} />}
@@ -222,22 +228,21 @@ export function EventTransitionAnimation({ active }: { active: boolean }) {
   }, [active, channel, timeRef]);
 
   const channels = [
-    { id: "x" as const, color: "#ff6b6b", label: "X" },
-    { id: "y" as const, color: "#51cf66", label: "Y" },
-    { id: "rotation" as const, color: "#ffd43b", label: "Rotation" },
+    { id: "x" as const, color: "var(--event-x)", label: "X" },
+    { id: "y" as const, color: "var(--event-y)", label: "Y" },
+    { id: "rotation" as const, color: "var(--event-rotation)", label: "Rotation" },
   ];
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 4, marginBottom: 6, justifyContent: "center" }}>
-        {channels.map(ch => (
-          <button key={ch.id} onClick={() => setChannel(ch.id)} style={{
-            padding: "3px 12px", borderRadius: 4, fontSize: 10, fontWeight: 600,
-            border: `1px solid ${channel === ch.id ? ch.color : "var(--border-color)"}`,
-            background: channel === ch.id ? ch.color + "22" : "transparent",
-            color: channel === ch.id ? ch.color : "var(--text-muted)", cursor: "pointer",
-          }}>{ch.label}</button>
-        ))}
+      <div style={{ display: "flex", marginBottom: "var(--space-6)", justifyContent: "center" }}>
+        <SegmentedControl
+          label="Event channel"
+          size="sm"
+          value={channel}
+          onChange={setChannel}
+          options={channels.map(ch => ({ value: ch.id, label: ch.label }))}
+        />
       </div>
       <svg width="100%" height="160" viewBox="0 0 300 160" style={{ display: "block", margin: "0 auto" }}>
         <rect x="10" y="10" width="280" height="120" fill="var(--bg-primary)" stroke="var(--border-color)" rx="4" />
@@ -246,7 +251,7 @@ export function EventTransitionAnimation({ active }: { active: boolean }) {
           <circle cx="0" cy="0" r="2.5" fill="var(--accent-primary)" />
         </g>
         <line x1="20" y1="140" x2="280" y2="140" stroke="var(--border-color)" strokeWidth="0.5" />
-        <circle ref={dotRef} cx="20" cy="140" r="3" fill={channels.find(c => c.id === channel)?.color ?? "#fff"} />
+        <circle ref={dotRef} cx="20" cy="140" r="3" fill={channels.find(c => c.id === channel)?.color ?? "var(--accent-primary)"} />
       </svg>
     </div>
   );
@@ -280,24 +285,24 @@ export function ConstantVsTransition({ active }: { active: boolean }) {
   }, [active, timeRef]);
 
   return (
-    <div style={{ display: "flex", gap: 8 }}>
+    <div style={{ display: "flex", gap: "var(--space-8)" }}>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", marginBottom: 4, fontWeight: 600 }}>Constant</div>
+        <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", textAlign: "center", marginBottom: "var(--space-4)", fontWeight: 600 }}>Constant</div>
         <svg width="100%" height="80" viewBox="0 0 140 80" style={{ display: "block" }}>
           <rect x="5" y="5" width="130" height="70" fill="var(--bg-primary)" stroke="var(--border-color)" rx="4" />
-          <line ref={constLineRef} x1="22" y1="40" x2="58" y2="40" stroke="#cc5de8" strokeWidth="2.5" strokeLinecap="round" />
-          <text x="70" y="70" textAnchor="middle" fill="var(--text-muted)" fontSize="7">Snaps instantly</text>
+          <line ref={constLineRef} x1="22" y1="40" x2="58" y2="40" stroke="var(--accent-primary)" strokeWidth="2.5" strokeLinecap="round" />
+          <text x="70" y="69" textAnchor="middle" fill="var(--text-secondary)" fontSize="10">Snaps instantly</text>
         </svg>
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", marginBottom: 4, fontWeight: 600 }}>Transition</div>
+        <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", textAlign: "center", marginBottom: "var(--space-4)", fontWeight: 600 }}>Transition</div>
         <svg width="100%" height="80" viewBox="0 0 140 80" style={{ display: "block" }}>
           <rect x="5" y="5" width="130" height="70" fill="var(--bg-primary)" stroke="var(--border-color)" rx="4" />
           <g ref={transLineRef}>
-            <line x1="-18" y1="0" x2="18" y2="0" stroke="#51cf66" strokeWidth="2.5" strokeLinecap="round" />
-            <circle cx="0" cy="0" r="2" fill="#51cf66" />
+            <line x1="-18" y1="0" x2="18" y2="0" stroke="var(--accent-primary)" strokeWidth="2.5" strokeLinecap="round" />
+            <circle cx="0" cy="0" r="2" fill="var(--accent-primary)" />
           </g>
-          <text x="70" y="70" textAnchor="middle" fill="var(--text-muted)" fontSize="7">Slides smoothly</text>
+          <text x="70" y="69" textAnchor="middle" fill="var(--text-secondary)" fontSize="10">Slides smoothly</text>
         </svg>
       </div>
     </div>
@@ -355,67 +360,71 @@ export function EasingExplorer({ active }: { active: boolean }) {
   return (
     <div>
       {/* Family filter row */}
-      <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 8 }}>
-        <button onClick={() => setFamilyFilter(null)} style={{
-          padding: "2px 8px", borderRadius: 4, fontSize: 9, fontWeight: 600,
-          border: `1px solid ${!familyFilter ? "var(--accent-primary)" : "var(--border-color)"}`,
-          background: !familyFilter ? "var(--accent-primary)22" : "transparent",
-          color: !familyFilter ? "var(--accent-primary)" : "var(--text-muted)", cursor: "pointer",
-        }}>All</button>
+      <div role="group" aria-label="Easing family" style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap", marginBottom: "var(--space-8)" }}>
+        <Pill active={!familyFilter} onClick={() => setFamilyFilter(null)}>All</Pill>
         {EASING_FAMILIES.map(f => (
-          <button key={f.name} onClick={() => setFamilyFilter(f.name === familyFilter ? null : f.name)} style={{
-            padding: "2px 8px", borderRadius: 4, fontSize: 9,
-            border: `1px solid ${familyFilter === f.name ? "var(--accent-primary)" : "var(--border-color)"}`,
-            background: familyFilter === f.name ? "var(--accent-primary)22" : "transparent",
-            color: familyFilter === f.name ? "var(--accent-primary)" : "var(--text-muted)", cursor: "pointer",
-          }}>{f.name}</button>
+          <Pill key={f.name} active={familyFilter === f.name} onClick={() => setFamilyFilter(f.name === familyFilter ? null : f.name)}>
+            {f.name}
+          </Pill>
         ))}
       </div>
 
       {/* Main explorer */}
-      <div style={{ display: "flex", gap: 10 }}>
+      <div style={{ display: "flex", gap: "var(--space-10)" }}>
         <svg width="240" height="180" viewBox="0 0 240 180" style={{ flexShrink: 0 }}>
           <rect x={pad} y={pad} width={gw} height={gh} fill="var(--bg-primary)" stroke="var(--border-color)" rx="3" />
-          <line x1={pad} y1={pad + gh} x2={pad + gw} y2={pad} stroke="#333" strokeWidth="0.5" strokeDasharray="2,2" />
+          <line x1={pad} y1={pad + gh} x2={pad + gw} y2={pad} stroke="var(--border-color)" strokeWidth="0.5" strokeDasharray="2,2" />
           <polyline points={pts.join(" ")} fill="none" stroke="var(--accent-primary)" strokeWidth="2" strokeLinejoin="round" />
           <circle ref={dotRef} cx={pad} cy={pad + gh} r="4" fill="var(--accent-primary)" />
           <rect ref={barRef} x={pad + gw + 8} y={pad + gh} width="8" height="0" rx="2" fill="var(--accent-primary)" opacity="0.6" />
           <rect x={pad + gw + 8} y={pad} width="8" height={gh} rx="2" fill="none" stroke="var(--border-color)" strokeWidth="0.5" />
-          <text x={pad + gw / 2} y={pad + gh + 16} textAnchor="middle" fill="var(--text-secondary)" fontSize="9" fontFamily="monospace">{selected}</text>
+          <text x={pad + gw / 2} y={pad + gh + 16} textAnchor="middle" fill="var(--text-secondary)" fontSize="10" style={MONO}>{selected}</text>
         </svg>
 
         <div style={{ flex: 1, padding: "4px 0" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-primary)", marginBottom: 4 }}>{selected}</div>
-          <div style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.6 }}>
-            {selected.includes("in_out") ? "Slow start and slow end \u2014 smooth both ways." :
-             selected.includes("_in_") || selected.startsWith("ease_in") ? "Slow start, fast end \u2014 builds momentum." :
-             selected.includes("_out_") || selected.startsWith("ease_out") ? "Fast start, slow end \u2014 decelerates." :
+          <div style={{ fontSize: "var(--fs-headline)", fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--text-primary)", marginBottom: "var(--space-4)" }}>{selected}</div>
+          <div style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+            {selected.includes("in_out") ? "Slow start and slow end — smooth both ways." :
+             selected.includes("_in_") || selected.startsWith("ease_in") ? "Slow start, fast end — builds momentum." :
+             selected.includes("_out_") || selected.startsWith("ease_out") ? "Fast start, slow end — decelerates." :
              "Constant speed, no acceleration."}
             {selected.includes("back") && " Overshoots the target, then returns."}
             {selected.includes("elastic") && " Spring-like oscillation around the target."}
             {selected.includes("bounce") && " Bounces off the target value."}
           </div>
-          <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 8 }}>
+          <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginTop: "var(--space-8)" }}>
             Tip: <strong>In</strong> = slow start, <strong>Out</strong> = slow end, <strong>InOut</strong> = slow both
           </div>
         </div>
       </div>
 
       {/* Grid of all easings */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 4, marginTop: 10, maxHeight: 200, overflowY: "auto" }}>
-        {filteredEasings.map(name => (
-          <div key={name} onClick={() => setSelected(name)} style={{
-            padding: 4, borderRadius: 6, cursor: "pointer", textAlign: "center",
-            background: selected === name ? "var(--bg-active)" : "transparent",
-            border: `1px solid ${selected === name ? "var(--accent-primary)" : "var(--border-color)"}`,
-            transition: "border-color 0.15s",
-          }}>
-            <EasingMini name={name} size={48} />
-            <div style={{ fontSize: 7, color: "var(--text-muted)", marginTop: 1, fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.2 }}>
-              {name.replace(/ease_/g, "").replace(/_/g, " ")}
-            </div>
-          </div>
-        ))}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: "var(--space-4)", marginTop: "var(--space-10)", maxHeight: 200, overflowY: "auto" }}>
+        {filteredEasings.map(name => {
+          const isSel = selected === name;
+          return (
+            <button
+              key={name}
+              type="button"
+              aria-pressed={isSel}
+              className={isSel ? undefined : "ui-hover"}
+              onClick={() => setSelected(name)}
+              style={{
+                display: "flex", flexDirection: "column", alignItems: "center",
+                padding: "var(--space-4)", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer", textAlign: "center",
+                // Unselected cells take their hover wash from .ui-hover (no inline background).
+                background: isSel ? "var(--accent-selected)" : undefined,
+                color: isSel ? "var(--accent-primary)" : "var(--text-secondary)",
+                fontFamily: "inherit",
+              }}
+            >
+              <EasingMini name={name} size={48} />
+              <div style={{ fontSize: "var(--fs-caption)", marginTop: 1, fontFamily: "var(--font-mono)", wordBreak: "break-all", lineHeight: 1.2 }}>
+                {name.replace(/ease_/g, "").replace(/_/g, " ")}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

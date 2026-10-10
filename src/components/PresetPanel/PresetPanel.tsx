@@ -1,8 +1,15 @@
 // ============================================================
 // Preset Panel — Grid of preset cards with curve previews
+//
+// Cards are filled (bg-active) buttons; category colours are the
+// event-kind tokens of the channel each category mostly drives.
 // ============================================================
 
 import { useState, useMemo } from "react";
+import { Search } from "lucide-react";
+import { Icon } from "../common/Icon";
+import { INPUT_STYLE } from "../common/UIKit";
+import { EVENT_KIND_META } from "../../constants/eventConfig";
 import { BUILTIN_PRESETS } from "../../presets/builtinPresets";
 import { applyPresetAtPlayhead } from "../../utils/applyPreset";
 import { useSelectedLineIndex } from "../../stores/selection";
@@ -18,11 +25,11 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  movement: "#ff6b6b",
-  visibility: "#cc5de8",
-  rotation: "#ffd43b",
-  speed: "#4dabf7",
-  compound: "#51cf66",
+  movement: "var(--event-x)",
+  visibility: "var(--event-opacity)",
+  rotation: "var(--event-rotation)",
+  speed: "var(--event-speed)",
+  compound: "var(--event-y)",
 };
 
 export function PresetPanel() {
@@ -61,20 +68,22 @@ export function PresetPanel() {
   return (
     <div className="flex flex-col h-full text-xs" style={{ overflow: "hidden" }}>
       {/* Search bar */}
-      <div className="px-2 py-1 border-b" style={{ borderColor: "var(--border-color)" }}>
+      <div className="px-2 py-1 border-b" style={{ borderColor: "var(--border-color)", position: "relative" }}>
+        <Icon
+          icon={Search}
+          size={12}
+          style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)", pointerEvents: "none" }}
+        />
         <input
           type="text"
-          placeholder="Search presets..."
+          placeholder="Search presets…"
+          aria-label="Search presets"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{
+            ...INPUT_STYLE,
             width: "100%",
-            backgroundColor: "var(--bg-primary)",
-            color: "var(--text-primary)",
-            border: "1px solid var(--border-color)",
-            borderRadius: 6,
-            padding: "4px 8px",
-            fontSize: 11,
+            paddingLeft: 24,
           }}
         />
       </div>
@@ -82,14 +91,17 @@ export function PresetPanel() {
       {/* Category filter */}
       <div
         className="flex items-center gap-1 px-2 py-1 border-b flex-wrap"
-        style={{ borderColor: "var(--border-color)" }}
+        style={{ borderColor: "var(--border-color)", color: "var(--text-secondary)" }}
       >
         <button
-          className="px-1.5 py-0 rounded text-xs"
+          type="button"
+          className="ui-hover px-1.5 py-0 rounded text-xs"
+          aria-pressed={filter === null}
           style={{
-            backgroundColor: filter === null ? "var(--bg-active)" : "transparent",
-            color: filter === null ? "var(--text-primary)" : "var(--text-muted)",
+            backgroundColor: filter === null ? "var(--bg-active)" : undefined,
+            color: filter === null ? "var(--text-primary)" : undefined,
             border: "none",
+            borderRadius: "var(--radius-sm)",
             cursor: "pointer",
           }}
           onClick={() => setFilter(null)}
@@ -99,11 +111,16 @@ export function PresetPanel() {
         {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
           <button
             key={key}
-            className="px-1.5 py-0 rounded text-xs"
+            type="button"
+            className="ui-hover px-1.5 py-0 rounded text-xs"
+            aria-pressed={filter === key}
             style={{
-              backgroundColor: filter === key ? CATEGORY_COLORS[key] + "25" : "transparent",
-              color: filter === key ? CATEGORY_COLORS[key] : "var(--text-muted)",
+              backgroundColor: filter === key
+                ? `color-mix(in srgb, ${CATEGORY_COLORS[key]} 15%, transparent)`
+                : undefined,
+              color: filter === key ? CATEGORY_COLORS[key] : undefined,
               border: "none",
+              borderRadius: "var(--radius-sm)",
               cursor: "pointer",
             }}
             onClick={() => setFilter(filter === key ? null : key)}
@@ -116,51 +133,59 @@ export function PresetPanel() {
       {/* Preset grid */}
       <div
         className="flex-1 overflow-y-auto p-2"
-        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, alignContent: "start" }}
+        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "var(--space-8)", alignContent: "start" }}
       >
         {filtered.map((preset) => (
           <div
             key={preset.id}
+            role="button"
+            tabIndex={0}
+            aria-disabled={selectedLineIndex === null}
             style={{
-              backgroundColor: "var(--bg-primary)",
-              border: "1px solid var(--border-color)",
-              borderRadius: 8,
-              padding: 8,
+              backgroundColor: "var(--bg-active)",
+              borderRadius: "var(--radius-lg)",
+              padding: "var(--space-8)",
               cursor: selectedLineIndex !== null ? "pointer" : "not-allowed",
-              opacity: selectedLineIndex !== null ? 1 : 0.5,
+              opacity: selectedLineIndex !== null ? 1 : "var(--opacity-disabled)",
             }}
             onClick={() => handleApply(preset)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleApply(preset);
+              }
+            }}
             title={preset.description}
           >
             <PresetCurvePreview preset={preset} width={120} height={36} />
-            <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-primary)", marginTop: 4 }}>
+            <div style={{ fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--text-primary)", marginTop: "var(--space-4)" }}>
               {preset.name}
             </div>
-            <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 1 }}>
+            <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginTop: "var(--space-2)" }}>
               {preset.description}
             </div>
-            <div style={{ display: "flex", gap: 3, marginTop: 3 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)", marginTop: "var(--space-4)" }}>
               {preset.channels.map((ch) => (
                 <span
                   key={ch}
                   style={{
-                    fontSize: 8,
-                    padding: "0 3px",
-                    borderRadius: 3,
-                    backgroundColor: CATEGORY_COLORS[preset.category ?? "compound"] + "20",
+                    fontSize: "var(--fs-badge)",
+                    lineHeight: "12px",
+                    padding: "1px var(--space-6)",
+                    borderRadius: "var(--radius-full)",
+                    backgroundColor: `color-mix(in srgb, ${CATEGORY_COLORS[preset.category ?? "compound"]} 14%, transparent)`,
                     color: CATEGORY_COLORS[preset.category ?? "compound"],
-                    textTransform: "uppercase",
-                    fontWeight: 700,
+                    fontWeight: 600,
                   }}
                 >
-                  {ch}
+                  {EVENT_KIND_META[ch]?.label ?? ch}
                 </span>
               ))}
             </div>
           </div>
         ))}
         {filtered.length === 0 && (
-          <div style={{ color: "var(--text-muted)", gridColumn: "1 / -1", textAlign: "center", padding: 16 }}>
+          <div style={{ color: "var(--text-secondary)", gridColumn: "1 / -1", textAlign: "center", padding: "var(--space-16)" }}>
             No presets match your search
           </div>
         )}
@@ -169,7 +194,7 @@ export function PresetPanel() {
       {selectedLineIndex === null && (
         <div
           className="px-2 py-1 border-t"
-          style={{ borderColor: "var(--border-color)", fontSize: 10, color: "var(--text-muted)", textAlign: "center" }}
+          style={{ borderColor: "var(--border-color)", fontSize: "var(--fs-caption)", color: "var(--text-secondary)", textAlign: "center" }}
         >
           Select a line to apply presets
         </div>

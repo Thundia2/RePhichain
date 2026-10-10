@@ -133,10 +133,10 @@ export function ShaderPreview({ effect }: ShaderPreviewProps) {
 
   return (
     <div style={{
-      borderRadius: 6,
+      borderRadius: "var(--radius-md)",
       overflow: "hidden",
-      border: "1px solid var(--border-color)",
-      backgroundColor: "#000",
+      border: "var(--rule) solid var(--border-color)",
+      backgroundColor: "var(--canvas-bg)",
     }}>
       <canvas
         ref={canvasRef}
@@ -149,9 +149,9 @@ export function ShaderPreview({ effect }: ShaderPreviewProps) {
         }}
       />
       <div style={{
-        fontSize: 8,
-        color: "var(--text-muted)",
-        padding: "2px 4px",
+        fontSize: "var(--fs-caption)",
+        color: "var(--text-secondary)",
+        padding: "var(--space-2) var(--space-4)",
         backgroundColor: "var(--bg-secondary)",
         textAlign: "center",
       }}>
@@ -195,7 +195,7 @@ function CSSFilterFallback({
       const sy = (PREVIEW_HEIGHT - sh) / 2;
       ctx.drawImage(illustrationImage, sx, sy, sw, sh);
     } else {
-      // Gradient fallback
+      // Gradient fallback — sample *content* for the effect preview, not chrome
       const grad = ctx.createLinearGradient(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
       grad.addColorStop(0, "#2b2d42");
       grad.addColorStop(0.5, "#8d99ae");
@@ -255,10 +255,10 @@ function CSSFilterFallback({
 
   return (
     <div style={{
-      borderRadius: 6,
+      borderRadius: "var(--radius-md)",
       overflow: "hidden",
-      border: "1px solid var(--border-color)",
-      backgroundColor: "#000",
+      border: "var(--rule) solid var(--border-color)",
+      backgroundColor: "var(--canvas-bg)",
       position: "relative",
     }}>
       <div style={{ position: "relative", width: PREVIEW_WIDTH, height: PREVIEW_HEIGHT }}>
@@ -285,9 +285,9 @@ function CSSFilterFallback({
         )}
       </div>
       <div style={{
-        fontSize: 8,
-        color: "var(--text-muted)",
-        padding: "2px 4px",
+        fontSize: "var(--fs-caption)",
+        color: "var(--text-secondary)",
+        padding: "var(--space-2) var(--space-4)",
         backgroundColor: "var(--bg-secondary)",
         textAlign: "center",
       }}>

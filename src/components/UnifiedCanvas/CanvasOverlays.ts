@@ -12,6 +12,11 @@
 // - drawXSnapGrid() now accepts activeX param for lane highlight (Feature E)
 // - drawBeatGrid() — perpendicular beat subdivision ticks (Feature A)
 // - drawEraserPendingMarks() + drawEraserCountIndicator() — drag-erase visual feedback (Feature B)
+//
+// Chrome colours and fonts come from chromeTheme (design tokens):
+// accent for handles / grids / HUD pills, selection colour for the
+// marquee, error for record / erase feedback, note tokens for note
+// kinds, EVENT_COLORS.rotation for rotation handles and guides.
 // ============================================================
 
 import type { RenderedLineInfo } from "../../canvas/gameRenderer";
@@ -22,6 +27,13 @@ import { evaluateLineEventsWithLayers, distanceAt } from "../../canvas/events";
 import { snapBeat, formatBeat, floatToBeat } from "../../utils/beat";
 import type { BpmList } from "../../utils/bpmList";
 import { formatStepSize } from "../../utils/stepPresets";
+import { chromeTheme, monoFont, sansFont, withAlpha } from "../../canvas/chromeTheme";
+import { EVENT_COLORS } from "../../constants/eventColors";
+
+/** Capitalise the first letter ("tap" → "Tap") for sentence-case labels. */
+function capitalize(text: string): string {
+  return text ? text[0].toUpperCase() + text.slice(1) : text;
+}
 
 // ============================================================
 // Constants (matching EventCanvasRenderer)
@@ -36,7 +48,7 @@ const LINE_HALF_LENGTH = 200; // pixels at scale 1 in EventCanvas coords
 // ============================================================
 
 /**
- * Draw the translate handle (blue circle with crosshair) at the
+ * Draw the translate handle (accent circle with crosshair) at the
  * selected line's center position.
  */
 export function drawTranslateHandle(
@@ -45,12 +57,13 @@ export function drawTranslateHandle(
   screenY: number,
   opacity: number,
 ): void {
+  const t = chromeTheme();
   ctx.save();
   ctx.globalAlpha = Math.max(0.4, opacity);
 
   // Filled circle
-  ctx.fillStyle = "rgba(50, 150, 255, 0.6)";
-  ctx.strokeStyle = "#3296ff";
+  ctx.fillStyle = withAlpha(t.accentPrimary, 0.6);
+  ctx.strokeStyle = t.accentPrimary;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(screenX, screenY, HANDLE_RADIUS, 0, Math.PI * 2);
@@ -58,7 +71,7 @@ export function drawTranslateHandle(
   ctx.stroke();
 
   // Crosshair inside
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+  ctx.strokeStyle = withAlpha(t.onAccent, 0.7);
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(screenX - 4, screenY);
@@ -72,7 +85,7 @@ export function drawTranslateHandle(
 }
 
 /**
- * Draw the rotation handle (orange circle at the line endpoint)
+ * Draw the rotation handle (rotation-event colour circle at the line endpoint)
  * with a small arc indicator.
  */
 export function drawRotationHandle(
@@ -87,10 +100,11 @@ export function drawRotationHandle(
   const handleX = screenX + Math.cos(rotation) * (halfLen + 15);
   const handleY = screenY + Math.sin(rotation) * (halfLen + 15);
 
+  const rotationColor = EVENT_COLORS.rotation;
   ctx.save();
 
-  ctx.fillStyle = "rgba(255, 180, 50, 0.6)";
-  ctx.strokeStyle = "#ffb432";
+  ctx.fillStyle = withAlpha(rotationColor, 0.6);
+  ctx.strokeStyle = rotationColor;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(handleX, handleY, ROTATION_HANDLE_RADIUS, 0, Math.PI * 2);
@@ -98,7 +112,7 @@ export function drawRotationHandle(
   ctx.stroke();
 
   // Rotation arc indicator
-  ctx.strokeStyle = "rgba(255, 180, 50, 0.4)";
+  ctx.strokeStyle = withAlpha(rotationColor, 0.4);
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.arc(screenX, screenY, halfLen + 15, rotation - 0.3, rotation + 0.3);
@@ -148,7 +162,7 @@ export function drawDragGhostLine(
   ctx.translate(screenX, screenY);
   ctx.rotate(ghostRotation);
   ctx.globalAlpha = 0.3;
-  ctx.strokeStyle = "rgba(100, 200, 255, 0.6)";
+  ctx.strokeStyle = withAlpha(chromeTheme().accentPrimary, 0.6);
   ctx.lineWidth = 4;
   ctx.lineCap = "round";
   ctx.beginPath();
@@ -177,7 +191,7 @@ export function drawRotationSnapGuides(
   const count = Math.floor(360 / snapDegrees);
 
   ctx.save();
-  ctx.strokeStyle = "rgba(255, 180, 50, 0.12)";
+  ctx.strokeStyle = withAlpha(EVENT_COLORS.rotation, 0.12);
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 6]);
 
@@ -212,9 +226,10 @@ export function drawSelectionRect(
   const w = Math.abs(x2 - x1);
   const h = Math.abs(y2 - y1);
 
+  const t = chromeTheme();
   ctx.save();
-  ctx.fillStyle = "rgba(50, 150, 255, 0.15)";
-  ctx.strokeStyle = "rgba(50, 150, 255, 0.6)";
+  ctx.fillStyle = withAlpha(t.selectionColor, 0.15);
+  ctx.strokeStyle = withAlpha(t.selectionColor, 0.6);
   ctx.lineWidth = 1;
   ctx.fillRect(x, y, w, h);
   ctx.strokeRect(x, y, w, h);
@@ -360,7 +375,7 @@ export function drawBookmarkOverlay(
     ctx.fill();
 
     if (isSelected) {
-      ctx.strokeStyle = "#fff";
+      ctx.strokeStyle = chromeTheme().textPrimary;
       ctx.lineWidth = 2;
       ctx.globalAlpha = 1;
     } else {
@@ -375,7 +390,7 @@ export function drawBookmarkOverlay(
 
 /**
  * Draw semi-transparent ghost note circles for the pattern tool.
- * Color-coded by note kind: tap=blue, drag=green, flick=red, hold=orange.
+ * Color-coded by note kind with the note tokens (--note-tap|drag|flick|hold).
  */
 export function drawPatternGhostNotes(
   ctx: CanvasRenderingContext2D,
@@ -386,6 +401,7 @@ export function drawPatternGhostNotes(
   const cos = Math.cos(-lineInfo.rotation);
   const sin = Math.sin(-lineInfo.rotation);
 
+  const t = chromeTheme();
   ctx.save();
   ctx.globalAlpha = 0.45;
   for (const ghost of ghostNotes) {
@@ -395,17 +411,17 @@ export function drawPatternGhostNotes(
     const sy = lineInfo.screenY + noteX * sin * lineInfo.scaleY;
 
     const size = 6;
-    ctx.fillStyle = ghost.kind === "tap" ? "#4fc3f7"
-      : ghost.kind === "drag" ? "#aed581"
-      : ghost.kind === "flick" ? "#ef5350"
-      : "#ffb74d"; // hold
+    ctx.fillStyle = ghost.kind === "tap" ? t.noteTap
+      : ghost.kind === "drag" ? t.noteDrag
+      : ghost.kind === "flick" ? t.noteFlick
+      : t.noteHold; // hold
 
     ctx.beginPath();
     ctx.arc(sx, sy, size, 0, Math.PI * 2);
     ctx.fill();
 
-    // Small white border for visibility
-    ctx.strokeStyle = "#fff";
+    // Small light border for visibility
+    ctx.strokeStyle = t.textPrimary;
     ctx.lineWidth = 1;
     ctx.stroke();
   }
@@ -413,7 +429,7 @@ export function drawPatternGhostNotes(
 }
 
 /**
- * Draw purple tick marks perpendicular to the selected line at
+ * Draw accent tick marks perpendicular to the selected line at
  * each X-snap position. Visualizes the snap grid for note placement.
  */
 export function drawXSnapGrid(
@@ -439,7 +455,7 @@ export function drawXSnapGrid(
 
     // Active lane: brighter and wider; others: subtle background grid
     ctx.globalAlpha = isActive ? 0.45 : 0.12;
-    ctx.strokeStyle = "#8b5cf6"; // Purple accent
+    ctx.strokeStyle = chromeTheme().accentPrimary;
     ctx.lineWidth = isActive ? 2 : 1;
 
     // Convert note X (Phigros coords) to screen position along the line
@@ -574,10 +590,11 @@ export function drawBeatGrid(
   }
 
   // ---- Stroke each tier once (3 stroke calls instead of N*2) ----
+  const t = chromeTheme();
   const tiers: [typeof wholePath, string, number][] = [
-    [wholePath, "rgba(108, 138, 255, 0.25)", 1],
-    [halfPath, "rgba(108, 138, 255, 0.15)", 0.5],
-    [subPath, "rgba(108, 138, 255, 0.08)", 0.5],
+    [wholePath, withAlpha(t.accentPrimary, 0.25), 1],
+    [halfPath, withAlpha(t.accentPrimary, 0.15), 0.5],
+    [subPath, withAlpha(t.accentPrimary, 0.08), 0.5],
   ];
   for (const [segments, color, width] of tiers) {
     if (segments.length === 0) continue;
@@ -593,9 +610,9 @@ export function drawBeatGrid(
 
   // ---- Beat number labels (drawn separately since fillText can't batch) ----
   if (labels.length > 0) {
-    ctx.globalAlpha = 0.35;
-    ctx.fillStyle = "#6c8aff";
-    ctx.font = "9px sans-serif";
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = t.textSecondary;
+    ctx.font = monoFont(10);
     // E6: set textAlign explicitly so the beat numbers don't inherit a "right"/"center"
     // alignment left over from an earlier overlay. Scoped by this function's save/restore.
     ctx.textAlign = "left";
@@ -611,7 +628,7 @@ export function drawBeatGrid(
 
 /**
  * Draw a dotted trail showing a line's past and future positions.
- * Future positions are blue, past positions are orange, connected
+ * Future positions are accent, past positions are grey (text-secondary), connected
  * by a dashed line. Dots fade with distance from the current beat.
  */
 export function drawLinePathPreview(
@@ -625,6 +642,7 @@ export function drawLinePathPreview(
   canvasWidth: number,
   canvasHeight: number,
 ): void {
+  const t = chromeTheme();
   ctx.save();
   const dots: { sx: number; sy: number; alpha: number; isFuture: boolean }[] = [];
 
@@ -651,7 +669,7 @@ export function drawLinePathPreview(
   if (dots.length > 1) {
     ctx.setLineDash([4, 4]);
     ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+    ctx.strokeStyle = withAlpha(t.textPrimary, 0.2);
     ctx.beginPath();
     // Sort by temporal order for a connected line
     const allDots = dots.sort((a, b) => {
@@ -666,10 +684,10 @@ export function drawLinePathPreview(
     ctx.setLineDash([]);
   }
 
-  // Draw dots (blue = future, orange = past)
+  // Draw dots (accent = future, grey = past)
   for (const dot of dots) {
     ctx.globalAlpha = dot.alpha;
-    ctx.fillStyle = dot.isFuture ? "#42a5f5" : "#ff9800";
+    ctx.fillStyle = dot.isFuture ? t.accentPrimary : t.textSecondary;
     ctx.beginPath();
     ctx.arc(dot.sx, dot.sy, 4, 0, Math.PI * 2);
     ctx.fill();
@@ -688,7 +706,8 @@ export function drawLinePathPreview(
 // ============================================================
 
 /**
- * Draw a pulsing red border and "REC" label when record mode is active.
+ * Draw a pulsing error-colour border and a "Recording" label (dot + text)
+ * when record mode is active.
  */
 export function drawRecordModeIndicator(
   ctx: CanvasRenderingContext2D,
@@ -699,17 +718,21 @@ export function drawRecordModeIndicator(
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+  const t = chromeTheme();
   const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 300);
 
-  // Pulsing red border
-  ctx.strokeStyle = `rgba(255, 50, 50, ${0.4 + pulse * 0.4})`;
+  // Pulsing error-colour border
+  ctx.strokeStyle = withAlpha(t.error, 0.4 + pulse * 0.4);
   ctx.lineWidth = 3;
   ctx.strokeRect(1.5, 1.5, screenWidth - 3, screenHeight - 3);
 
-  // "● REC" label in top-left
-  ctx.fillStyle = `rgba(255, 50, 50, ${0.7 + pulse * 0.3})`;
-  ctx.font = "bold 12px sans-serif";
-  ctx.fillText("\u25CF REC", 10, 20);
+  // Recording dot + "Recording" label in top-left
+  ctx.fillStyle = withAlpha(t.error, 0.7 + pulse * 0.3);
+  ctx.beginPath();
+  ctx.arc(14, 16, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.font = sansFont(12, 600);
+  ctx.fillText("Recording", 22, 20);
 
   ctx.restore();
 }
@@ -731,16 +754,17 @@ export function drawStepRecordStatus(
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  ctx.fillStyle = "#22d3ee";
-  ctx.font = "bold 11px sans-serif";
+  const t = chromeTheme();
+  ctx.fillStyle = t.accentPrimary;
+  ctx.font = sansFont(11, 600);
   ctx.globalAlpha = 0.85;
 
-  const kindLabel = noteKind.toUpperCase();
+  const kindLabel = capitalize(noteKind);
   const beatLabel = formatBeat(snapBeat(currentBeat, density));
   const stepLabel = formatStepSize(stepSize);
 
   ctx.fillText(
-    `STEP [${kindLabel}] ${stepLabel} \u2014 Beat ${beatLabel}  (${notesPlaced} placed)`,
+    `Step record · ${kindLabel} · ${stepLabel} · Beat ${beatLabel} · ${notesPlaced} placed`,
     10, yOffset,
   );
 
@@ -762,9 +786,10 @@ export function drawCursorHUD(
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  ctx.globalAlpha = 0.5;
-  ctx.fillStyle = "#aaa";
-  ctx.font = "10px monospace";
+  const t = chromeTheme();
+  ctx.globalAlpha = 0.8;
+  ctx.fillStyle = t.textSecondary;
+  ctx.font = monoFont(10);
   ctx.fillText(
     `X: ${canvasX.toFixed(0)}  Y: ${canvasY.toFixed(0)}  Beat: ${beat.toFixed(2)}`,
     8, screenHeight - 6,
@@ -775,8 +800,8 @@ export function drawCursorHUD(
 
 /**
  * Draw a floating beat label near the cursor when a ghost note is active.
- * Shows the note kind icon + snapped beat in "whole:num/denom" format
- * (e.g., "● 4:3/4"). Rendered in screen-space so it doesn't scale with
+ * Shows the note kind name + snapped beat in "whole:num/denom" format
+ * (e.g., "Tap 4:3/4"). Rendered in screen-space so it doesn't scale with
  * viewport zoom.
  *
  * Uses manual arcTo rounded rect (NOT ctx.roundRect()) for broad
@@ -801,15 +826,13 @@ export function drawGhostBeatLabel(
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // Note kind icons for the label prefix
-  const kindIcons: Record<string, string> = {
-    tap: "●", drag: "◆", flick: "▲", hold: "▮",
-  };
-  const kindIcon = kindIcons[kind] || "";
-  const label = `${kindIcon} ${formatBeat(beat)}`;
+  const t = chromeTheme();
+  // Note kind name as the label prefix (sentence case, no glyph icons)
+  const kindName = capitalize(kind);
+  const label = kindName ? `${kindName} ${formatBeat(beat)}` : formatBeat(beat);
 
   // Measure text width for background pill
-  ctx.font = "bold 10px sans-serif";
+  ctx.font = monoFont(10, 600);
   const metrics = ctx.measureText(label);
   const textW = metrics.width;
   const padX = 6;
@@ -824,7 +847,7 @@ export function drawGhostBeatLabel(
   // Background pill (manual rounded rect for broad webview compatibility —
   // ctx.roundRect() is relatively new and may not be available on all
   // Windows WebView2 versions used by Tauri)
-  ctx.fillStyle = "rgba(108, 138, 255, 0.85)";
+  ctx.fillStyle = withAlpha(t.accentPrimary, 0.85);
   const r = 4;
   const px = x, py = y - pillH / 2, pw = pillW, ph = pillH;
   ctx.beginPath();
@@ -840,8 +863,8 @@ export function drawGhostBeatLabel(
   ctx.closePath();
   ctx.fill();
 
-  // White text centered vertically in the pill
-  ctx.fillStyle = "#fff";
+  // On-accent text centered vertically in the pill
+  ctx.fillStyle = t.onAccent;
   ctx.textBaseline = "middle";
   ctx.fillText(label, x + padX, y);
 
@@ -849,7 +872,7 @@ export function drawGhostBeatLabel(
 }
 
 /**
- * Draw red strikethrough marks on notes pending erasure during a drag-erase.
+ * Draw error-colour strikethrough marks on notes pending erasure during a drag-erase.
  * Called from the render loop when an eraser_drag is active.
  * Draws an X mark over each hit note for visual feedback.
  */
@@ -859,7 +882,7 @@ export function drawEraserPendingMarks(
   lineInfo: RenderedLineInfo,
 ): void {
   ctx.save();
-  ctx.strokeStyle = "rgba(255, 70, 70, 0.7)";
+  ctx.strokeStyle = withAlpha(chromeTheme().error, 0.7);
   ctx.lineWidth = 2;
   ctx.lineCap = "round";
 
@@ -902,11 +925,12 @@ export function drawEraserCountIndicator(
 ): void {
   if (count === 0) return; // Nothing to show yet
 
+  const t = chromeTheme();
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const label = `Erasing ${count}`;
-  ctx.font = "bold 10px sans-serif";
+  ctx.font = sansFont(10, 600);
   const metrics = ctx.measureText(label);
   const textW = metrics.width;
   const padX = 6;
@@ -918,8 +942,8 @@ export function drawEraserCountIndicator(
   const x = Math.min(cursorX + 16, screenWidth - pillW - 4);
   const y = cursorY + 24;
 
-  // Red background pill (manual rounded rect for webview compatibility)
-  ctx.fillStyle = "rgba(255, 70, 70, 0.85)";
+  // Error-colour background pill (manual rounded rect for webview compatibility)
+  ctx.fillStyle = withAlpha(t.error, 0.85);
   const r = 4;
   const px = x, py = y - pillH / 2, pw = pillW, ph = pillH;
   ctx.beginPath();
@@ -935,8 +959,8 @@ export function drawEraserCountIndicator(
   ctx.closePath();
   ctx.fill();
 
-  // White text
-  ctx.fillStyle = "#fff";
+  // On-accent text
+  ctx.fillStyle = t.onAccent;
   ctx.textBaseline = "middle";
   ctx.fillText(label, x + padX, y);
 

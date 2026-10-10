@@ -3,14 +3,19 @@
 //
 // Displays chart validation results. Re-validates on demand
 // when the user clicks "Validate". Shows errors, warnings,
-// and info messages with line/note references.
+// and info messages with line/note references; severity is
+// always an icon plus a word in its status colour.
 // ============================================================
 
 import { useState, useCallback } from "react";
+import { CircleAlert, TriangleAlert, Info, CircleCheck, ListChecks } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { selectLineByIndex } from "../../stores/selection";
 import { validateChart, type ValidationIssue, type ValidationSeverity } from "../../utils/chartValidation";
-import { ActionButton, Badge } from "../common/UIKit";
+import { Badge } from "../common/UIKit";
+import { Button } from "../common/Button";
+import { Icon } from "../common/Icon";
 
 const SEVERITY_COLORS: Record<ValidationSeverity, string> = {
   error: "var(--error)",
@@ -18,10 +23,16 @@ const SEVERITY_COLORS: Record<ValidationSeverity, string> = {
   info: "var(--info)",
 };
 
-const SEVERITY_ICONS: Record<ValidationSeverity, string> = {
-  error: "\u2715",
-  warning: "!",
-  info: "i",
+const SEVERITY_ICONS: Record<ValidationSeverity, LucideIcon> = {
+  error: CircleAlert,
+  warning: TriangleAlert,
+  info: Info,
+};
+
+const SEVERITY_LABELS: Record<ValidationSeverity, string> = {
+  error: "Error",
+  warning: "Warning",
+  info: "Info",
 };
 
 export function ValidationPanel() {
@@ -46,20 +57,20 @@ export function ValidationPanel() {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
-          padding: "8px 12px",
-          borderBottom: "1px solid var(--border-color)",
+          gap: "var(--space-8)",
+          padding: "var(--space-8) var(--space-12)",
+          borderBottom: "var(--rule) solid var(--border-color)",
           flexShrink: 0,
         }}
       >
-        <ActionButton variant="primary" onClick={runValidation}>
+        <Button variant="primary" icon={ListChecks} onClick={runValidation}>
           Validate
-        </ActionButton>
+        </Button>
         {hasRun && (
-          <div style={{ display: "flex", gap: 6 }}>
-            <Badge color="#ff4a6a">{errorCount} error{errorCount !== 1 ? "s" : ""}</Badge>
-            <Badge color="#ffd43b">{warningCount} warning{warningCount !== 1 ? "s" : ""}</Badge>
-            <Badge color="#4dabf7">{infoCount} info</Badge>
+          <div style={{ display: "flex", gap: "var(--space-6)" }}>
+            <Badge color={SEVERITY_COLORS.error}>{errorCount} error{errorCount !== 1 ? "s" : ""}</Badge>
+            <Badge color={SEVERITY_COLORS.warning}>{warningCount} warning{warningCount !== 1 ? "s" : ""}</Badge>
+            <Badge color={SEVERITY_COLORS.info}>{infoCount} info</Badge>
           </div>
         )}
       </div>
@@ -68,14 +79,23 @@ export function ValidationPanel() {
       <div style={{ flex: 1, overflowY: "auto" }}>
         {!hasRun && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            <span style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>
               Click "Validate" to check for issues
             </span>
           </div>
         )}
         {hasRun && issues.length === 0 && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
-            <span style={{ fontSize: 11, color: "var(--success)" }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "var(--space-6)",
+                fontSize: "var(--fs-control)",
+                color: "var(--success)",
+              }}
+            >
+              <Icon icon={CircleCheck} size={14} />
               No issues found
             </span>
           </div>
@@ -83,12 +103,13 @@ export function ValidationPanel() {
         {issues.map((issue, idx) => (
           <div
             key={idx}
+            className="ui-hover"
             style={{
               display: "flex",
               alignItems: "flex-start",
-              gap: 10,
-              padding: "8px 12px",
-              borderBottom: "1px solid rgba(42, 42, 53, 0.4)",
+              gap: "var(--space-10)",
+              padding: "var(--space-8) var(--space-12)",
+              borderBottom: "var(--rule) solid var(--separator)",
               cursor: "pointer",
             }}
             onClick={() => {
@@ -99,23 +120,21 @@ export function ValidationPanel() {
           >
             <span
               style={{
-                width: 18,
-                height: 18,
-                borderRadius: "50%",
-                flexShrink: 0,
-                display: "flex",
+                display: "inline-flex",
                 alignItems: "center",
-                justifyContent: "center",
-                fontSize: 9,
-                fontWeight: 700,
-                backgroundColor: SEVERITY_COLORS[issue.severity] + "20" as string,
+                gap: "var(--space-4)",
+                flexShrink: 0,
+                minWidth: 64,
+                fontSize: "var(--fs-control)",
+                fontWeight: 600,
+                lineHeight: 1.4,
                 color: SEVERITY_COLORS[issue.severity],
-                marginTop: 1,
               }}
             >
-              {SEVERITY_ICONS[issue.severity]}
+              <Icon icon={SEVERITY_ICONS[issue.severity]} size={14} />
+              {SEVERITY_LABELS[issue.severity]}
             </span>
-            <span style={{ fontSize: 11, color: "var(--text-primary)", lineHeight: 1.4 }}>
+            <span style={{ fontSize: "var(--fs-control)", color: "var(--text-primary)", lineHeight: 1.4 }}>
               {issue.message}
             </span>
           </div>

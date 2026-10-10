@@ -115,15 +115,13 @@ export function MiniGamePreview() {
         right: 8,
         width: MINI_WIDTH,
         height: MINI_HEIGHT,
-        borderRadius: 6,
-        border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: "var(--radius-lg)",
+        border: "var(--rule) solid var(--border-color)",
         overflow: "hidden",
-        // Subtle glass-like background
-        background: "rgba(14, 22, 41, 0.7)",
-        backdropFilter: "blur(4px)",
-        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+        background: "var(--canvas-bg)",
+        boxShadow: "var(--shadow-popover)",
         pointerEvents: "none", // read-only — clicks pass through
-        zIndex: 10,
+        zIndex: "var(--z-raised)",
       }}
     >
       <canvas
@@ -142,9 +140,8 @@ export function MiniGamePreview() {
           left: 0,
           right: 0,
           textAlign: "center",
-          fontSize: 8,
-          color: "rgba(255,255,255,0.3)",
-          fontFamily: "monospace",
+          fontSize: "var(--fs-caption)",
+          color: "var(--text-secondary)",
           pointerEvents: "none",
         }}
       >

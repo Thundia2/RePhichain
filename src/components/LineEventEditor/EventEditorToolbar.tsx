@@ -1,8 +1,10 @@
 // ============================================================
 // Event Editor Toolbar — Property selector and toggles
 //
-// Horizontal bar with property buttons (X/Y/R/O/S),
-// show-all-lines toggle, show-notes toggle, and beat display.
+// Horizontal bar with property segmented controls (core and
+// extended kinds, each chip with a dot in the event colour),
+// "All lines" / "Notes" toggles, and the beat display. A layer
+// switch row appears when the line has event layers.
 // ============================================================
 
 import { useEditorStore } from "../../stores/editorStore";
@@ -10,22 +12,31 @@ import { useSelectedLineIndex } from "../../stores/selection";
 import { useChartStore } from "../../stores/chartStore";
 import type { LineEventKind } from "../../types/chart";
 import { EVENT_COLORS } from "../../constants/eventColors";
+import { SegmentedControl, type SegmentOption } from "../common/SegmentedControl";
+import { Pill } from "../common/UIKit";
+import { LaneDot } from "../KeyframeBar/KeyframeBarHeader";
+import { LANE_LABEL } from "../KeyframeBar/curveEditorUtils";
 
-const CORE_PROPERTIES: { kind: LineEventKind; short: string; full: string }[] = [
-  { kind: "x", short: "X", full: "X Position" },
-  { kind: "y", short: "Y", full: "Y Position" },
-  { kind: "rotation", short: "R", full: "Rotation" },
-  { kind: "opacity", short: "O", full: "Opacity" },
-  { kind: "speed", short: "S", full: "Speed" },
+const CORE_PROPERTIES: { kind: LineEventKind; full: string }[] = [
+  { kind: "x", full: "X position" },
+  { kind: "y", full: "Y position" },
+  { kind: "rotation", full: "Rotation" },
+  { kind: "opacity", full: "Opacity" },
+  { kind: "speed", full: "Speed" },
 ];
 
-const EXTENDED_PROPERTIES: { kind: LineEventKind; short: string; full: string }[] = [
-  { kind: "scale_x", short: "SX", full: "Scale X" },
-  { kind: "scale_y", short: "SY", full: "Scale Y" },
-  { kind: "color", short: "C", full: "Color" },
-  { kind: "text", short: "T", full: "Text" },
-  { kind: "incline", short: "I", full: "Incline" },
-  { kind: "gif", short: "GIF", full: "GIF Progress" },
+const EXTENDED_PROPERTIES: { kind: LineEventKind; full: string }[] = [
+  { kind: "scale_x", full: "Scale X" },
+  { kind: "scale_y", full: "Scale Y" },
+  { kind: "color", full: "Colour" },
+  { kind: "text", full: "Text" },
+  { kind: "incline", full: "Incline" },
+  { kind: "gif", full: "GIF progress" },
+];
+
+const LAYER_OPTIONS: SegmentOption<number>[] = [
+  ...[0, 1, 2, 3, 4].map((i) => ({ value: i, label: String(i), title: `Event layer ${i}` })),
+  { value: -1, label: "Flat", title: "Flat events (non-layered)" },
 ];
 
 export function EventEditorToolbar() {
@@ -45,123 +56,101 @@ export function EventEditorToolbar() {
     return line?.event_layers != null && line.event_layers.length > 0;
   });
 
-  const renderPropertyButton = ({ kind, short, full }: { kind: LineEventKind; short: string; full: string }) => {
-    const isActive = activeProperty === kind;
-    return (
-      <button
-        key={kind}
-        className="px-2 py-0.5 rounded text-xs font-bold"
-        style={{
-          backgroundColor: isActive ? EVENT_COLORS[kind] + "30" : "transparent",
-          color: isActive ? EVENT_COLORS[kind] : "var(--text-muted)",
-          border: isActive
-            ? `1px solid ${EVENT_COLORS[kind]}`
-            : "1px solid transparent",
-          minWidth: "28px",
-        }}
-        onClick={() => setActiveProperty(kind)}
-        title={full}
-      >
-        {short}
-      </button>
-    );
-  };
+  const toOptions = (props: { kind: LineEventKind; full: string }[]): SegmentOption<LineEventKind>[] =>
+    props.map(({ kind, full }) => ({
+      value: kind,
+      title: full,
+      label: (
+        <>
+          <LaneDot color={EVENT_COLORS[kind]} on={activeProperty === kind} />
+          {LANE_LABEL[kind]}
+        </>
+      ),
+    }));
 
   return (
     <div
-      className="flex flex-col border-b flex-shrink-0"
       style={{
-        borderColor: "var(--border-color)",
+        display: "flex",
+        flexDirection: "column",
+        flexShrink: 0,
+        borderBottom: "var(--rule) solid var(--border-color)",
         backgroundColor: "var(--bg-secondary)",
       }}
     >
       {/* Main toolbar row */}
-      <div className="flex items-center gap-2 px-2 py-1" style={{ height: "32px" }}>
-        {/* Core property buttons */}
-        <div className="flex gap-1">
-          {CORE_PROPERTIES.map(renderPropertyButton)}
-        </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-8)",
+          padding: "0 var(--space-8)",
+          height: 32,
+        }}
+      >
+        {/* Core property selector */}
+        <SegmentedControl
+          label="Core properties"
+          size="sm"
+          options={toOptions(CORE_PROPERTIES)}
+          value={activeProperty}
+          onChange={setActiveProperty}
+        />
 
-        {/* Separator */}
-        <div className="w-px h-4" style={{ backgroundColor: "var(--border-color)" }} />
+        {/* Extended property selector */}
+        <SegmentedControl
+          label="Extended properties"
+          size="sm"
+          options={toOptions(EXTENDED_PROPERTIES)}
+          value={activeProperty}
+          onChange={setActiveProperty}
+        />
 
-        {/* Extended property buttons */}
-        <div className="flex gap-1">
-          {EXTENDED_PROPERTIES.map(renderPropertyButton)}
-        </div>
+        {/* Toggle: Show all lines */}
+        <Pill active={showAllLines} onClick={toggleShowAllLines} title="Show all lines">
+          All lines
+        </Pill>
 
-        {/* Separator */}
-        <div className="w-px h-4" style={{ backgroundColor: "var(--border-color)" }} />
-
-        {/* Toggle: Show All Lines */}
-        <label className="flex items-center gap-1 cursor-pointer text-xs">
-          <input
-            type="checkbox"
-            checked={showAllLines}
-            onChange={toggleShowAllLines}
-            className="w-3 h-3"
-          />
-          <span style={{ color: "var(--text-secondary)" }}>All Lines</span>
-        </label>
-
-        {/* Toggle: Show Notes */}
-        <label className="flex items-center gap-1 cursor-pointer text-xs">
-          <input
-            type="checkbox"
-            checked={showNotes}
-            onChange={toggleShowNotes}
-            className="w-3 h-3"
-          />
-          <span style={{ color: "var(--text-secondary)" }}>Notes</span>
-        </label>
+        {/* Toggle: Show notes */}
+        <Pill active={showNotes} onClick={toggleShowNotes} title="Show notes">
+          Notes
+        </Pill>
 
         {/* Spacer */}
-        <div className="flex-1" />
+        <div style={{ flex: 1 }} />
 
         {/* Beat display */}
-        <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
-          Beat: {currentBeat.toFixed(2)}
+        <span
+          style={{
+            fontSize: "var(--fs-caption)",
+            fontFamily: "var(--font-mono)",
+            color: "var(--text-secondary)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Beat {currentBeat.toFixed(2)}
         </span>
       </div>
 
       {/* Layer selector row (only shown when line has event layers) */}
       {hasLayers && (
         <div
-          className="flex items-center gap-1 px-2 py-0.5 border-t"
-          style={{ borderColor: "var(--border-color)", height: "24px" }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-8)",
+            padding: "0 var(--space-8) var(--space-4)",
+            minHeight: 24,
+          }}
         >
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>Layer:</span>
-          {[0, 1, 2, 3, 4].map((i) => {
-            const isActive = activeLayer === i;
-            return (
-              <button
-                key={i}
-                className="px-1.5 py-0 rounded text-xs"
-                style={{
-                  backgroundColor: isActive ? "var(--accent-primary)" : "transparent",
-                  color: isActive ? "#fff" : "var(--text-muted)",
-                  border: isActive ? "1px solid var(--accent-primary)" : "1px solid transparent",
-                  minWidth: "20px",
-                }}
-                onClick={() => setActiveLayer(i)}
-                title={`Event Layer ${i}`}
-              >
-                {i}
-              </button>
-            );
-          })}
-          <button
-            className="px-1.5 py-0 rounded text-xs"
-            style={{
-              backgroundColor: activeLayer === -1 ? "var(--accent-primary)" : "transparent",
-              color: activeLayer === -1 ? "#fff" : "var(--text-muted)",
-              border: activeLayer === -1 ? "1px solid var(--accent-primary)" : "1px solid transparent",
-            }}
-            onClick={() => setActiveLayer(-1)}
-            title="Flat events (non-layered)"
-          >
-            Flat
-          </button>
+          <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>Layer</span>
+          <SegmentedControl
+            label="Event layer"
+            size="sm"
+            options={LAYER_OPTIONS}
+            value={activeLayer}
+            onChange={setActiveLayer}
+          />
         </div>
       )}
     </div>

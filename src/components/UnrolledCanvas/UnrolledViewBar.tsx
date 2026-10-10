@@ -2,7 +2,7 @@
 // Unrolled View Bar
 //
 // Compact viewport bar above the UnrolledCanvas. Two tri-state
-// segmented pill groups for layer visibility:
+// segmented controls for layer visibility:
 //
 //   Notes  [All] [Ghost] [None]
 //   Events [All] [Ghost] [None]
@@ -24,20 +24,17 @@
 
 import { useEditorStore } from "../../stores/editorStore";
 import type { LayerVisibility } from "../../stores/editorStore";
-import { Pill } from "../common/UIKit";
+import { SegmentedControl, type SegmentOption } from "../common/SegmentedControl";
 
-const STATES: LayerVisibility[] = ["all", "ghost", "none"];
-const LABELS: Record<LayerVisibility, string> = {
-  all: "All",
-  ghost: "Ghost",
-  none: "None",
-};
+const OPTIONS: SegmentOption<LayerVisibility>[] = [
+  { value: "all", label: "All" },
+  { value: "ghost", label: "Ghost" },
+  { value: "none", label: "None" },
+];
 
 /**
- * Single labeled tri-state pill group. Reusing UIKit's `Pill`
- * keeps it visually identical to the layer pills already in
- * KeyframeBar — same hover treatment, same active accent color,
- * same 0.15s transitions.
+ * Single labeled tri-state segmented control — the same
+ * SegmentedControl used for the layer switch in KeyframeBar.
  */
 function VisibilityGroup({
   label,
@@ -52,26 +49,25 @@ function VisibilityGroup({
 }) {
   return (
     <div
-      style={{ display: "flex", alignItems: "center", gap: 4 }}
+      style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}
       title={title}
     >
       <span
         style={{
-          fontSize: 9,
+          fontSize: "var(--fs-control)",
           fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-          color: "var(--text-muted)",
-          marginRight: 2,
+          color: "var(--text-secondary)",
         }}
       >
         {label}
       </span>
-      {STATES.map((s) => (
-        <Pill key={s} active={value === s} onClick={() => onChange(s)}>
-          {LABELS[s]}
-        </Pill>
-      ))}
+      <SegmentedControl
+        label={`${label} visibility`}
+        size="sm"
+        options={OPTIONS}
+        value={value}
+        onChange={onChange}
+      />
     </div>
   );
 }
@@ -85,14 +81,14 @@ export function UnrolledViewBar() {
   return (
     <div
       style={{
-        height: 28,
+        height: 32,
         flexShrink: 0,
         display: "flex",
         alignItems: "center",
-        gap: 14,
-        padding: "0 10px",
-        background: "var(--bg-tertiary)",
-        borderBottom: "1px solid var(--border-color)",
+        gap: "var(--space-16)",
+        padding: "0 var(--space-10)",
+        background: "var(--bg-secondary)",
+        borderBottom: "var(--rule) solid var(--border-color)",
       }}
     >
       <VisibilityGroup
@@ -105,15 +101,6 @@ export function UnrolledViewBar() {
           "Ghost: dim and lock — keeps them as visual reference but no clicks land\n" +
           "None: hide entirely"
         }
-      />
-
-      {/* Inline divider — same 1×14 strip used between KeyframeBar groups */}
-      <div
-        style={{
-          width: 1,
-          height: 14,
-          background: "var(--border-color)",
-        }}
       />
 
       <VisibilityGroup

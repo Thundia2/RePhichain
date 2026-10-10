@@ -2,20 +2,28 @@
 // Onboarding Overlay
 //
 // First-run experience that introduces new users to the editor.
-// Shows 5 steps highlighting key areas of the UI.
+// Shows 5 steps highlighting key areas of the UI, on a popover
+// surface above the overlay scrim.
 // ============================================================
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useId, type ReactNode } from "react";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { Button } from "../common/Button";
+import { Kbd } from "../common/Kbd";
 
-const STEPS = [
+const STEPS: { title: string; body: ReactNode }[] = [
   {
     title: "Welcome to PhiChain",
     body: "PhiChain is a chart editor for the rhythm game Phigros. Create judgment lines, place notes, and animate line events to build playable charts.",
   },
   {
     title: "Toolbar",
-    body: "Use the toolbar on the left to switch between tools: Select (V), Tap (Q), Drag (W), Flick (E), Hold (R), and Eraser (X). Each tool changes how clicks on the timeline behave.",
+    body: (
+      <>
+        Use the toolbar on the left to switch between tools: Select <Kbd>V</Kbd>, Tap <Kbd>Q</Kbd>, Drag <Kbd>W</Kbd>,
+        Flick <Kbd>E</Kbd>, Hold <Kbd>R</Kbd>, and Eraser <Kbd>X</Kbd>. Each tool changes how clicks on the timeline behave.
+      </>
+    ),
   },
   {
     title: "Timeline",
@@ -26,8 +34,13 @@ const STEPS = [
     body: "When you select a note or event, the Inspector shows its properties. Edit beat positions, X coordinates, speed, and easing curves directly.",
   },
   {
-    title: "Keyboard Shortcuts",
-    body: "Press Ctrl+K to open the command palette. Use Space for play/pause, Ctrl+Z/Ctrl+Shift+Z for undo/redo, and arrow keys to nudge selected items.",
+    title: "Keyboard shortcuts",
+    body: (
+      <>
+        Press <Kbd>Ctrl+K</Kbd> to open the command palette. Use <Kbd>Space</Kbd> for play/pause,{" "}
+        <Kbd>Ctrl+Z</Kbd> / <Kbd>Ctrl+Shift+Z</Kbd> for undo/redo, and the arrow keys to nudge selected items.
+      </>
+    ),
   },
 ];
 
@@ -38,6 +51,7 @@ export function OnboardingOverlay() {
   const [dontShowAgain, setDontShowAgain] = useState(false);
 
   const [visible, setVisible] = useState(true);
+  const titleId = useId();
 
   const handleDismiss = useCallback(() => {
     if (dontShowAgain) {
@@ -66,54 +80,94 @@ export function OnboardingOverlay() {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0, 0, 0, 0.7)" }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: "var(--z-dropdown)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "var(--overlay)",
+      }}
     >
       <div
-        className="rounded-xl p-6 max-w-md w-full mx-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="ui-popover"
         style={{
-          backgroundColor: "var(--bg-secondary)",
-          border: "1px solid var(--border-color)",
+          width: "100%",
+          maxWidth: 448,
+          margin: "0 var(--space-16)",
+          padding: "var(--space-24)",
           color: "var(--text-primary)",
         }}
       >
         {/* Step indicator */}
-        <div className="flex gap-1.5 mb-4 justify-center">
+        <div style={{ display: "flex", gap: "var(--space-6)", marginBottom: "var(--space-16)", justifyContent: "center" }}>
           {STEPS.map((_, idx) => (
             <div
               key={idx}
-              className="rounded-full transition-all"
               style={{
                 width: idx === currentStep ? 20 : 8,
                 height: 8,
-                backgroundColor: idx === currentStep
-                  ? "var(--accent-primary)"
-                  : idx < currentStep
-                    ? "var(--accent-primary)"
-                    : "var(--bg-active)",
-                opacity: idx <= currentStep ? 1 : 0.4,
+                borderRadius: "var(--radius-full)",
+                transition: "width var(--dur-base) var(--ease-out), background-color var(--dur-base)",
+                backgroundColor: idx <= currentStep ? "var(--accent-primary)" : "var(--fill-strong)",
               }}
             />
           ))}
         </div>
 
         {/* Content */}
-        <h2 className="text-base font-bold mb-2 text-center">{step.title}</h2>
+        <h2
+          id={titleId}
+          style={{
+            fontSize: "var(--fs-title)",
+            lineHeight: "20px",
+            fontWeight: 600,
+            textAlign: "center",
+            marginBottom: "var(--space-8)",
+          }}
+        >
+          {step.title}
+        </h2>
         <p
-          className="text-xs leading-relaxed text-center mb-6"
-          style={{ color: "var(--text-secondary)" }}
+          style={{
+            fontSize: "var(--fs-body)",
+            lineHeight: "20px",
+            textAlign: "center",
+            color: "var(--text-secondary)",
+            marginBottom: "var(--space-24)",
+          }}
         >
           {step.body}
         </p>
 
         {/* Step counter */}
-        <div className="text-[10px] text-center mb-4" style={{ color: "var(--text-muted)" }}>
+        <div
+          style={{
+            fontSize: "var(--fs-caption)",
+            textAlign: "center",
+            color: "var(--text-secondary)",
+            marginBottom: "var(--space-16)",
+          }}
+        >
           Step {currentStep + 1} of {STEPS.length}
         </div>
 
         {/* Controls */}
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-1.5 text-[10px] cursor-pointer" style={{ color: "var(--text-muted)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-8)" }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-6)",
+              fontSize: "var(--fs-caption)",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+            }}
+          >
             <input
               type="checkbox"
               checked={dontShowAgain}
@@ -123,25 +177,13 @@ export function OnboardingOverlay() {
             Don't show again
           </label>
 
-          <div className="flex gap-2">
-            <button
-              className="px-3 py-1.5 rounded text-xs"
-              style={{
-                backgroundColor: "var(--bg-active)",
-                color: "var(--text-secondary)",
-                border: "1px solid var(--border-color)",
-              }}
-              onClick={handleSkip}
-            >
+          <div style={{ display: "flex", gap: "var(--space-8)" }}>
+            <Button variant="ghost" onClick={handleSkip}>
               Skip
-            </button>
-            <button
-              className="px-4 py-1.5 rounded text-xs font-medium"
-              style={{ backgroundColor: "var(--accent-primary)", color: "#fff" }}
-              onClick={handleNext}
-            >
+            </Button>
+            <Button variant="primary" onClick={handleNext}>
               {currentStep < STEPS.length - 1 ? "Next" : "Done"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

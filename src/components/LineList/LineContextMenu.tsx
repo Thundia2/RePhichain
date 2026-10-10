@@ -1,12 +1,16 @@
 // ============================================================
 // Line Context Menu — Right-click menu for LineList items
 //
-// Actions: Open Event Editor, Duplicate, Delete, Set Category.
+// Actions: Open event editor, Duplicate, Delete, Set category.
+// A ui-popover of ui-menu-items; hover comes from CSS.
 // ============================================================
 
 import { useState } from "react";
+import { SquarePen, Copy, Trash2, Tag, ChevronRight, ChevronDown, Check } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { useTabStore } from "../../stores/tabStore";
+import { Icon } from "../common/Icon";
 import {
   LINE_CATEGORY_COLORS,
   LINE_CATEGORY_LABELS,
@@ -44,7 +48,7 @@ export function LineContextMenu({
     <>
       {/* Backdrop */}
       <div
-        style={{ position: "fixed", inset: 0, zIndex: 99 }}
+        style={{ position: "fixed", inset: 0, zIndex: "calc(var(--z-dropdown) - 1)" }}
         onClick={onClose}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -53,61 +57,65 @@ export function LineContextMenu({
       />
       {/* Menu */}
       <div
+        role="menu"
+        aria-label="Line actions"
+        className="ui-popover"
         style={{
           position: "fixed",
           left: clampedX,
           top: clampedY,
-          zIndex: 100,
-          backgroundColor: "var(--bg-secondary)",
-          border: "1px solid var(--border-color)",
-          borderRadius: 8,
-          padding: 4,
+          zIndex: "var(--z-dropdown)",
           minWidth: menuWidth,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
         }}
       >
         <MenuItem
-          label="Open Event Editor"
+          icon={SquarePen}
+          label="Open event editor"
           onClick={() => {
             openLineEventEditor(lineIndex, line.name);
             onClose();
           }}
         />
         <MenuItem
-          label="Duplicate Line"
+          icon={Copy}
+          label="Duplicate line"
           onClick={() => {
             duplicateLine(lineIndex);
             onClose();
           }}
         />
         <MenuItem
-          label="Delete Line"
+          icon={Trash2}
+          label="Delete line"
           onClick={() => {
             removeLine(lineIndex);
             onClose();
           }}
           danger
         />
-        <MenuSeparator />
+        <div className="ui-menu-separator" role="separator" />
         <MenuItem
-          label={`Category ${showCategorySubmenu ? "▾" : "▸"}`}
+          icon={Tag}
+          label="Category"
+          trailing={<Icon icon={showCategorySubmenu ? ChevronDown : ChevronRight} size={12} style={{ color: "var(--text-secondary)" }} />}
+          ariaExpanded={showCategorySubmenu}
           onClick={() => setShowCategorySubmenu(!showCategorySubmenu)}
         />
         {showCategorySubmenu && (
-          <div style={{ paddingLeft: 8 }}>
+          <div style={{ paddingLeft: "var(--space-8)" }}>
             {(["gameplay", "visual", "text", "helper"] as const).map((cat) => (
               <MenuItem
                 key={cat}
                 label={LINE_CATEGORY_LABELS[cat]}
-                icon={
+                leading={
                   <span
+                    aria-hidden="true"
                     style={{
                       width: 8,
                       height: 8,
-                      borderRadius: "50%",
+                      borderRadius: "var(--radius-full)",
                       backgroundColor: LINE_CATEGORY_COLORS[cat],
                       display: "inline-block",
-                      marginRight: 6,
                       flexShrink: 0,
                     }}
                   />
@@ -119,7 +127,7 @@ export function LineContextMenu({
                 }}
               />
             ))}
-            <MenuSeparator />
+            <div className="ui-menu-separator" role="separator" />
             <MenuItem
               label="None"
               active={!line._category}
@@ -141,50 +149,35 @@ function MenuItem({
   danger,
   active,
   icon,
+  leading,
+  trailing,
+  ariaExpanded,
 }: {
   label: string;
   onClick: () => void;
   danger?: boolean;
   active?: boolean;
-  icon?: React.ReactNode;
+  icon?: LucideIcon;
+  leading?: React.ReactNode;
+  trailing?: React.ReactNode;
+  ariaExpanded?: boolean;
 }) {
+  const isChoice = active !== undefined;
   return (
-    <div
+    <button
+      type="button"
+      role={isChoice ? "menuitemradio" : "menuitem"}
+      aria-checked={isChoice ? active : undefined}
+      aria-expanded={ariaExpanded}
       onClick={onClick}
-      style={{
-        padding: "6px 10px",
-        fontSize: 11,
-        cursor: "pointer",
-        borderRadius: 4,
-        color: danger
-          ? "var(--error)"
-          : active
-            ? "var(--accent-primary)"
-            : "var(--text-primary)",
-        display: "flex",
-        alignItems: "center",
-      }}
-      onMouseEnter={(e) =>
-        (e.currentTarget.style.backgroundColor = "var(--bg-active)")
-      }
-      onMouseLeave={(e) =>
-        (e.currentTarget.style.backgroundColor = "transparent")
-      }
+      className={danger ? "ui-menu-item ui-menu-item--danger" : "ui-menu-item"}
+      style={active ? { color: "var(--accent-primary)" } : undefined}
     >
-      {icon}
-      {label}
-    </div>
-  );
-}
-
-function MenuSeparator() {
-  return (
-    <div
-      style={{
-        height: 1,
-        backgroundColor: "var(--border-color)",
-        margin: "4px 0",
-      }}
-    />
+      {icon && <Icon icon={icon} size={14} style={danger || active ? undefined : { color: "var(--text-secondary)" }} />}
+      {leading}
+      <span style={{ flex: 1, minWidth: 0 }}>{label}</span>
+      {active && <Icon icon={Check} size={12} />}
+      {trailing}
+    </button>
   );
 }

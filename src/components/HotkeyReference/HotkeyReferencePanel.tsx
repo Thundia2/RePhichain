@@ -3,94 +3,73 @@
 //
 // Quick-reference card showing all keyboard shortcuts grouped
 // by category. Accessible via Command Palette or View menu.
+// Rendered with the shared HotkeyList (cards of label + Kbd).
 // ============================================================
 
-const HOTKEY_GROUPS: { title: string; keys: { key: string; description: string }[] }[] = [
+import { HotkeyList, type HotkeySection } from "../ContextPanel/shared/HotkeyList";
+
+const HOTKEY_GROUPS: HotkeySection[] = [
   {
     title: "Tools",
     keys: [
-      { key: "V", description: "Select tool" },
-      { key: "X", description: "Eraser tool" },
-      { key: "Q", description: "Place Tap" },
-      { key: "W", description: "Place Drag" },
-      { key: "E", description: "Place Flick" },
-      { key: "R", description: "Place Hold" },
+      { hotkey: "V", label: "Select tool" },
+      { hotkey: "X", label: "Eraser tool" },
+      { hotkey: "Q", label: "Place tap" },
+      { hotkey: "W", label: "Place drag" },
+      { hotkey: "E", label: "Place flick" },
+      { hotkey: "R", label: "Place hold" },
     ],
   },
   {
     title: "Panels",
     keys: [
-      { key: "L", description: "Toggle line drawer" },
-      { key: "I", description: "Toggle inspector" },
-      { key: "K", description: "Toggle keyframe bar" },
-      { key: "Shift+K", description: "Toggle curve editor" },
-      { key: "Alt+1", description: "Timeline panel" },
-      { key: "Alt+2", description: "Lines panel" },
-      { key: "Alt+3", description: "Effects panel" },
+      { hotkey: "L", label: "Toggle line drawer" },
+      { hotkey: "I", label: "Toggle inspector" },
+      { hotkey: "K", label: "Toggle keyframe bar" },
+      { hotkey: "Shift+K", label: "Toggle curve editor" },
+      { hotkey: "Alt+1", label: "Timeline panel" },
+      { hotkey: "Alt+2", label: "Lines panel" },
+      { hotkey: "Alt+3", label: "Effects panel" },
     ],
   },
   {
     title: "Playback",
     keys: [
-      { key: "Space", description: "Play / Pause" },
-      { key: "Left / Right", description: "Seek backward / forward" },
+      { hotkey: "Space", label: "Play / pause" },
+      { hotkey: "Left / Right", label: "Seek backward / forward" },
     ],
   },
   {
     title: "Editing",
     keys: [
-      { key: "Ctrl+Z", description: "Undo" },
-      { key: "Ctrl+Shift+Z", description: "Redo" },
-      { key: "Ctrl+C", description: "Copy" },
-      { key: "Ctrl+X", description: "Cut" },
-      { key: "Ctrl+V", description: "Paste" },
-      { key: "Delete", description: "Delete selected" },
-      { key: "F", description: "Flip above/below" },
+      { hotkey: "Ctrl+Z", label: "Undo" },
+      { hotkey: "Ctrl+Shift+Z", label: "Redo" },
+      { hotkey: "Ctrl+C", label: "Copy" },
+      { hotkey: "Ctrl+X", label: "Cut" },
+      { hotkey: "Ctrl+V", label: "Paste" },
+      { hotkey: "Delete", label: "Delete selected" },
+      { hotkey: "F", label: "Flip above/below" },
     ],
   },
   {
     title: "Other",
     keys: [
-      { key: "Ctrl+K", description: "Command palette" },
-      { key: "Ctrl+N", description: "New chart" },
-      { key: "Ctrl+S", description: "Save project" },
-      { key: "Alt+R", description: "Toggle record mode" },
-      { key: "Alt+M", description: "Toggle improvisation mode" },
+      { hotkey: "Ctrl+K", label: "Command palette" },
+      { hotkey: "Ctrl+N", label: "New chart" },
+      { hotkey: "Ctrl+S", label: "Save project" },
+      { hotkey: "Alt+R", label: "Toggle record mode" },
+      { hotkey: "Alt+M", label: "Toggle improvisation mode" },
     ],
   },
 ];
 
 export function HotkeyReferencePanel() {
   return (
-    <div style={{ padding: 12, overflow: "auto", height: "100%" }}>
-      <div style={{ fontSize: 13, fontWeight: "bold", color: "var(--text-primary)", marginBottom: 12 }}>
-        Keyboard Shortcuts
+    <div style={{ padding: "var(--space-12)", overflow: "auto", height: "100%" }}>
+      <div style={{ fontSize: "var(--fs-headline)", fontWeight: 600, color: "var(--text-primary)" }}>
+        Keyboard shortcuts
       </div>
-      {HOTKEY_GROUPS.map((group) => (
-        <div key={group.title} style={{ marginBottom: 16 }}>
-          <div style={{
-            fontSize: 11, fontWeight: "bold", color: "var(--text-muted)",
-            textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6,
-          }}>
-            {group.title}
-          </div>
-          {group.keys.map((entry) => (
-            <div key={entry.key} style={{
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              padding: "3px 0", fontSize: 12,
-            }}>
-              <span style={{ color: "var(--text-secondary)" }}>{entry.description}</span>
-              <kbd style={{
-                background: "var(--bg-primary)", border: "1px solid var(--border-color)",
-                borderRadius: 3, padding: "1px 6px", fontSize: 11,
-                fontFamily: "monospace", color: "var(--text-primary)",
-              }}>
-                {entry.key}
-              </kbd>
-            </div>
-          ))}
-        </div>
-      ))}
+      <HotkeyList sections={HOTKEY_GROUPS} />
     </div>
   );
 }

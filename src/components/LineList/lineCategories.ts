@@ -1,14 +1,18 @@
 // ============================================================
 // Line Categories — Color-coded organizational tags
+//
+// Category colours are design tokens (CSS variables), so they work in
+// any CSS colour context; use color-mix() for tints, never string
+// concatenation of alpha suffixes.
 // ============================================================
 
 import type { Line } from "../../types/chart";
 
 export const LINE_CATEGORY_COLORS: Record<string, string> = {
-  gameplay: "#4dabf7",
-  visual: "#ffd43b",
-  text: "#51cf66",
-  helper: "#868e96",
+  gameplay: "var(--info)",
+  visual: "var(--warning)",
+  text: "var(--event-y)",
+  helper: "var(--text-secondary)",
 };
 
 export const LINE_CATEGORY_LABELS: Record<string, string> = {

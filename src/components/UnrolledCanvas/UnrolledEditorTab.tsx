@@ -34,6 +34,7 @@ import { useGroupStore } from "../../stores/groupStore";
 import { CanvasPanelDrawer } from "../UnifiedCanvas/CanvasPanelDrawer";
 import { GroupEditOverlay } from "../GroupManager/GroupEditOverlay";
 import { FloatingInspector } from "../UnifiedCanvas/FloatingInspector";
+import { Pill } from "../common/UIKit";
 
 // ============================================================
 // Props — lineIndex locks to a specific line (per-line tab mode)
@@ -152,25 +153,20 @@ export function UnrolledEditorTab({ lineIndex }: UnrolledEditorTabProps = {}) {
           {/* Per-line header or full LineStrip */}
           {isPerLineTab ? (
             <div style={{
-              height: 30, display: "flex", alignItems: "center", gap: 8,
-              padding: "0 12px", background: "var(--bg-tertiary)",
-              borderBottom: "1px solid var(--border-color)", fontSize: 12, flexShrink: 0,
+              height: 30, display: "flex", alignItems: "center", gap: "var(--space-8)",
+              padding: "0 var(--space-12)", background: "var(--bg-secondary)",
+              borderBottom: "var(--rule) solid var(--border-color)", fontSize: "var(--fs-body)", flexShrink: 0,
             }}>
-              <span style={{ opacity: 0.5 }}>Line:</span>
+              <span style={{ color: "var(--text-secondary)" }}>Line</span>
               <span style={{ fontWeight: 600 }}>{lineName}</span>
               <div style={{ flex: 1 }} />
-              <button
+              <Pill
+                active={followPlayback}
                 onClick={toggleFollow}
                 title={followPlayback ? "Following playback (click to make independent)" : "Independent scroll (click to sync with playback)"}
-                style={{
-                  background: "none", border: "1px solid var(--border-color)", borderRadius: 3,
-                  color: followPlayback ? "#22c55e" : "var(--text-secondary)",
-                  cursor: "pointer", fontSize: 11, padding: "2px 8px",
-                  display: "flex", alignItems: "center", gap: 4,
-                }}
               >
                 {followPlayback ? "Synced" : "Independent"}
-              </button>
+              </Pill>
             </div>
           ) : (
             <LineStrip />
@@ -234,7 +230,7 @@ export function UnrolledEditorTab({ lineIndex }: UnrolledEditorTabProps = {}) {
             style={{
               height: keyframeBarOpen ? keyframeBarHeight : 0,
               overflow: "hidden",
-              transition: "height 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+              transition: "height var(--dur-base) var(--ease-out)",
               flexShrink: 0,
             }}
           >

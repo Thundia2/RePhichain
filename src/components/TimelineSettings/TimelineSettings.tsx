@@ -19,12 +19,13 @@ export function TimelineSettings() {
   const setSpectrogramOpacity = useEditorStore((s) => s.setSpectrogramOpacity);
 
   return (
-    <div style={{ padding: 8 }}>
-      <SectionHeader color="var(--accent-primary)">View</SectionHeader>
+    <div style={{ padding: "var(--space-8)" }}>
+      <SectionHeader>View</SectionHeader>
       <Card>
         <CardRow label="Zoom">
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
             <input
+              aria-label="Zoom"
               type="range"
               min={0.1}
               max={5}
@@ -33,14 +34,15 @@ export function TimelineSettings() {
               onChange={(e) => setTimelineZoom(parseFloat(e.target.value))}
               style={{ accentColor: "var(--accent-primary)", width: 90 }}
             />
-            <span style={{ fontSize: 10, color: "var(--text-secondary)", minWidth: 30, textAlign: "right" }}>
-              {zoom.toFixed(1)}x
+            <span style={{ fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", color: "var(--text-secondary)", minWidth: 30, textAlign: "right" }}>
+              {zoom.toFixed(1)}×
             </span>
           </div>
         </CardRow>
         <CardRow label="Density">
           <select
-            style={{ ...SELECT_STYLE }}
+            aria-label="Density"
+            style={{ ...SELECT_STYLE, fontFamily: "var(--font-mono)" }}
             value={density}
             onChange={(e) => setDensity(parseInt(e.target.value))}
           >
@@ -51,9 +53,10 @@ export function TimelineSettings() {
             ))}
           </select>
         </CardRow>
-        <CardRow label="X Grid Lines">
+        <CardRow label="X grid lines">
           <input
-            style={{ ...INPUT_STYLE, width: 50 }}
+            aria-label="X grid lines"
+            style={{ ...INPUT_STYLE, width: 50, fontFamily: "var(--font-mono)" }}
             type="number"
             min={2}
             max={256}
@@ -63,6 +66,7 @@ export function TimelineSettings() {
         </CardRow>
         <CardRow label="Side filter" last>
           <select
+            aria-label="Side filter"
             style={{ ...SELECT_STYLE }}
             value={noteSideFilter}
             onChange={(e) => setNoteSideFilter(e.target.value as NoteSideFilter)}
@@ -74,15 +78,16 @@ export function TimelineSettings() {
         </CardRow>
       </Card>
 
-      <SectionHeader color="var(--accent-primary)">Spectrogram</SectionHeader>
+      <SectionHeader>Spectrogram</SectionHeader>
       <Card>
         <CardRow label="Show" last={!showSpectrogram}>
-          <Toggle checked={showSpectrogram} onChange={(v) => setShowSpectrogram(v)} />
+          <Toggle checked={showSpectrogram} onChange={(v) => setShowSpectrogram(v)} label="Show spectrogram" />
         </CardRow>
         {showSpectrogram && (
           <CardRow label="Opacity" last>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
               <input
+                aria-label="Spectrogram opacity"
                 type="range"
                 min={0}
                 max={1}
@@ -91,7 +96,7 @@ export function TimelineSettings() {
                 onChange={(e) => setSpectrogramOpacity(parseFloat(e.target.value))}
                 style={{ accentColor: "var(--accent-primary)", width: 90 }}
               />
-              <span style={{ fontSize: 10, color: "var(--text-secondary)", minWidth: 30, textAlign: "right" }}>
+              <span style={{ fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", color: "var(--text-secondary)", minWidth: 30, textAlign: "right" }}>
                 {Math.round(spectrogramOpacity * 100)}%
               </span>
             </div>

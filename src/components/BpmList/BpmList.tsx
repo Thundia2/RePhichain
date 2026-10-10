@@ -1,8 +1,14 @@
 import { useChartStore } from "../../stores/chartStore";
 import type { Beat, BpmPoint } from "../../types/chart";
 import { beatToFloat } from "../../types/chart";
-import { Card, ActionButton, INPUT_STYLE } from "../common/UIKit";
+import { Plus, Trash2 } from "lucide-react";
+import { Card, INPUT_STYLE } from "../common/UIKit";
 import { NumericInput } from "../common/FormFields";
+import { Button } from "../common/Button";
+import { IconButton } from "../common/IconButton";
+
+/** Number wells use the mono face. */
+const NUM_INPUT_STYLE: React.CSSProperties = { ...INPUT_STYLE, fontFamily: "var(--font-mono)" };
 
 export function BpmListPanel() {
   const bpmList = useChartStore((s) => s.chart.bpm_list);
@@ -43,21 +49,21 @@ export function BpmListPanel() {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
-          padding: "8px 12px",
-          borderBottom: "1px solid rgba(42, 42, 53, 0.55)",
+          gap: "var(--space-8)",
+          padding: "var(--space-8) var(--space-12)",
+          borderBottom: "var(--rule) solid var(--separator)",
         }}
       >
-        <ActionButton variant="primary" onClick={addBpm} title="Add BPM point">
-          + Add BPM Point
-        </ActionButton>
-        <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: "auto" }}>
+        <Button variant="primary" icon={Plus} onClick={addBpm}>
+          Add BPM point
+        </Button>
+        <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginLeft: "auto" }}>
           {bpmList.length} point{bpmList.length !== 1 ? "s" : ""}
         </span>
       </div>
 
       {/* BPM entries */}
-      <div className="flex-1 overflow-y-auto" style={{ padding: "8px 12px" }}>
+      <div className="flex-1 overflow-y-auto" style={{ padding: "var(--space-8) var(--space-12)" }}>
         <Card>
           {bpmList.map((entry, idx) => (
             <div
@@ -65,11 +71,11 @@ export function BpmListPanel() {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 4,
-                padding: "8px 10px",
+                gap: "var(--space-4)",
+                padding: "var(--space-8) var(--space-10)",
                 borderBottom:
                   idx < bpmList.length - 1
-                    ? "1px solid rgba(42, 42, 53, 0.55)"
+                    ? "var(--rule) solid var(--separator)"
                     : "none",
               }}
             >
@@ -77,8 +83,9 @@ export function BpmListPanel() {
                 style={{
                   width: 16,
                   textAlign: "center",
-                  color: "var(--text-muted)",
-                  fontSize: 10,
+                  color: "var(--text-secondary)",
+                  fontSize: "var(--fs-caption)",
+                  fontFamily: "var(--font-mono)",
                 }}
               >
                 {idx}
@@ -86,7 +93,7 @@ export function BpmListPanel() {
 
               {/* Beat inputs — commit-on-blur, integer-normalised (L8) */}
               <NumericInput
-                style={{ ...INPUT_STYLE, width: 36, textAlign: "center" }}
+                style={{ ...NUM_INPUT_STYLE, width: 36, textAlign: "center" }}
                 commitMode="blur"
                 integer
                 value={entry.beat[0]}
@@ -94,7 +101,7 @@ export function BpmListPanel() {
                 title="Whole beats"
               />
               <NumericInput
-                style={{ ...INPUT_STYLE, width: 28, textAlign: "center" }}
+                style={{ ...NUM_INPUT_STYLE, width: 28, textAlign: "center" }}
                 commitMode="blur"
                 integer
                 min={0}
@@ -102,9 +109,9 @@ export function BpmListPanel() {
                 onChange={(v) => editBeat(idx, [entry.beat[0], v, entry.beat[2]])}
                 title="Numerator"
               />
-              <span style={{ color: "var(--text-muted)", fontSize: 10 }}>/</span>
+              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)" }}>/</span>
               <NumericInput
-                style={{ ...INPUT_STYLE, width: 28, textAlign: "center" }}
+                style={{ ...NUM_INPUT_STYLE, width: 28, textAlign: "center" }}
                 commitMode="blur"
                 integer
                 min={1}
@@ -113,11 +120,11 @@ export function BpmListPanel() {
                 title="Denominator"
               />
 
-              <span style={{ color: "var(--text-muted)", fontSize: 10 }}>@</span>
+              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)" }}>@</span>
 
               {/* BPM input — min 1 clamp is the non-positive guard (L8) */}
               <NumericInput
-                style={{ ...INPUT_STYLE, width: 60 }}
+                style={{ ...NUM_INPUT_STYLE, width: 60 }}
                 commitMode="blur"
                 step="0.1"
                 min={1}
@@ -126,28 +133,18 @@ export function BpmListPanel() {
                 title="BPM"
               />
 
-              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>bpm</span>
+              <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>BPM</span>
 
               {/* Remove button */}
-              <button
-                style={{
-                  marginLeft: "auto",
-                  padding: "2px 6px",
-                  borderRadius: 4,
-                  border: "none",
-                  background: "transparent",
-                  color: bpmList.length <= 1 ? "var(--text-muted)" : "var(--error)",
-                  cursor: bpmList.length <= 1 ? "default" : "pointer",
-                  fontSize: 11,
-                  opacity: bpmList.length <= 1 ? 0.4 : 1,
-                  fontFamily: "inherit",
-                }}
+              <IconButton
+                icon={Trash2}
+                label="Remove BPM point"
+                size="md"
+                danger
+                style={{ marginLeft: "auto" }}
                 onClick={() => removeBpm(idx)}
                 disabled={bpmList.length <= 1}
-                title="Remove"
-              >
-                ✕
-              </button>
+              />
             </div>
           ))}
         </Card>

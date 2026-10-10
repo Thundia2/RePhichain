@@ -3,9 +3,13 @@
 //
 // 210px wide, context-sensitive property panel for the unified editor.
 // Shows: current evaluated values, line/note/event properties, layer selector.
+// Note type, side and layer use SegmentedControls (note types drawn with
+// NoteGlyph); section headers are sentence case in text-secondary.
 // ============================================================
 
+import type React from "react";
 import { useMemo } from "react";
+import { X } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
 import {
@@ -23,41 +27,72 @@ import { EVENT_COLORS } from "../../constants/eventColors";
 import { useBookmarkStore } from "../../stores/bookmarkStore";
 import { BOOKMARK_PRESETS } from "../../types/bookmark";
 import type { BookmarkPreset } from "../../types/bookmark";
+import { NoteGlyph } from "../common/NoteGlyph";
+import { SegmentedControl, type SegmentOption } from "../common/SegmentedControl";
+import { IconButton } from "../common/IconButton";
+import { Button } from "../common/Button";
 
 // ============================================================
 // Constants
 // ============================================================
 
-const NOTE_KIND_OPTIONS = [
-  { value: "tap", label: "Tap" },
-  { value: "drag", label: "Drag" },
-  { value: "flick", label: "Flick" },
-  { value: "hold", label: "Hold" },
+const NOTE_KIND_LABELS: Record<NoteKind, string> = { tap: "Tap", drag: "Drag", flick: "Flick", hold: "Hold" };
+
+const NOTE_KIND_SEGMENTS: SegmentOption<NoteKind>[] = (["tap", "drag", "flick", "hold"] as const).map((k) => ({
+  value: k,
+  title: NOTE_KIND_LABELS[k],
+  label: <><NoteGlyph kind={k} size={14} /><span className="sr-only">{NOTE_KIND_LABELS[k]}</span></>,
+}));
+
+const SIDE_SEGMENTS: SegmentOption<"above" | "below">[] = [
+  { value: "above", label: "Above" },
+  { value: "below", label: "Below" },
+];
+
+const LAYER_SEGMENTS: SegmentOption<number>[] = [
+  ...[0, 1, 2, 3, 4].map((i) => ({ value: i, label: `L${i}`, title: `Layer ${i}` })),
+  { value: -1, label: "Flat", title: "Flat events" },
 ];
 
 const VALUE_PROPS: { key: string; kind: LineEventKind; label: string }[] = [
   { key: "x", kind: "x", label: "X" },
   { key: "y", kind: "y", label: "Y" },
-  { key: "rotation", kind: "rotation", label: "R" },
-  { key: "opacity", kind: "opacity", label: "O" },
-  { key: "speed", kind: "speed", label: "S" },
+  { key: "rotation", kind: "rotation", label: "Rotation" },
+  { key: "opacity", kind: "opacity", label: "Opacity" },
+  { key: "speed", kind: "speed", label: "Speed" },
 ];
 
+const SECTION_STYLE: React.CSSProperties = {
+  padding: "var(--space-8) var(--space-10)",
+  borderBottom: "var(--rule) solid var(--separator)",
+};
+
+const DIVIDER_STYLE: React.CSSProperties = {
+  height: 1, background: "var(--separator)", margin: "var(--space-8) 0",
+};
+
+/** "scale_x" → "Scale X", "x" → "X" (sentence case, axis letters upper-case). */
+function eventKindLabel(kind: string): string {
+  return kind
+    .split("_")
+    .map((w, i) => (w.length === 1 ? w.toUpperCase() : i === 0 ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
 // ============================================================
-// Sub-components (inline, matching mockup style)
+// Sub-components
 // ============================================================
 
+/** Sentence-case section label; pass color="var(--text-primary)" for the selection title. */
 function SectionHeader({ children, color }: { children: React.ReactNode; color?: string }) {
   return (
     <div
       style={{
-        fontSize: 10,
+        fontSize: "var(--fs-control)",
+        lineHeight: "14px",
         fontWeight: 600,
-        letterSpacing: 0.6,
-        textTransform: "uppercase",
-        color: color || "var(--accent-primary)",
-        marginBottom: 6,
-        fontFamily: "inherit",
+        color: color || "var(--text-secondary)",
+        marginBottom: "var(--space-6)",
       }}
     >
       {children}
@@ -65,16 +100,42 @@ function SectionHeader({ children, color }: { children: React.ReactNode; color?:
   );
 }
 
+/** Label + control row laid out like the shared Field / SelectField. */
+function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-secondary)" }}>{label}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+/** Note type picker drawn with NoteGlyphs. null = mixed selection. */
+function NoteKindPicker({ value, onChange }: { value: NoteKind | null; onChange: (k: NoteKind) => void }) {
+  return (
+    <FieldRow label="Kind">
+      <SegmentedControl options={NOTE_KIND_SEGMENTS} value={value} onChange={onChange} size="sm" block label="Note type" />
+    </FieldRow>
+  );
+}
+
+/** Above / below picker. null = mixed selection. */
+function SidePicker({ value, onChange }: { value: "above" | "below" | null; onChange: (v: "above" | "below") => void }) {
+  return (
+    <FieldRow label="Side">
+      <SegmentedControl options={SIDE_SEGMENTS} value={value} onChange={onChange} size="sm" block label="Side" />
+    </FieldRow>
+  );
+}
+
 function NoteSection({ note, lineIndex, noteIndex }: { note: Note; lineIndex: number; noteIndex: number }) {
   const editNote = useChartStore((s) => s.editNote);
 
   return (
-    <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--border-color)" }}>
-      <SectionHeader>Note #{noteIndex}</SectionHeader>
-      <SelectField
-        label="Kind"
+    <div style={SECTION_STYLE}>
+      <SectionHeader color="var(--text-primary)">Note #{noteIndex}</SectionHeader>
+      <NoteKindPicker
         value={note.kind}
-        options={NOTE_KIND_OPTIONS}
         onChange={(v) => {
           // P6: switching to "hold" without a hold_beat exports a zero-length hold
           // (garbage). Seed one beat so the new hold is valid. Mirrors the same
@@ -92,41 +153,39 @@ function NoteSection({ note, lineIndex, noteIndex }: { note: Note; lineIndex: nu
       <Field label="X" value={note.x} onChange={(v) => editNote(lineIndex, noteIndex, { x: parseFloat(v) })} step="1" />
       {/* L8/UC8: no `|| 1` — Field only emits a valid number string, so the fallback only ever blocked a real 0 / negative speed (reverse-approach technique). */}
       <Field label="Speed" value={note.speed} onChange={(v) => editNote(lineIndex, noteIndex, { speed: parseFloat(v) })} step="0.1" />
-      <SelectField
-        label="Side"
+      <SidePicker
         value={note.above ? "above" : "below"}
-        options={[{ value: "above", label: "Above" }, { value: "below", label: "Below" }]}
         onChange={(v) => editNote(lineIndex, noteIndex, { above: v === "above" })}
       />
       {note.kind === "hold" && note.hold_beat && (
         <BeatField label="Hold" beat={note.hold_beat} onChange={(b) => editNote(lineIndex, noteIndex, { hold_beat: b })} />
       )}
-      <div style={{ height: 1, background: "var(--border-color)", margin: "8px 0" }} />
-      <SectionHeader color="var(--text-muted)">RPE Properties</SectionHeader>
+      <div style={DIVIDER_STYLE} />
+      <SectionHeader>RPE properties</SectionHeader>
       <Field label="Size" value={note.size ?? 1} onChange={(v) => { const val = parseFloat(v); editNote(lineIndex, noteIndex, { size: val === 1 ? undefined : val || 1 }); }} step="0.1" />
       {/* L8/UC8: no `val || 255` — alpha 0 is a valid invisible-note technique; only clamp to [0,255]. */}
       <Field label="Alpha" value={note.alpha ?? 255} onChange={(v) => { const val = parseInt(v); editNote(lineIndex, noteIndex, { alpha: val === 255 ? undefined : Math.max(0, Math.min(255, val)) }); }} step="1" />
-      <Field label="Vis. Time" value={note.visible_time ?? 999999} onChange={(v) => { const val = parseFloat(v); editNote(lineIndex, noteIndex, { visible_time: val === 999999 ? undefined : isNaN(val) ? 999999 : val }); }} step="0.5" />
+      <Field label="Vis. time" value={note.visible_time ?? 999999} onChange={(v) => { const val = parseFloat(v); editNote(lineIndex, noteIndex, { visible_time: val === 999999 ? undefined : isNaN(val) ? 999999 : val }); }} step="0.5" />
       <SelectField
         label="Fake"
         value={note.fake ? "true" : "false"}
         options={[{ value: "false", label: "No" }, { value: "true", label: "Yes" }]}
         onChange={(v) => editNote(lineIndex, noteIndex, { fake: v === "true" ? true : undefined })}
       />
-      <details style={{ marginTop: 8 }}>
-        <summary style={{ fontSize: 10, color: "var(--text-muted)", cursor: "pointer" }}>
-          Advanced Properties
+      <details style={{ marginTop: "var(--space-8)" }}>
+        <summary style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", cursor: "pointer" }}>
+          Advanced properties
         </summary>
-        <div style={{ marginTop: 6 }}>
-          <Field label="Y Offset" value={note.y_offset ?? 0} onChange={(v) => {
+        <div style={{ marginTop: "var(--space-6)" }}>
+          <Field label="Y offset" value={note.y_offset ?? 0} onChange={(v) => {
             const val = parseFloat(v);
             editNote(lineIndex, noteIndex, { y_offset: val === 0 ? undefined : isNaN(val) ? undefined : val });
           }} step="0.1" />
-          <Field label="Judge Area" value={note.judge_area ?? 1} onChange={(v) => {
+          <Field label="Judge area" value={note.judge_area ?? 1} onChange={(v) => {
             const val = parseFloat(v);
             editNote(lineIndex, noteIndex, { judge_area: val === 1 ? undefined : isNaN(val) ? undefined : val });
           }} step="0.1" />
-          <Field label="Hit Sound" value={note.hitsound ?? ""} type="text" onChange={(v) => {
+          <Field label="Hit sound" value={note.hitsound ?? ""} type="text" onChange={(v) => {
             editNote(lineIndex, noteIndex, { hitsound: v || undefined });
           }} />
         </div>
@@ -139,10 +198,11 @@ function MultiNoteSection({ count, lineIndex, indices }: { count: number; lineIn
   const editNotes = useChartStore((s) => s.editNotes);
 
   return (
-    <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--border-color)" }}>
-      <SectionHeader>{count} Notes Selected</SectionHeader>
-      <SelectField label="Kind" value="" options={[{ value: "", label: "(mixed)" }, ...NOTE_KIND_OPTIONS]} onChange={(v) => { if (v) editNotes(lineIndex, indices, { kind: v as NoteKind }); }} />
-      <SelectField label="Side" value="" options={[{ value: "", label: "(mixed)" }, { value: "above", label: "Above" }, { value: "below", label: "Below" }]} onChange={(v) => { if (v) editNotes(lineIndex, indices, { above: v === "above" }); }} />
+    <div style={SECTION_STYLE}>
+      <SectionHeader color="var(--text-primary)">{count} notes selected</SectionHeader>
+      {/* Mixed selection: no segment is pre-selected; picking one applies it to all */}
+      <NoteKindPicker value={null} onChange={(v) => editNotes(lineIndex, indices, { kind: v })} />
+      <SidePicker value={null} onChange={(v) => editNotes(lineIndex, indices, { above: v === "above" })} />
     </div>
   );
 }
@@ -155,8 +215,8 @@ function EventSection({ event, lineIndex, eventIndex }: { event: LineEvent; line
   const startVal = tv ? tv.start : cv!;
   const endVal = tv ? tv.end : cv!;
   return (
-    <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--border-color)" }}>
-      <SectionHeader>Event #{eventIndex} — {event.kind.toUpperCase()}</SectionHeader>
+    <div style={SECTION_STYLE}>
+      <SectionHeader color="var(--text-primary)">Event #{eventIndex} · {eventKindLabel(event.kind)}</SectionHeader>
       <BeatField label="Start" beat={event.start_beat} onChange={(b) => editEvent(lineIndex, eventIndex, { start_beat: b })} />
       <BeatField label="End" beat={event.end_beat} onChange={(b) => editEvent(lineIndex, eventIndex, { end_beat: b })} />
       <SelectField
@@ -178,8 +238,8 @@ function EventSection({ event, lineIndex, eventIndex }: { event: LineEvent; line
             options={EASING_OPTIONS}
             onChange={(v) => editEvent(lineIndex, eventIndex, { value: { transition: { start: tv.start, end: tv.end, easing: v as EasingType } } })}
           />
-          <Field label="Ease L" value={event.easing_left ?? 0} onChange={(v) => editEvent(lineIndex, eventIndex, { easing_left: parseFloat(v) })} step="0.05" />
-          <Field label="Ease R" value={event.easing_right ?? 1} onChange={(v) => editEvent(lineIndex, eventIndex, { easing_right: parseFloat(v) || 1 })} step="0.05" />
+          <Field label="Ease left" value={event.easing_left ?? 0} onChange={(v) => editEvent(lineIndex, eventIndex, { easing_left: parseFloat(v) })} step="0.05" />
+          <Field label="Ease right" value={event.easing_right ?? 1} onChange={(v) => editEvent(lineIndex, eventIndex, { easing_right: parseFloat(v) || 1 })} step="0.05" />
         </>
       ) : (
         <Field label="Value" value={startVal} onChange={(v) => editEvent(lineIndex, eventIndex, { value: { constant: parseFloat(v) } })} step="0.1" />
@@ -196,39 +256,39 @@ function LineSection({ lineIndex }: { lineIndex: number }) {
 
   const fields: [string, string | number][] = [
     ["Name", line.name || `Line ${lineIndex}`],
-    ["z_order", String(line.z_order ?? 0)],
-    ["is_cover", line.is_cover === false ? "false" : "true"],
-    ["bpm_factor", String(line.bpm_factor ?? 1.0)],
-    ["father", line.father_index != null ? String(line.father_index) : "none"],
-    ["group", String(line.group ?? 0)],
+    ["Z order", String(line.z_order ?? 0)],
+    ["Is cover", line.is_cover === false ? "false" : "true"],
+    ["BPM factor", String(line.bpm_factor ?? 1.0)],
+    ["Father", line.father_index != null ? String(line.father_index) : "none"],
+    ["Group", String(line.group ?? 0)],
   ];
 
   return (
-    <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--border-color)" }}>
-      <SectionHeader>Line #{lineIndex}</SectionHeader>
+    <div style={SECTION_STYLE}>
+      <SectionHeader color="var(--text-primary)">Line #{lineIndex}</SectionHeader>
       {fields.map(([k, v]) => (
         <div key={k} style={{ display: "flex", alignItems: "center", marginBottom: 3 }}>
-          <span style={{ width: 70, color: "#666", fontSize: 10 }}>{k}</span>
+          <span style={{ width: 70, color: "var(--text-secondary)", fontSize: "var(--fs-caption)" }}>{k}</span>
           <div
             style={{
               flex: 1,
-              background: "var(--bg-tertiary, #1a1a22)",
-              borderRadius: 5,
-              padding: "2px 6px",
-              color: "#bbb",
-              fontSize: 10,
-              border: "1px solid var(--border-color)",
+              background: "var(--bg-tertiary)",
+              borderRadius: "var(--radius-sm)",
+              padding: "var(--space-2) var(--space-6)",
+              color: "var(--text-primary)",
+              fontSize: "var(--fs-caption)",
+              border: "var(--hairline) solid var(--border-color)",
             }}
           >
             {v}
           </div>
         </div>
       ))}
-      <div style={{ height: 1, background: "var(--border-color)", margin: "8px 0" }} />
-      <SectionHeader color="var(--text-muted)">Editable</SectionHeader>
+      <div style={DIVIDER_STYLE} />
+      <SectionHeader>Editable</SectionHeader>
       <Field label="Name" type="text" value={line.name} onChange={(v) => editLine(lineIndex, { name: v })} />
-      <Field label="Z Order" value={line.z_order ?? 0} onChange={(v) => editLine(lineIndex, { z_order: parseInt(v) === 0 ? undefined : parseInt(v) })} step="1" />
-      <Field label="BPM Fac." value={line.bpm_factor ?? 1} onChange={(v) => { const val = parseFloat(v); editLine(lineIndex, { bpm_factor: val === 1 ? undefined : val || 1 }); }} step="0.1" />
+      <Field label="Z order" value={line.z_order ?? 0} onChange={(v) => editLine(lineIndex, { z_order: parseInt(v) === 0 ? undefined : parseInt(v) })} step="1" />
+      <Field label="BPM factor" value={line.bpm_factor ?? 1} onChange={(v) => { const val = parseFloat(v); editLine(lineIndex, { bpm_factor: val === 1 ? undefined : val || 1 }); }} step="0.1" />
       <Field label="Father" value={line.father_index ?? -1} onChange={(v) => { const val = parseInt(v); editLine(lineIndex, { father_index: val === -1 ? undefined : val }); }} step="1" />
       <SelectField
         label="Attach UI"
@@ -263,23 +323,18 @@ const PRESET_ENTRIES = Object.entries(BOOKMARK_PRESETS) as [BookmarkPreset, stri
 
 function PresetDots({ activePreset, onSelect }: { activePreset?: BookmarkPreset; onSelect: (p: BookmarkPreset) => void }) {
   return (
-    <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+    <div style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-6)" }}>
       {PRESET_ENTRIES.map(([preset, color]) => (
-        <button
+        <IconButton
           key={preset}
+          label={`${preset[0].toUpperCase()}${preset.slice(1)} color`}
+          size="sm"
+          active={activePreset === undefined ? undefined : activePreset === preset}
           onClick={() => onSelect(preset)}
-          title={preset}
-          style={{
-            width: 14,
-            height: 14,
-            borderRadius: 3,
-            border: activePreset === preset ? "2px solid #fff" : "2px solid transparent",
-            background: color,
-            cursor: "pointer",
-            padding: 0,
-            outline: "none",
-          }}
-        />
+        >
+          {/* Preset swatch — a user data colour */}
+          <span style={{ width: 12, height: 12, borderRadius: "var(--radius-xs)", background: color }} />
+        </IconButton>
       ))}
     </div>
   );
@@ -292,8 +347,8 @@ function BookmarkSection({ bookmarkId }: { bookmarkId: string }) {
   const store = useBookmarkStore.getState();
 
   return (
-    <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border-color)" }}>
-      <SectionHeader>Marker</SectionHeader>
+    <div style={{ ...SECTION_STYLE, padding: "var(--space-8) var(--space-12)" }}>
+      <SectionHeader color="var(--text-primary)">Marker</SectionHeader>
       <PresetDots
         activePreset={bookmark.preset}
         onSelect={(p) => store.setBookmarkColor(bookmarkId, p)}
@@ -309,46 +364,17 @@ function BookmarkSection({ bookmarkId }: { bookmarkId: string }) {
         onChange={(v) => store.updateBookmark(bookmarkId, { x: parseInt(v) })}
         step="1"
       />
-      <SelectField
-        label="Side"
+      <SidePicker
         value={bookmark.above ? "above" : "below"}
-        options={[{ value: "above", label: "Above" }, { value: "below", label: "Below" }]}
         onChange={(v) => store.updateBookmark(bookmarkId, { above: v === "above" })}
       />
-      <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
-        <button
-          onClick={() => store.convertToNotes([bookmarkId])}
-          style={{
-            flex: 1,
-            padding: "4px 6px",
-            borderRadius: 5,
-            border: "none",
-            cursor: "pointer",
-            fontSize: 9,
-            fontWeight: 600,
-            background: "var(--accent-primary)",
-            color: "#fff",
-            fontFamily: "inherit",
-          }}
-        >
-          Convert to Note
-        </button>
-        <button
-          onClick={() => store.removeBookmark(bookmarkId)}
-          style={{
-            padding: "4px 8px",
-            borderRadius: 5,
-            border: "none",
-            cursor: "pointer",
-            fontSize: 9,
-            fontWeight: 500,
-            background: "rgba(255, 80, 80, 0.15)",
-            color: "#ff5050",
-            fontFamily: "inherit",
-          }}
-        >
+      <div style={{ display: "flex", gap: "var(--space-4)", marginTop: "var(--space-6)" }}>
+        <Button variant="primary" size="sm" style={{ flex: 1 }} onClick={() => store.convertToNotes([bookmarkId])}>
+          Convert to note
+        </Button>
+        <Button variant="danger" size="sm" onClick={() => store.removeBookmark(bookmarkId)}>
           Delete
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -358,47 +384,20 @@ function MultiBookmarkSection({ ids }: { ids: string[] }) {
   const store = useBookmarkStore.getState();
 
   return (
-    <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border-color)" }}>
-      <SectionHeader>{ids.length} Markers Selected</SectionHeader>
+    <div style={{ ...SECTION_STYLE, padding: "var(--space-8) var(--space-12)" }}>
+      <SectionHeader color="var(--text-primary)">{ids.length} markers selected</SectionHeader>
       <PresetDots
         onSelect={(p) => {
           for (const id of ids) store.setBookmarkColor(id, p);
         }}
       />
-      <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
-        <button
-          onClick={() => store.convertToNotes(ids)}
-          style={{
-            flex: 1,
-            padding: "4px 6px",
-            borderRadius: 5,
-            border: "none",
-            cursor: "pointer",
-            fontSize: 9,
-            fontWeight: 600,
-            background: "var(--accent-primary)",
-            color: "#fff",
-            fontFamily: "inherit",
-          }}
-        >
-          Convert All to Notes
-        </button>
-        <button
-          onClick={() => store.deleteSelected()}
-          style={{
-            padding: "4px 8px",
-            borderRadius: 5,
-            border: "none",
-            cursor: "pointer",
-            fontSize: 9,
-            fontWeight: 500,
-            background: "rgba(255, 80, 80, 0.15)",
-            color: "#ff5050",
-            fontFamily: "inherit",
-          }}
-        >
-          Delete All
-        </button>
+      <div style={{ display: "flex", gap: "var(--space-4)", marginTop: "var(--space-6)" }}>
+        <Button variant="primary" size="sm" style={{ flex: 1 }} onClick={() => store.convertToNotes(ids)}>
+          Convert all to notes
+        </Button>
+        <Button variant="danger" size="sm" onClick={() => store.deleteSelected()}>
+          Delete all
+        </Button>
       </div>
     </div>
   );
@@ -448,8 +447,8 @@ export function UnifiedInspector() {
       style={{
         width: inspectorOpen ? 220 : 0,
         overflow: "hidden",
-        transition: "width 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-        borderLeft: inspectorOpen ? "1px solid var(--border-color)" : "none",
+        transition: "width var(--dur-base) var(--ease-out)",
+        borderLeft: inspectorOpen ? "var(--rule) solid var(--border-color)" : "none",
         background: "var(--bg-secondary)",
         display: "flex",
         flexDirection: "column",
@@ -460,45 +459,27 @@ export function UnifiedInspector() {
         {/* Header */}
         <div
           style={{
-            padding: "8px 12px",
-            borderBottom: "1px solid var(--border-color)",
+            padding: "var(--space-6) var(--space-8) var(--space-6) var(--space-12)",
+            borderBottom: "var(--rule) solid var(--border-color)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             flexShrink: 0,
           }}
         >
-          <span style={{ fontWeight: 700, color: "var(--text-secondary, #888)", fontSize: 10, letterSpacing: 0.8 }}>
-            INSPECTOR
+          <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "var(--fs-control)" }}>
+            Inspector
           </span>
-          <button
-            onClick={toggleInspector}
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: 5,
-              background: "transparent",
-              border: "none",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: 13,
-              fontFamily: "inherit",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            ×
-          </button>
+          <IconButton icon={X} label="Close inspector" size="md" tooltipPosition="left" onClick={toggleInspector} />
         </div>
 
         {/* Scrollable content */}
         <div style={{ flex: 1, overflowY: "auto" }}>
           {/* Current Values section */}
           {line && (
-            <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color)" }}>
-              <SectionHeader>Current Values</SectionHeader>
-              <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 6, fontFamily: "var(--font-mono, monospace)" }}>
+            <div style={{ padding: "var(--space-10) var(--space-12)", borderBottom: "var(--rule) solid var(--separator)" }}>
+              <SectionHeader>Current values</SectionHeader>
+              <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginBottom: "var(--space-6)", fontFamily: "var(--font-mono)" }}>
                 Beat {currentBeat.toFixed(2)}
               </div>
               {VALUE_PROPS.map(({ kind, label }) => {
@@ -511,18 +492,18 @@ export function UnifiedInspector() {
                     : 0
                   : 0;
                 return (
-                  <div key={kind} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+                  <div key={kind} style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", padding: "3px 0" }}>
                     <span
                       style={{
                         width: 7,
                         height: 7,
-                        borderRadius: 2,
-                        background: EVENT_COLORS[kind] || "#888",
+                        borderRadius: "var(--radius-xs)",
+                        background: EVENT_COLORS[kind] || "var(--text-secondary)",
                         flexShrink: 0,
                       }}
                     />
-                    <span style={{ width: 14, fontSize: 10, color: "var(--text-muted)" }}>{label}</span>
-                    <span style={{ fontSize: 10, color: "var(--text-primary)", fontFamily: "var(--font-mono, monospace)" }}>{val.toFixed(1)}</span>
+                    <span style={{ width: 52, fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>{label}</span>
+                    <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{val.toFixed(1)}</span>
                   </div>
                 );
               })}
@@ -531,7 +512,7 @@ export function UnifiedInspector() {
 
           {/* Context-sensitive content */}
           {selectedLineIndex === null && (
-            <div style={{ padding: 20, textAlign: "center", color: "#555", fontSize: 11 }}>
+            <div style={{ padding: "var(--space-20)", textAlign: "center", color: "var(--text-secondary)", fontSize: "var(--fs-control)" }}>
               No line selected
             </div>
           )}
@@ -564,8 +545,8 @@ export function UnifiedInspector() {
           )}
 
           {selectedLineIndex !== null && selectedNoteIndices.length === 0 && selectedEventIndices.length > 1 && (
-            <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border-color)" }}>
-              <SectionHeader>{selectedEventIndices.length} Events Selected</SectionHeader>
+            <div style={{ ...SECTION_STYLE, padding: "var(--space-8) var(--space-12)" }}>
+              <SectionHeader color="var(--text-primary)">{selectedEventIndices.length} events selected</SectionHeader>
             </div>
           )}
 
@@ -583,47 +564,17 @@ export function UnifiedInspector() {
 
           {/* Layer selector */}
           {hasLayers && (
-            <div style={{ padding: "8px 12px" }}>
-              <SectionHeader color="var(--text-muted)">Event Layer</SectionHeader>
-              <div style={{ display: "flex", gap: 3 }}>
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <button
-                    key={i}
-                    onClick={() => setActiveLayer(i)}
-                    style={{
-                      padding: "2px 6px",
-                      borderRadius: 6,
-                      border: "none",
-                      cursor: "pointer",
-                      fontSize: 9,
-                      fontWeight: 500,
-                      transition: "all 0.15s",
-                      background: activeLayer === i ? "var(--accent-primary)" : "var(--bg-active)",
-                      color: activeLayer === i ? "#fff" : "#666",
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    L{i}
-                  </button>
-                ))}
-                <button
-                  onClick={() => setActiveLayer(-1)}
-                  style={{
-                    padding: "2px 6px",
-                    borderRadius: 6,
-                    border: "none",
-                    cursor: "pointer",
-                    fontSize: 9,
-                    fontWeight: 500,
-                    transition: "all 0.15s",
-                    background: activeLayer === -1 ? "var(--accent-primary)" : "var(--bg-active)",
-                    color: activeLayer === -1 ? "#fff" : "#666",
-                    fontFamily: "inherit",
-                  }}
-                >
-                  Flat
-                </button>
-              </div>
+            <div style={{ padding: "var(--space-8) var(--space-12)" }}>
+              <SectionHeader>Event layer</SectionHeader>
+              <SegmentedControl
+                options={LAYER_SEGMENTS}
+                value={activeLayer}
+                onChange={setActiveLayer}
+                tone="accent"
+                size="sm"
+                block
+                label="Event layer"
+              />
             </div>
           )}
         </div>

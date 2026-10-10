@@ -4,14 +4,19 @@
 // A dialog for creating custom multi-channel event presets.
 // Users can select channels, add keyframes on a visual strip,
 // set values and easings, then save to customPresets.
+// Rendered in the shared Dialog chrome.
 // ============================================================
 
 import { useState, useCallback, useRef } from "react";
+import { Trash2, SlidersHorizontal } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type { EventPreset, EventTemplate } from "../../types/preset";
 import type { LineEventKind, EasingType } from "../../types/chart";
 import { floatToBeat } from "../../types/chart";
 import { EASING_OPTIONS, NumericInput } from "../common/FormFields";
+import { INPUT_STYLE, SELECT_STYLE } from "../common/UIKit";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
 
 // ============================================================
 // Types
@@ -39,8 +44,8 @@ interface ChannelState {
 const ALL_CHANNELS: LineEventKind[] = ["x", "y", "rotation", "opacity", "speed"];
 
 const CHANNEL_LABELS: Partial<Record<LineEventKind, string>> = {
-  x: "X Position",
-  y: "Y Position",
+  x: "X position",
+  y: "Y position",
   rotation: "Rotation",
   opacity: "Opacity",
   speed: "Speed",
@@ -54,13 +59,25 @@ const CHANNEL_DEFAULTS: Partial<Record<LineEventKind, number>> = {
   speed: 1,
 };
 
+/** Channel identity colours: the shared event-kind tokens. */
 const CHANNEL_COLORS: Partial<Record<LineEventKind, string>> = {
-  x: "#4fc3f7",
-  y: "#81c784",
-  rotation: "#ffb74d",
-  opacity: "#ce93d8",
-  speed: "#ef5350",
+  x: "var(--event-x)",
+  y: "var(--event-y)",
+  rotation: "var(--event-rotation)",
+  opacity: "var(--event-opacity)",
+  speed: "var(--event-speed)",
 };
+
+const FIELD_LABEL_STYLE: React.CSSProperties = { color: "var(--text-secondary)" };
+
+const SECTION_LABEL_STYLE: React.CSSProperties = {
+  fontSize: "var(--fs-control)",
+  fontWeight: 600,
+  color: "var(--text-secondary)",
+  marginBottom: "var(--space-4)",
+};
+
+const NUM_INPUT_STYLE: React.CSSProperties = { ...INPUT_STYLE, fontFamily: "var(--font-mono)", minWidth: 0 };
 
 function generateKeyframeId(): string {
   return `kf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -107,16 +124,17 @@ function KeyframeStrip({
         <span className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
           {CHANNEL_LABELS[channel.kind]}
         </span>
-        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+        <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
           ({channel.keyframes.length} keyframes)
         </span>
       </div>
       <div
         ref={stripRef}
-        className="relative h-6 rounded cursor-crosshair"
+        className="relative h-6 cursor-crosshair"
         style={{
-          backgroundColor: "var(--bg-active)",
-          border: "1px solid var(--border-color)",
+          backgroundColor: "var(--bg-tertiary)",
+          border: "var(--hairline) solid var(--border-color)",
+          borderRadius: "var(--radius-md)",
         }}
         onClick={handleStripClick}
       >
@@ -171,8 +189,10 @@ function KeyframeStrip({
                 width: isSelected ? 10 : 8,
                 height: isSelected ? 10 : 8,
                 backgroundColor: CHANNEL_COLORS[channel.kind],
-                border: isSelected ? "2px solid white" : "1px solid rgba(255,255,255,0.5)",
-                zIndex: isSelected ? 2 : 1,
+                border: isSelected
+                  ? "2px solid var(--text-primary)"
+                  : "var(--rule) solid color-mix(in srgb, var(--text-primary) 50%, transparent)",
+                zIndex: isSelected ? "var(--z-raised)" : undefined,
               }}
               onClick={(e) => {
                 e.stopPropagation();
@@ -204,34 +224,26 @@ function KeyframeEditor({
 }) {
   return (
     <div
-      className="rounded p-2 space-y-2"
-      style={{ backgroundColor: "var(--bg-active)", border: "1px solid var(--border-color)" }}
+      className="p-2 space-y-2"
+      style={{ backgroundColor: "var(--bg-active)", borderRadius: "var(--radius-lg)" }}
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium" style={{ color: CHANNEL_COLORS[kind] }}>
-          Keyframe Details
+          Keyframe details
         </span>
-        <button
-          className="px-2 py-0.5 rounded text-xs"
-          style={{ color: "var(--text-muted)" }}
-          onClick={onDelete}
-        >
+        <Button variant="ghost" size="sm" icon={Trash2} onClick={onDelete}>
           Delete
-        </button>
+        </Button>
       </div>
 
       {/* Beat offset */}
       <label className="flex items-center gap-2 text-xs">
-        <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+        <span className="w-16 text-right flex-shrink-0" style={FIELD_LABEL_STYLE}>
           Beat
         </span>
         <NumericInput
-          className="flex-1 px-1 py-0.5 rounded text-xs"
-          style={{
-            backgroundColor: "var(--bg-secondary)",
-            color: "var(--text-primary)",
-            border: "1px solid var(--border-color)",
-          }}
+          className="flex-1"
+          style={NUM_INPUT_STYLE}
           commitMode="blur"
           step="0.25"
           min={0}
@@ -243,21 +255,17 @@ function KeyframeEditor({
 
       {/* Value */}
       <label className="flex items-center gap-2 text-xs">
-        <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+        <span className="w-16 text-right flex-shrink-0" style={FIELD_LABEL_STYLE}>
           Value
         </span>
         {keyframe.useCurrent ? (
-          <span className="flex-1 px-1 py-0.5 text-xs italic" style={{ color: "var(--text-muted)" }}>
+          <span className="flex-1 px-1 py-0.5 text-xs" style={{ color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
             $CURRENT
           </span>
         ) : (
           <NumericInput
-            className="flex-1 px-1 py-0.5 rounded text-xs"
-            style={{
-              backgroundColor: "var(--bg-secondary)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--border-color)",
-            }}
+            className="flex-1"
+            style={NUM_INPUT_STYLE}
             commitMode="blur"
             step="0.1"
             fallback={0}
@@ -265,7 +273,11 @@ function KeyframeEditor({
             onChange={(v) => onUpdate({ value: v })}
           />
         )}
-        <label className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
+        <label
+          className="flex items-center gap-1 text-xs"
+          style={{ color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}
+          title="Use the line's current value"
+        >
           <input
             type="checkbox"
             checked={keyframe.useCurrent}
@@ -277,16 +289,12 @@ function KeyframeEditor({
 
       {/* Easing */}
       <label className="flex items-center gap-2 text-xs">
-        <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+        <span className="w-16 text-right flex-shrink-0" style={FIELD_LABEL_STYLE}>
           Easing
         </span>
         <select
-          className="flex-1 px-1 py-0.5 rounded text-xs"
-          style={{
-            backgroundColor: "var(--bg-secondary)",
-            color: "var(--text-primary)",
-            border: "1px solid var(--border-color)",
-          }}
+          className="flex-1"
+          style={{ ...SELECT_STYLE, minWidth: 0 }}
           value={typeof keyframe.easing === "string" ? keyframe.easing : "linear"}
           onChange={(e) => onUpdate({ easing: e.target.value as EasingType })}
         >
@@ -479,177 +487,158 @@ export function PresetBuilder({ onClose }: { onClose: () => void }) {
   const enabledChannelCount = channelStates.filter((ch) => ch.enabled).length;
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-      onClick={onClose}
-    >
-      <div
-        className="rounded-lg p-4 w-[520px] max-h-[85vh] overflow-y-auto"
-        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-color)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-          Preset Builder
-        </h3>
-
-        {/* Name and description */}
-        <div className="space-y-2 mb-3">
-          <label className="flex items-center gap-2 text-xs">
-            <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
-              Name
-            </span>
-            <input
-              className="flex-1 px-2 py-1 rounded text-xs"
-              style={{
-                backgroundColor: "var(--bg-active)",
-                color: "var(--text-primary)",
-                border: "1px solid var(--border-color)",
-              }}
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-          <label className="flex items-center gap-2 text-xs">
-            <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
-              Desc
-            </span>
-            <input
-              className="flex-1 px-2 py-1 rounded text-xs"
-              style={{
-                backgroundColor: "var(--bg-active)",
-                color: "var(--text-primary)",
-                border: "1px solid var(--border-color)",
-              }}
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description..."
-            />
-          </label>
-          <label className="flex items-center gap-2 text-xs">
-            <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
-              Duration
-            </span>
-            <NumericInput
-              className="flex-1 px-2 py-1 rounded text-xs"
-              style={{
-                backgroundColor: "var(--bg-active)",
-                color: "var(--text-primary)",
-                border: "1px solid var(--border-color)",
-              }}
-              commitMode="blur"
-              integer
-              step="1"
-              min={1}
-              max={32}
-              fallback={4}
-              value={totalBeats}
-              onChange={setTotalBeats}
-            />
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>beats</span>
-          </label>
-        </div>
-
-        {/* Channel selector */}
-        <div className="mb-3">
-          <div className="text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
-            Channels
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {ALL_CHANNELS.map((kind) => {
-              const ch = channelStates.find((c) => c.kind === kind);
-              const isEnabled = ch?.enabled ?? false;
-              return (
-                <button
-                  key={kind}
-                  className="px-2 py-0.5 rounded text-xs transition-colors"
-                  style={{
-                    backgroundColor: isEnabled ? CHANNEL_COLORS[kind] : "var(--bg-active)",
-                    color: isEnabled ? "white" : "var(--text-secondary)",
-                    border: isEnabled ? "none" : "1px solid var(--border-color)",
-                  }}
-                  onClick={() => toggleChannel(kind)}
-                >
-                  {CHANNEL_LABELS[kind]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Keyframe strips for enabled channels */}
-        {enabledChannelCount > 0 && (
-          <div className="mb-3">
-            <div className="text-xs font-medium mb-1" style={{ color: "var(--text-muted)" }}>
-              Keyframes (click strip to add)
-            </div>
-            {channelStates
-              .filter((ch) => ch.enabled)
-              .map((ch) => (
-                <KeyframeStrip
-                  key={ch.kind}
-                  channel={ch}
-                  totalBeats={totalBeats}
-                  onAddKeyframe={addKeyframe}
-                  onSelectKeyframe={selectKeyframe}
-                  selectedKeyframeId={
-                    selectedChannel === ch.kind ? selectedKeyframeId : null
-                  }
-                />
-              ))}
-          </div>
-        )}
-
-        {/* Selected keyframe editor */}
-        {selectedKf && selectedChannel && (
-          <div className="mb-3">
-            <KeyframeEditor
-              keyframe={selectedKf}
-              kind={selectedChannel}
-              onUpdate={(changes) =>
-                updateKeyframe(selectedChannel, selectedKf.id, changes)
-              }
-              onDelete={() => deleteKeyframe(selectedChannel, selectedKf.id)}
-            />
-          </div>
-        )}
-
-        {/* Summary */}
-        {enabledChannelCount > 0 && (
-          <div
-            className="text-xs p-2 mb-3 rounded"
-            style={{ backgroundColor: "var(--bg-active)", color: "var(--text-muted)" }}
-          >
-            Preset will generate{" "}
-            {channelStates.reduce(
-              (sum, ch) => sum + (ch.enabled ? Math.max(0, ch.keyframes.length - 1) : 0),
-              0,
-            )}{" "}
-            event(s) across {enabledChannelCount} channel(s) over {totalBeats} beat(s).
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex justify-end gap-2">
-          <button
-            className="px-3 py-1 rounded text-xs"
-            style={{ backgroundColor: "var(--bg-active)", color: "var(--text-secondary)" }}
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            className="px-3 py-1 rounded text-xs"
-            style={{ backgroundColor: "var(--accent-primary)", color: "white" }}
+    <Dialog
+      title="Preset builder"
+      icon={SlidersHorizontal}
+      onClose={onClose}
+      width={520}
+      bodyStyle={{ maxHeight: "75vh" }}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
             onClick={handleSave}
             disabled={enabledChannelCount === 0 || !name.trim()}
           >
-            Save Preset
-          </button>
+            Save preset
+          </Button>
+        </>
+      }
+    >
+      {/* Name and description */}
+      <div className="space-y-2 mb-3">
+        <label className="flex items-center gap-2 text-xs">
+          <span className="w-16 text-right flex-shrink-0" style={FIELD_LABEL_STYLE}>
+            Name
+          </span>
+          <input
+            className="flex-1"
+            style={{ ...INPUT_STYLE, minWidth: 0 }}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        <label className="flex items-center gap-2 text-xs">
+          <span className="w-16 text-right flex-shrink-0" style={FIELD_LABEL_STYLE}>
+            Description
+          </span>
+          <input
+            className="flex-1"
+            style={{ ...INPUT_STYLE, minWidth: 0 }}
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Brief description…"
+          />
+        </label>
+        <label className="flex items-center gap-2 text-xs">
+          <span className="w-16 text-right flex-shrink-0" style={FIELD_LABEL_STYLE}>
+            Duration
+          </span>
+          <NumericInput
+            className="flex-1"
+            style={NUM_INPUT_STYLE}
+            commitMode="blur"
+            integer
+            step="1"
+            min={1}
+            max={32}
+            fallback={4}
+            value={totalBeats}
+            onChange={setTotalBeats}
+          />
+          <span className="text-xs" style={FIELD_LABEL_STYLE}>beats</span>
+        </label>
+      </div>
+
+      {/* Channel selector */}
+      <div className="mb-3">
+        <div style={SECTION_LABEL_STYLE}>
+          Channels
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {ALL_CHANNELS.map((kind) => {
+            const ch = channelStates.find((c) => c.kind === kind);
+            const isEnabled = ch?.enabled ?? false;
+            return (
+              <button
+                key={kind}
+                type="button"
+                aria-pressed={isEnabled}
+                className="ui-pill"
+                style={{
+                  backgroundColor: isEnabled
+                    ? `color-mix(in srgb, ${CHANNEL_COLORS[kind]} 20%, transparent)`
+                    : "var(--bg-active)",
+                  color: isEnabled ? CHANNEL_COLORS[kind] : "var(--text-secondary)",
+                  fontSize: "var(--fs-control)",
+                }}
+                onClick={() => toggleChannel(kind)}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{ width: 6, height: 6, borderRadius: "var(--radius-full)", backgroundColor: CHANNEL_COLORS[kind], flexShrink: 0 }}
+                />
+                {CHANNEL_LABELS[kind]}
+              </button>
+            );
+          })}
         </div>
       </div>
-    </div>
+
+      {/* Keyframe strips for enabled channels */}
+      {enabledChannelCount > 0 && (
+        <div className="mb-3">
+          <div style={SECTION_LABEL_STYLE}>
+            Keyframes (click strip to add)
+          </div>
+          {channelStates
+            .filter((ch) => ch.enabled)
+            .map((ch) => (
+              <KeyframeStrip
+                key={ch.kind}
+                channel={ch}
+                totalBeats={totalBeats}
+                onAddKeyframe={addKeyframe}
+                onSelectKeyframe={selectKeyframe}
+                selectedKeyframeId={
+                  selectedChannel === ch.kind ? selectedKeyframeId : null
+                }
+              />
+            ))}
+        </div>
+      )}
+
+      {/* Selected keyframe editor */}
+      {selectedKf && selectedChannel && (
+        <div className="mb-3">
+          <KeyframeEditor
+            keyframe={selectedKf}
+            kind={selectedChannel}
+            onUpdate={(changes) =>
+              updateKeyframe(selectedChannel, selectedKf.id, changes)
+            }
+            onDelete={() => deleteKeyframe(selectedChannel, selectedKf.id)}
+          />
+        </div>
+      )}
+
+      {/* Summary */}
+      {enabledChannelCount > 0 && (
+        <div
+          className="text-xs p-2"
+          style={{ backgroundColor: "var(--bg-active)", borderRadius: "var(--radius-lg)", color: "var(--text-secondary)" }}
+        >
+          Preset will generate{" "}
+          {channelStates.reduce(
+            (sum, ch) => sum + (ch.enabled ? Math.max(0, ch.keyframes.length - 1) : 0),
+            0,
+          )}{" "}
+          event(s) across {enabledChannelCount} channel(s) over {totalBeats} beat(s).
+        </div>
+      )}
+    </Dialog>
   );
 }

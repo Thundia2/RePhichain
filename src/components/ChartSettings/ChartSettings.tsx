@@ -2,6 +2,9 @@ import { useChartStore } from "../../stores/chartStore";
 import { Card, CardRow, SectionHeader, INPUT_STYLE, SELECT_STYLE } from "../common/UIKit";
 import { NumericInput } from "../common/FormFields";
 
+/** Number wells use the mono face. */
+const NUM_INPUT_STYLE: React.CSSProperties = { ...INPUT_STYLE, width: 100, fontFamily: "var(--font-mono)" };
+
 export function ChartSettings() {
   const offset = useChartStore((s) => s.chart.offset);
   const meta = useChartStore((s) => s.meta);
@@ -9,14 +12,14 @@ export function ChartSettings() {
   const setMeta = useChartStore((s) => s.setMeta);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0, padding: 12, fontSize: 12 }}>
-      <SectionHeader color="var(--accent-primary)">Chart</SectionHeader>
+    <div style={{ display: "flex", flexDirection: "column", gap: 0, padding: "var(--space-12)", fontSize: "var(--fs-body)" }}>
+      <SectionHeader>Chart</SectionHeader>
 
       {/* Offset */}
       <Card>
         <CardRow label="Offset" description="Audio offset in seconds" last>
           <NumericInput
-            style={{ ...INPUT_STYLE, width: 100 }}
+            style={NUM_INPUT_STYLE}
             commitMode="blur"
             step="0.001"
             value={offset}
@@ -25,7 +28,7 @@ export function ChartSettings() {
         </CardRow>
       </Card>
 
-      <SectionHeader color="var(--accent-primary)">Metadata</SectionHeader>
+      <SectionHeader>Metadata</SectionHeader>
 
       {/* Metadata fields */}
       <Card>
@@ -71,13 +74,13 @@ export function ChartSettings() {
         </CardRow>
       </Card>
 
-      <SectionHeader color="var(--accent-primary)">Phira / info.yml</SectionHeader>
+      <SectionHeader>Phira / info.yml</SectionHeader>
 
       {/* Phira Extended Fields */}
       <Card>
         <CardRow label="Preview start">
           <NumericInput
-            style={{ ...INPUT_STYLE, width: 100 }}
+            style={NUM_INPUT_STYLE}
             commitMode="blur"
             optional
             step="0.1"
@@ -89,7 +92,7 @@ export function ChartSettings() {
         </CardRow>
         <CardRow label="Preview end">
           <NumericInput
-            style={{ ...INPUT_STYLE, width: 100 }}
+            style={NUM_INPUT_STYLE}
             commitMode="blur"
             optional
             step="0.1"
@@ -101,7 +104,7 @@ export function ChartSettings() {
         </CardRow>
         <CardRow label="Aspect ratio">
           <NumericInput
-            style={{ ...INPUT_STYLE, width: 100 }}
+            style={NUM_INPUT_STYLE}
             commitMode="blur"
             optional
             step="0.01"
@@ -113,7 +116,7 @@ export function ChartSettings() {
         </CardRow>
         <CardRow label="BG dim">
           <NumericInput
-            style={{ ...INPUT_STYLE, width: 100 }}
+            style={NUM_INPUT_STYLE}
             commitMode="blur"
             optional
             step="0.05"
@@ -127,7 +130,7 @@ export function ChartSettings() {
         </CardRow>
         <CardRow label="Line length">
           <NumericInput
-            style={{ ...INPUT_STYLE, width: 100 }}
+            style={NUM_INPUT_STYLE}
             commitMode="blur"
             optional
             step="0.5"
@@ -150,7 +153,7 @@ export function ChartSettings() {
           <input
             style={{ ...INPUT_STYLE, width: 140 }}
             type="text"
-            placeholder="tag1, tag2, ..."
+            placeholder="tag1, tag2, …"
             value={(meta.tags ?? []).join(", ")}
             onChange={(e) => {
               const raw = e.target.value;

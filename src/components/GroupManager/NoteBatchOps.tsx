@@ -1,17 +1,36 @@
 // ============================================================
 // NoteBatchOps — Batch operations for note groups
 //
-// Shift, Change Kind, Flip, Change Speed across all notes in
+// Shift, Change kind, Flip, Change speed across all notes in
 // a group. Extracted from GroupManager.tsx.
 // ============================================================
 
 import type { NoteKind } from "../../types/chart";
 import type { NoteGroup } from "../../types/group";
 import { safeParseNumber } from "../common/FormFields";
+import { MoveHorizontal, Shapes, FlipVertical2, Gauge } from "lucide-react";
+import { Button } from "../common/Button";
 import {
   NOTE_KINDS, CARD_STYLE, INPUT_STYLE, SELECT_STYLE,
-  BTN_ACCENT_STYLE, BTN_MUTED_STYLE,
 } from "./groupManagerStyles";
+
+/** Card title row: sentence-case label over a separator. */
+const CARD_TITLE_STYLE: React.CSSProperties = {
+  padding: "var(--space-8) var(--space-10)",
+  fontSize: "var(--fs-control)",
+  fontWeight: 600,
+  color: "var(--text-primary)",
+  borderBottom: "var(--rule) solid var(--separator)",
+};
+
+const LABEL_STYLE: React.CSSProperties = {
+  fontSize: "var(--fs-caption)",
+  color: "var(--text-secondary)",
+  display: "block",
+  marginBottom: "var(--space-2)",
+};
+
+const NUM_INPUT_STYLE: React.CSSProperties = { ...INPUT_STYLE, width: "100%", fontFamily: "var(--font-mono)" };
 
 export interface NoteBatchOpsProps {
   groupId: string;
@@ -40,52 +59,52 @@ export function NoteBatchOps({
 
   return (
     <>
-      {/* Shift Beats */}
+      {/* Shift beats */}
       <div style={CARD_STYLE}>
-        <div style={{ padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-primary)", borderBottom: "1px solid rgba(42, 42, 53, 0.55)" }}>
-          Shift Beats
+        <div style={CARD_TITLE_STYLE}>
+          Shift beats
         </div>
-        <div style={{ padding: "6px 10px" }}>
-          <label style={{ fontSize: 9, color: "var(--text-muted)", display: "block", marginBottom: 2 }}>Delta (beats)</label>
-          <input type="number" step="0.25" value={shiftDelta} onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setShiftDelta(n); }} style={{ ...INPUT_STYLE, width: "100%", marginBottom: 6 }} />
-          <button onClick={onShiftNotes} disabled={disabled} style={{ ...BTN_ACCENT_STYLE, width: "100%", background: "#38d9a9", opacity: disabled ? 0.4 : 1, cursor: disabled ? "not-allowed" : "pointer" }}>
+        <div style={{ padding: "var(--space-6) var(--space-10)" }}>
+          <label style={LABEL_STYLE}>Delta (beats)</label>
+          <input type="number" step="0.25" value={shiftDelta} onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setShiftDelta(n); }} style={{ ...NUM_INPUT_STYLE, marginBottom: "var(--space-6)" }} />
+          <Button variant="primary" block icon={MoveHorizontal} onClick={onShiftNotes} disabled={disabled}>
             Shift {noteCount} notes
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Change Kind */}
+      {/* Change kind */}
       <div style={CARD_STYLE}>
-        <div style={{ padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-primary)", borderBottom: "1px solid rgba(42, 42, 53, 0.55)" }}>
-          Change Kind
+        <div style={CARD_TITLE_STYLE}>
+          Change kind
         </div>
-        <div style={{ padding: "6px 10px" }}>
-          <select value={noteKind} onChange={(e) => setNoteKind(e.target.value as NoteKind)} style={{ ...SELECT_STYLE, width: "100%", marginBottom: 6 }}>
+        <div style={{ padding: "var(--space-6) var(--space-10)" }}>
+          <select value={noteKind} onChange={(e) => setNoteKind(e.target.value as NoteKind)} style={{ ...SELECT_STYLE, width: "100%", marginBottom: "var(--space-6)" }}>
             {NOTE_KINDS.map((nk) => <option key={nk.value} value={nk.value}>{nk.label}</option>)}
           </select>
-          <button onClick={onChangeKind} disabled={disabled} style={{ ...BTN_ACCENT_STYLE, width: "100%", background: "#38d9a9", opacity: disabled ? 0.4 : 1, cursor: disabled ? "not-allowed" : "pointer" }}>
+          <Button variant="primary" block icon={Shapes} onClick={onChangeKind} disabled={disabled}>
             Set kind on {noteCount} notes
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick actions */}
       <div style={CARD_STYLE}>
-        <div style={{ padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-primary)", borderBottom: "1px solid rgba(42, 42, 53, 0.55)" }}>
-          Quick Actions
+        <div style={CARD_TITLE_STYLE}>
+          Quick actions
         </div>
-        <div style={{ padding: "6px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <button onClick={onFlipNotes} disabled={disabled} style={{ ...BTN_MUTED_STYLE, width: "100%", opacity: disabled ? 0.4 : 1, cursor: disabled ? "not-allowed" : "pointer" }}>
-            Flip Above/Below ({noteCount} notes)
-          </button>
-          <div style={{ display: "flex", gap: 6, alignItems: "end" }}>
+        <div style={{ padding: "var(--space-6) var(--space-10)", display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          <Button block icon={FlipVertical2} onClick={onFlipNotes} disabled={disabled}>
+            Flip above/below ({noteCount} notes)
+          </Button>
+          <div style={{ display: "flex", gap: "var(--space-6)", alignItems: "end" }}>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 9, color: "var(--text-muted)", display: "block", marginBottom: 2 }}>Speed</label>
-              <input type="number" step="0.1" value={noteSpeed} onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setNoteSpeed(n); }} style={{ ...INPUT_STYLE, width: "100%" }} />
+              <label style={LABEL_STYLE}>Speed</label>
+              <input type="number" step="0.1" value={noteSpeed} onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setNoteSpeed(n); }} style={NUM_INPUT_STYLE} />
             </div>
-            <button onClick={onChangeSpeed} disabled={disabled} style={{ ...BTN_MUTED_STYLE, opacity: disabled ? 0.4 : 1, cursor: disabled ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
-              Set Speed
-            </button>
+            <Button icon={Gauge} onClick={onChangeSpeed} disabled={disabled}>
+              Set speed
+            </Button>
           </div>
         </div>
       </div>

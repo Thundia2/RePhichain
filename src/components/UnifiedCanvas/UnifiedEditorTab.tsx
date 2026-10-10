@@ -121,11 +121,15 @@ export function UnifiedEditorTab() {
             <>
               {/* Resize handle */}
               <div
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="Resize panel"
+                className="ui-hover"
                 onMouseDown={handleResizeStart}
                 style={{
                   height: 4,
                   cursor: "ns-resize",
-                  background: "var(--border-color)",
+                  borderTop: "var(--rule) solid var(--border-color)",
                   flexShrink: 0,
                 }}
               />
@@ -141,11 +145,15 @@ export function UnifiedEditorTab() {
           {/* Keyframe bar with resize handle */}
           {keyframeBarOpen && (
             <div
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize keyframe bar"
+              className="ui-hover"
               onMouseDown={handleKbResizeStart}
               style={{
                 height: 4,
                 cursor: "ns-resize",
-                background: "var(--border-color)",
+                borderTop: "var(--rule) solid var(--border-color)",
                 flexShrink: 0,
               }}
             />
@@ -154,7 +162,7 @@ export function UnifiedEditorTab() {
             style={{
               height: keyframeBarOpen ? keyframeBarHeight : 0,
               overflow: "hidden",
-              transition: "height 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+              transition: "height var(--dur-base) var(--ease-out)",
               flexShrink: 0,
             }}
           >

@@ -33,6 +33,7 @@ import { UnrolledRenderer, effectiveGutterWidth, EVENT_DIAMOND_HIT_RADIUS, EVENT
 import type { UnrolledOverlayLine } from "../../canvas/unrolledRenderer";
 import { BEAT_GUTTER_WIDTH, BASE_PX_PER_BEAT } from "../../constants/canvasConstants";
 import { getPlayheadBeat } from "../../utils/playhead";
+import { chromeTheme, sansFont, seriesColor } from "../../canvas/chromeTheme";
 import { beatToFloat } from "../../types/chart";
 import { snapBeat, floatToBeat } from "../../utils/beat";
 import { snapX } from "../../utils/xSnap";
@@ -205,11 +206,12 @@ export function UnrolledCanvas({
         const h = cnv.height / dpr;
         const cx = cnv.getContext("2d");
         if (cx) {
+          const t = chromeTheme();
           cx.clearRect(0, 0, w, h);
-          cx.fillStyle = "#0e1629";
+          cx.fillStyle = t.bgPrimary;
           cx.fillRect(0, 0, w, h);
-          cx.fillStyle = "rgba(255,255,255,0.2)";
-          cx.font = "14px monospace";
+          cx.fillStyle = t.textSecondary;
+          cx.font = sansFont(12);
           cx.textAlign = "center";
           cx.textBaseline = "middle";
           cx.fillText(
@@ -247,7 +249,7 @@ export function UnrolledCanvas({
       // Build overlay lines
       let overlayLines: UnrolledOverlayLine[] | undefined;
       if (es.timelineOverlayEnabled && es.timelineOverlayLines.length > 0) {
-        const overlayColors = ["#ff6b6b", "#4ecdc4", "#ffe66d", "#95e1d3", "#f38181", "#aa96da"];
+        // Distinct series colour per overlay line (same order in every view)
         overlayLines = [];
         for (let i = 0; i < es.timelineOverlayLines.length; i++) {
           const li = es.timelineOverlayLines[i];
@@ -257,7 +259,7 @@ export function UnrolledCanvas({
           overlayLines.push({
             notes: ol.notes,
             lineIndex: li,
-            color: overlayColors[i % overlayColors.length],
+            color: seriesColor(i),
           });
         }
       }

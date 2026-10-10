@@ -37,6 +37,7 @@ import { snapBeat } from "../../utils/beat";
 import type { NoteKind } from "../../types/chart";
 import type { EditorTool } from "../../types/editor";
 import { TimelineMinimap } from "./TimelineMinimap";
+import { seriesColor } from "../../canvas/chromeTheme";
 
 /** Extra beats of padding beyond the last content */
 const SCROLL_PADDING_BEATS = 8;
@@ -181,8 +182,7 @@ export function Timeline() {
       // Build overlay lines from editorStore if overlay is enabled
       const overlayLines: { notes: import("../../types/chart").Note[]; lineIndex: number; color: string }[] = [];
       if (es.timelineOverlayEnabled && es.timelineOverlayLines.length > 0) {
-        // Assign distinct colors for overlay lines
-        const OVERLAY_COLORS = ["#ff6b6b", "#51cf66", "#ffd43b", "#cc5de8", "#4dabf7", "#ff922b", "#20c997", "#f06595"];
+        // Distinct series colour per overlay line (same order in every view)
         for (let oi = 0; oi < es.timelineOverlayLines.length; oi++) {
           const oLineIdx = es.timelineOverlayLines[oi];
           if (oLineIdx === selLineIdx) continue; // skip selected line
@@ -191,7 +191,7 @@ export function Timeline() {
             overlayLines.push({
               notes: oLine.notes,
               lineIndex: oLineIdx,
-              color: OVERLAY_COLORS[oi % OVERLAY_COLORS.length],
+              color: seriesColor(oi),
             });
           }
         }
@@ -512,7 +512,7 @@ export function Timeline() {
   return (
     <div
       className="w-full h-full relative flex flex-col"
-      style={{ backgroundColor: "#16213e" }}
+      style={{ backgroundColor: "var(--bg-primary)" }}
     >
       <TimelineMinimap />
       <div ref={containerRef} className="flex-1 relative min-h-0">
@@ -527,7 +527,7 @@ export function Timeline() {
       />
       {!hasLine && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+          <span style={{ fontSize: "var(--fs-body)", color: "var(--text-secondary)" }}>
             Select a line to edit
           </span>
         </div>
@@ -536,35 +536,41 @@ export function Timeline() {
       {/* Context menu */}
       {contextMenu && (
         <div
-          className="absolute z-50 rounded shadow-lg py-1 text-xs"
+          role="menu"
+          className="ui-popover"
           style={{
+            position: "absolute",
+            zIndex: "var(--z-dropdown)",
             left: contextMenu.x,
             top: contextMenu.y,
-            backgroundColor: "var(--bg-secondary)",
-            border: "1px solid var(--border-color)",
-            minWidth: 160,
+            minWidth: 180,
           }}
         >
           {useEditorStore.getState().curveTrackCreation ? (
             <button
-              className="w-full px-3 py-1.5 text-left hover:bg-white/10"
-              style={{ color: "var(--text-primary)" }}
+              type="button"
+              role="menuitem"
+              className="ui-menu-item"
               onClick={handleCompleteCurveTrack}
             >
-              End Curve Track Here
+              End curve track here
             </button>
           ) : (
             <button
-              className="w-full px-3 py-1.5 text-left hover:bg-white/10"
-              style={{ color: "var(--text-primary)" }}
+              type="button"
+              role="menuitem"
+              className="ui-menu-item"
               onClick={handleStartCurveTrack}
             >
-              Start Curve Track From Here
+              Start curve track from here
             </button>
           )}
+          <div className="ui-menu-separator" />
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-white/10"
-            style={{ color: "var(--text-muted)" }}
+            type="button"
+            role="menuitem"
+            className="ui-menu-item"
+            style={{ color: "var(--text-secondary)" }}
             onClick={() => setContextMenu(null)}
           >
             Cancel

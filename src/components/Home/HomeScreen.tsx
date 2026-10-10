@@ -1,12 +1,11 @@
 // ============================================================
-// Home Screen — Linear/Figma style
+// Home Screen
 //
 // Two-column layout: main content (welcome, action cards,
 // recent projects) + right sidebar (quick reference).
 //
-// Recent change: Added confirmation dialog to "Clear all" button
-// and individual delete (✕) buttons on each project row.
-// Both use the existing showConfirm() from ConfirmDialog.
+// "Clear all" and the per-row remove button (shown on row hover
+// or keyboard focus) both ask first via showConfirm().
 // ============================================================
 
 import { useState } from "react";
@@ -28,23 +27,31 @@ import {
   setAudioBlobUrl,
   clearProjectAudio,
 } from "../../utils/chartSessions";
+import { FilePlus, FileInput, Music, X, BookOpen } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { EditorGuideModal } from "./EditorGuideModal";
+import { Icon } from "../common/Icon";
+import { IconButton } from "../common/IconButton";
+import { Button } from "../common/Button";
+import { Kbd } from "../common/Kbd";
+import { NoteGlyph } from "../common/NoteGlyph";
+import type { NoteKind } from "../../types/chart";
 
 interface HomeScreenProps {
   onNewChart: () => void;
   onImportChart: () => void;
 }
 
-// ── Note type colors (match the mockup + game) ──
-const NOTE_TYPES = [
-  { label: "Tap", color: "#48b5ff", key: "Q" },
-  { label: "Drag", color: "#ffd24a", key: "W" },
-  { label: "Flick", color: "#ff4a6a", key: "E" },
-  { label: "Hold", color: "#4aff7a", key: "R" },
+// Note types (drawn with NoteGlyph in their note colours)
+const NOTE_TYPES: { label: string; kind: NoteKind; key: string }[] = [
+  { label: "Tap", kind: "tap", key: "Q" },
+  { label: "Drag", kind: "drag", key: "W" },
+  { label: "Flick", kind: "flick", key: "E" },
+  { label: "Hold", kind: "hold", key: "R" },
 ];
 
 const SHORTCUTS = [
-  { label: "Play / Pause", key: "Space" },
+  { label: "Play / pause", key: "Space" },
   { label: "Undo", key: "Ctrl+Z" },
   { label: "Redo", key: "Ctrl+Shift+Z" },
   { label: "Select tool", key: "V" },
@@ -59,22 +66,17 @@ const TIPS = [
   "Set opacity to 0 for invisible lines — a staple of hard charts.",
 ];
 
-// ── Thumbnail gradient palette ──
-const GRADIENTS = [
-  "linear-gradient(135deg, #48b5ff33, #ff4a6a33)",
-  "linear-gradient(135deg, #4aff7a33, #ffd24a33)",
-  "linear-gradient(135deg, #6c8aff33, #cc5de833)",
-  "linear-gradient(135deg, #ff4a6a33, #ffd24a33)",
-  "linear-gradient(135deg, #48b5ff33, #4aff7a33)",
-];
-
-function getGradient(index: number) {
-  return GRADIENTS[index % GRADIENTS.length];
-}
+/** Sentence-case section label (11px / 600, text-secondary). */
+const SECTION_STYLE: React.CSSProperties = {
+  fontSize: "var(--fs-control)",
+  lineHeight: "14px",
+  fontWeight: 600,
+  color: "var(--text-secondary)",
+};
 
 function timeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return "just now";
+  if (seconds < 60) return "Just now";
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
@@ -84,25 +86,6 @@ function timeAgo(timestamp: number): string {
   if (days < 30) return `${days} days ago`;
   const months = Math.floor(days / 30);
   return `${months}mo ago`;
-}
-
-// ── Kbd badge component ──
-function Kbd({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        padding: "1px 5px",
-        borderRadius: 4,
-        fontSize: 10,
-        fontFamily: "'SF Mono', 'Cascadia Code', 'Fira Code', monospace",
-        color: "var(--text-muted)",
-        backgroundColor: "var(--bg-active)",
-      }}
-    >
-      {children}
-    </span>
-  );
 }
 
 async function handleOpenRecent(project: RecentProject) {
@@ -208,7 +191,8 @@ async function handleOpenRecent(project: RecentProject) {
 
 export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
   const [showGuide, setShowGuide] = useState(false);
-  // Track which project row is hovered (for showing the delete button)
+  // Which project row is hovered or holds keyboard focus — swaps the
+  // timestamp for the remove button on that row.
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const projects = useRecentProjectsStore((s) => s.projects);
   const clearAll = useRecentProjectsStore((s) => s.clearAll);
@@ -219,30 +203,31 @@ export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
       className="h-full"
       style={{ backgroundColor: "var(--bg-primary)", display: "flex", justifyContent: "center" }}
     >
-      {/* ── Centered wrapper ── */}
+      {/* Centered wrapper */}
       <div style={{ display: "flex", maxWidth: 900, width: "100%" }}>
-      {/* ── Left: Main content ── */}
+      {/* Left: main content */}
       <div
         style={{
           flex: 1,
-          padding: "32px 40px",
+          padding: "var(--space-32) 40px",
           maxWidth: 640,
           overflowY: "auto",
         }}
       >
         {/* Welcome */}
         <div style={{ marginBottom: 28 }}>
-          <div
+          <h1
             style={{
-              fontSize: 20,
+              fontSize: "var(--fs-display)",
+              lineHeight: "26px",
               fontWeight: 500,
               color: "var(--text-primary)",
-              marginBottom: 4,
+              marginBottom: "var(--space-4)",
             }}
           >
             Welcome back
-          </div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          </h1>
+          <div style={{ fontSize: "var(--fs-body)", color: "var(--text-secondary)" }}>
             Create a new chart or pick up where you left off.
           </div>
         </div>
@@ -252,150 +237,144 @@ export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
-            gap: 10,
-            marginBottom: 32,
+            gap: "var(--space-10)",
+            marginBottom: "var(--space-32)",
           }}
         >
           <ActionCard
-            icon="📄"
-            title="New chart"
-            description="Start from scratch with a blank project"
+            icon={FilePlus}
+            primary
+            title="New chart…"
+            description="Start from scratch with a blank project."
             shortcut="Ctrl+N"
             onClick={onNewChart}
           />
           <ActionCard
-            icon="📥"
-            title="Import chart"
-            description="Open a chart file (.json, .zip, .pez, .pec)"
+            icon={FileInput}
+            title="Import chart…"
+            description="Open a chart file (.json, .zip, .pez, .pec)."
             shortcut="Ctrl+O"
             onClick={onImportChart}
           />
         </div>
 
         {/* Recent projects */}
-        <div style={{ marginBottom: 24 }}>
+        <div style={{ marginBottom: "var(--space-24)" }}>
           <div
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              marginBottom: 12,
+              minHeight: "var(--control-sm)",
+              marginBottom: "var(--space-8)",
             }}
           >
-            <span
-              style={{
-                fontSize: 11,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-                color: "var(--text-muted)",
-              }}
-            >
-              Recent projects
-            </span>
+            <h2 style={SECTION_STYLE}>Recent projects</h2>
             {projects.length > 0 && (
-              <button
-                style={{
-                  fontSize: 11,
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  transition: "color 0.1s",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.color =
-                    "var(--text-secondary)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.color =
-                    "var(--text-muted)";
-                }}
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={async () => {
                   const { showConfirm } = await import("../common/ConfirmDialog");
-                  if (await showConfirm(`Clear all ${projects.length} recent projects?`)) {
+                  const n = projects.length;
+                  if (await showConfirm("This only clears the list; your chart files stay where they are.", {
+                    title: `Clear all ${n} recent projects?`,
+                    confirmLabel: "Clear list",
+                    danger: true,
+                  })) {
                     clearAll();
                   }
                 }}
               >
                 Clear all
-              </button>
+              </Button>
             )}
           </div>
 
           {projects.length === 0 ? (
             <div
               style={{
-                padding: "32px 16px",
+                padding: "var(--space-32) var(--space-16)",
                 textAlign: "center",
-                fontSize: 12,
-                color: "var(--text-muted)",
-                backgroundColor: "var(--bg-tertiary)",
-                borderRadius: 10,
-                border: "1px solid var(--border-color)",
+                fontSize: "var(--fs-body)",
+                color: "var(--text-secondary)",
+                backgroundColor: "var(--bg-secondary)",
+                borderRadius: "var(--radius-xl)",
               }}
             >
               No recent projects
             </div>
           ) : (
-            <div
-              style={{
-                backgroundColor: "var(--bg-tertiary)",
-                borderRadius: 10,
-                border: "1px solid var(--border-color)",
-                overflow: "hidden",
-              }}
-            >
-              {projects.map((project, i) => {
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+              {projects.map((project) => {
                 const isHovered = hoveredId === project.id;
+                const name = project.name || "Untitled";
                 return (
                 <div
                   key={project.id}
-                  onClick={() => handleOpenRecent(project)}
+                  className="ui-hover"
+                  // Hover/focus state only toggles which trailing control is shown
+                  // (timestamp vs. remove button); the row wash comes from .ui-hover.
+                  onMouseEnter={() => setHoveredId(project.id)}
+                  onMouseLeave={(e) => {
+                    // Keep the remove button visible while it (or the row) has focus.
+                    if (!e.currentTarget.contains(document.activeElement)) setHoveredId(null);
+                  }}
+                  onFocus={() => setHoveredId(project.id)}
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHoveredId(null);
+                  }}
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 12,
-                    padding: "10px 12px",
-                    cursor: "pointer",
-                    transition: "background 0.1s",
-                    borderBottom:
-                      i < projects.length - 1
-                        ? "1px solid rgba(42, 42, 53, 0.33)"
-                        : "none",
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.backgroundColor =
-                      "var(--bg-active)";
-                    setHoveredId(project.id);
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.backgroundColor =
-                      "transparent";
-                    setHoveredId(null);
+                    gap: "var(--space-4)",
+                    paddingRight: "var(--space-10)",
+                    borderRadius: "var(--radius-md)",
                   }}
                 >
-                  {/* Thumbnail */}
-                  <div
+                  {/* Open: a real button, so the remove button sits beside it rather than inside it. */}
+                  <button
+                    type="button"
+                    aria-label={`Open ${name}`}
+                    onClick={() => handleOpenRecent(project)}
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 8,
-                      background: getGradient(i),
+                      flex: 1,
+                      minWidth: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "var(--space-12)",
+                      padding: "var(--space-8) 0 var(--space-8) var(--space-10)",
+                      border: "none",
+                      borderRadius: "var(--radius-md)",
+                      background: "transparent",
+                      color: "inherit",
+                      font: "inherit",
+                      textAlign: "left",
+                      cursor: "pointer",
+                    }}
+                  >
+                  {/* Thumbnail */}
+                  <span
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: "var(--bg-active)",
+                      color: "var(--text-secondary)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: 14,
                       flexShrink: 0,
                     }}
                   >
-                    🎵
-                  </div>
+                    <Icon icon={Music} size={16} />
+                  </span>
                   {/* Info */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
+                  <span style={{ display: "block", flex: 1, minWidth: 0 }}>
+                    <span
                       style={{
-                        fontSize: 12,
+                        display: "block",
+                        fontSize: "var(--fs-body)",
                         color: "var(--text-primary)",
                         fontWeight: 500,
                         overflow: "hidden",
@@ -403,12 +382,13 @@ export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {project.name || "Untitled"}
-                    </div>
-                    <div
+                      {name}
+                    </span>
+                    <span
                       style={{
-                        fontSize: 10,
-                        color: "var(--text-muted)",
+                        display: "block",
+                        fontSize: "var(--fs-caption)",
+                        color: "var(--text-secondary)",
                         marginTop: 1,
                       }}
                     >
@@ -420,55 +400,38 @@ export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
                       {project.noteCount
                         ? ` · ${project.noteCount.toLocaleString()} notes`
                         : ""}
-                    </div>
-                  </div>
-                  {/* Time (hidden on hover) + Delete button (shown on hover) */}
-                  <div
+                    </span>
+                  </span>
+                  {/* Time (hidden on hover/focus) + remove button (shown on hover/focus) */}
+                  <span
                     style={{
-                      fontSize: 10,
-                      color: "var(--text-muted)",
+                      fontSize: "var(--fs-caption)",
+                      color: "var(--text-secondary)",
                       flexShrink: 0,
                       display: isHovered ? "none" : "block",
                     }}
                   >
                     {timeAgo(project.timestamp)}
-                  </div>
-                  {/* Delete button — appears on row hover */}
-                  <button
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 6,
-                      border: "none",
-                      background: "var(--bg-active)",
-                      color: "var(--text-muted)",
-                      fontSize: 12,
-                      cursor: "pointer",
-                      display: isHovered ? "flex" : "none",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                      transition: "color 0.12s, background 0.12s",
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.color = "var(--error)";
-                      (e.currentTarget as HTMLElement).style.background = "rgba(255, 74, 106, 0.15)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
-                      (e.currentTarget as HTMLElement).style.background = "var(--bg-active)";
-                    }}
+                  </span>
+                  </button>
+                  <IconButton
+                    icon={X}
+                    size="md"
+                    danger
+                    label="Remove from recent projects"
+                    style={{ display: isHovered ? undefined : "none" }}
                     onClick={async (e) => {
                       e.stopPropagation();
                       const { showConfirm } = await import("../common/ConfirmDialog");
-                      const name = project.name || "Untitled";
-                      if (await showConfirm(`Remove "${name}" from recent projects?`)) {
+                      if (await showConfirm("The chart files on disk are not deleted.", {
+                        title: `Remove "${name}" from recent projects?`,
+                        confirmLabel: "Remove",
+                        danger: true,
+                      })) {
                         removeOne(project.timestamp);
                       }
                     }}
-                  >
-                    ✕
-                  </button>
+                  />
                 </div>
                 );
               })}
@@ -477,64 +440,43 @@ export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
         </div>
       </div>
 
-      {/* ── Right: Quick Reference sidebar ── */}
+      {/* Right: quick reference sidebar */}
       <div
         style={{
           width: 260,
-          borderLeft: "1px solid var(--border-color)",
-          padding: "24px 20px",
+          borderLeft: "var(--rule) solid var(--border-color)",
+          padding: "var(--space-24) var(--space-20)",
           overflowY: "auto",
         }}
       >
-        <div
+        <h2
           style={{
-            fontSize: 11,
-            textTransform: "uppercase",
-            letterSpacing: 0.5,
-            color: "var(--text-muted)",
-            marginBottom: 14,
+            fontSize: "var(--fs-headline)",
+            lineHeight: "18px",
+            fontWeight: 600,
+            color: "var(--text-primary)",
+            marginBottom: "var(--space-14)",
           }}
         >
           Quick reference
-        </div>
+        </h2>
 
         {/* Note types */}
-        <div style={{ marginBottom: 20 }}>
-          <div
-            style={{
-              fontSize: 11,
-              color: "var(--text-secondary)",
-              fontWeight: 500,
-              marginBottom: 8,
-            }}
-          >
-            Note types
-          </div>
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: 5 }}
-          >
+        <div style={{ marginBottom: "var(--space-20)" }}>
+          <h3 style={{ ...SECTION_STYLE, marginBottom: "var(--space-8)" }}>Note types</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
             {NOTE_TYPES.map((nt) => (
               <div
                 key={nt.label}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 8,
-                  fontSize: 11,
+                  gap: "var(--space-8)",
+                  fontSize: "var(--fs-control)",
                 }}
               >
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 2,
-                    backgroundColor: nt.color,
-                    flexShrink: 0,
-                  }}
-                />
-                <span style={{ color: "var(--text-primary)" }}>
-                  {nt.label}
-                </span>
+                <NoteGlyph kind={nt.kind} size={14} />
+                <span style={{ color: "var(--text-primary)" }}>{nt.label}</span>
                 <span style={{ flex: 1 }} />
                 <Kbd>{nt.key}</Kbd>
               </div>
@@ -543,20 +485,9 @@ export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
         </div>
 
         {/* Essential shortcuts */}
-        <div style={{ marginBottom: 20 }}>
-          <div
-            style={{
-              fontSize: 11,
-              color: "var(--text-secondary)",
-              fontWeight: 500,
-              marginBottom: 8,
-            }}
-          >
-            Essential shortcuts
-          </div>
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: 5 }}
-          >
+        <div style={{ marginBottom: "var(--space-20)" }}>
+          <h3 style={{ ...SECTION_STYLE, marginBottom: "var(--space-8)" }}>Essential shortcuts</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
             {SHORTCUTS.map((s) => (
               <div
                 key={s.label}
@@ -564,12 +495,10 @@ export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  fontSize: 11,
+                  fontSize: "var(--fs-control)",
                 }}
               >
-                <span style={{ color: "var(--text-muted)" }}>
-                  {s.label}
-                </span>
+                <span style={{ color: "var(--text-secondary)" }}>{s.label}</span>
                 <Kbd>{s.key}</Kbd>
               </div>
             ))}
@@ -578,55 +507,28 @@ export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
 
         {/* Tips */}
         <div>
+          <h3 style={{ ...SECTION_STYLE, marginBottom: "var(--space-8)" }}>Tips</h3>
           <div
             style={{
-              fontSize: 11,
+              fontSize: "var(--fs-control)",
               color: "var(--text-secondary)",
-              fontWeight: 500,
-              marginBottom: 8,
-            }}
-          >
-            Tips
-          </div>
-          <div
-            style={{
-              fontSize: 11,
-              color: "var(--text-muted)",
               lineHeight: 1.55,
             }}
           >
             {TIPS.map((tip, i) => (
-              <p key={i} style={{ marginBottom: i < TIPS.length - 1 ? 6 : 0 }}>
+              <p key={i} style={{ marginBottom: i < TIPS.length - 1 ? "var(--space-6)" : 0 }}>
                 {tip}
               </p>
             ))}
           </div>
-          <button
-            style={{
-              marginTop: 12,
-              padding: "8px 12px",
-              backgroundColor: "var(--bg-active)",
-              borderRadius: 8,
-              cursor: "pointer",
-              textAlign: "center",
-              fontSize: 11,
-              color: "var(--accent-primary)",
-              border: "none",
-              width: "100%",
-              transition: "background 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor =
-                "rgba(108, 138, 255, 0.1)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor =
-                "var(--bg-active)";
-            }}
+          <Button
+            block
+            icon={BookOpen}
+            style={{ marginTop: "var(--space-12)" }}
             onClick={() => setShowGuide(true)}
           >
-            View full editor guide →
-          </button>
+            Open editor guide…
+          </Button>
         </div>
       </div>
 
@@ -636,15 +538,20 @@ export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
   );
 }
 
-// ── Action Card sub-component ──
+// Action card sub-component
+// bg-active radius-xl button: 28px icon chip, 13px/600 title,
+// 11px description, shortcut chip. Hover wash comes from .ui-btn.
 function ActionCard({
   icon,
+  primary,
   title,
   description,
   shortcut,
   onClick,
 }: {
-  icon: string;
+  icon: LucideIcon;
+  /** The main action: accent-tint chip with an accent icon. */
+  primary?: boolean;
   title: string;
   description: string;
   shortcut: string;
@@ -652,50 +559,54 @@ function ActionCard({
 }) {
   return (
     <button
+      type="button"
+      className="ui-btn"
       style={{
-        borderRadius: 10,
-        padding: "14px 16px",
-        cursor: "pointer",
+        height: "auto",
+        borderRadius: "var(--radius-xl)",
+        padding: "var(--space-14) var(--space-16)",
         display: "flex",
         flexDirection: "column",
-        gap: 6,
-        backgroundColor: "var(--bg-tertiary)",
-        border: "1px solid var(--border-color)",
+        alignItems: "flex-start",
+        justifyContent: "flex-start",
+        gap: "var(--space-6)",
         textAlign: "left",
-        transition: "border-color 0.15s, background 0.15s",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor =
-          "rgba(108, 138, 255, 0.33)";
-        (e.currentTarget as HTMLElement).style.backgroundColor =
-          "rgba(108, 138, 255, 0.03)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor =
-          "var(--border-color)";
-        (e.currentTarget as HTMLElement).style.backgroundColor =
-          "var(--bg-tertiary)";
+        whiteSpace: "normal",
+        fontWeight: 400,
       }}
       onClick={onClick}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 18 }}>{icon}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
         <span
           style={{
-            fontSize: 13,
-            fontWeight: 500,
+            width: 28,
+            height: 28,
+            borderRadius: "var(--radius-md)",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            backgroundColor: primary ? "var(--accent-tint)" : "var(--fill-hover)",
+            color: primary ? "var(--accent-primary)" : "var(--text-secondary)",
+          }}
+        >
+          <Icon icon={icon} size={16} />
+        </span>
+        <span
+          style={{
+            fontSize: "var(--fs-headline)",
+            lineHeight: "18px",
+            fontWeight: 600,
             color: "var(--text-primary)",
           }}
         >
           {title}
         </span>
       </div>
-      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+      <div style={{ fontSize: "var(--fs-control)", lineHeight: "15px", color: "var(--text-secondary)" }}>
         {description}
       </div>
-      <div style={{ marginTop: 2 }}>
-        <Kbd>{shortcut}</Kbd>
-      </div>
+      <Kbd style={{ marginTop: "var(--space-2)" }}>{shortcut}</Kbd>
     </button>
   );
 }

@@ -2,10 +2,14 @@
 // GroupRow — Individual group list item
 //
 // Displays group color, type badge, name (editable inline),
-// member count, lock status, and action buttons.
+// member count, lock status, and action buttons. Hover comes
+// from ui-hover; the selected row is accent-selected.
 // Extracted from GroupManager.tsx.
 // ============================================================
 
+import { Lock, LockOpen, Trash2, PenLine } from "lucide-react";
+import { Icon } from "../common/Icon";
+import { IconButton } from "../common/IconButton";
 import type { EditorGroup } from "../../types/group";
 
 export interface GroupRowProps {
@@ -37,27 +41,34 @@ export function GroupRow({
 
   return (
     <div
+      className="ui-hover"
       style={{
-        display: "flex", alignItems: "center", gap: 5,
-        padding: "4px 6px", borderRadius: 6,
-        border: isSelected ? "1px solid var(--accent-primary)" : "1px solid transparent",
-        background: isActive ? "rgba(100, 200, 100, 0.08)" : isSelected ? "var(--bg-active)" : "transparent",
-        cursor: "pointer", marginBottom: 2,
+        display: "flex", alignItems: "center", gap: "var(--space-6)",
+        minHeight: "var(--control-lg)",
+        padding: "var(--space-2) var(--space-6)", borderRadius: "var(--radius-md)",
+        background: isSelected
+          ? "var(--accent-selected)"
+          : isActive
+            ? "color-mix(in srgb, var(--success) 8%, transparent)"
+            : undefined,
+        color: isSelected ? "var(--accent-primary)" : "var(--text-primary)",
+        cursor: "pointer", marginBottom: "var(--space-2)",
       }}
       onClick={onSelect}
       onDoubleClick={isActive ? onExitEdit : onEnterEdit}
     >
       {/* Color dot */}
-      <div style={{ width: 8, height: 8, borderRadius: "50%", background: group.color, flexShrink: 0 }} />
+      <div aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "var(--radius-full)", background: group.color, flexShrink: 0 }} />
 
       {/* Type badge */}
       <span style={{
-        fontSize: 8, fontWeight: 700, padding: "1px 3px", borderRadius: 3,
-        background: group.type === "line" ? "rgba(108, 138, 255, 0.15)" : "rgba(56, 217, 169, 0.15)",
-        color: group.type === "line" ? "var(--accent-primary)" : "#38d9a9",
+        fontSize: "var(--fs-badge)", lineHeight: "12px", fontWeight: 600,
+        padding: "1px var(--space-6)", borderRadius: "var(--radius-full)",
+        background: group.type === "line" ? "var(--accent-tint)" : "var(--fill-strong)",
+        color: group.type === "line" ? "var(--accent-primary)" : "var(--text-secondary)",
         flexShrink: 0,
       }}>
-        {group.type === "line" ? "L" : "N"}
+        {group.type === "line" ? "Line" : "Note"}
       </span>
 
       {/* Name */}
@@ -72,16 +83,18 @@ export function GroupRow({
           }}
           autoFocus
           onClick={(e) => e.stopPropagation()}
+          aria-label="Group name"
           style={{
-            flex: 1, fontSize: 11, padding: "1px 4px",
-            background: "var(--bg-secondary)", color: "var(--text-primary)",
-            border: "1px solid var(--accent-primary)", borderRadius: 4,
-            outline: "none", fontFamily: "inherit", minWidth: 0,
+            flex: 1, fontSize: "var(--fs-control)", height: "var(--control-sm)",
+            padding: "0 var(--space-4)",
+            background: "var(--bg-tertiary)", color: "var(--text-primary)",
+            border: "var(--hairline) solid var(--accent-primary)", borderRadius: "var(--radius-sm)",
+            fontFamily: "inherit", minWidth: 0,
           }}
         />
       ) : (
         <span
-          style={{ flex: 1, fontSize: 11, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          style={{ flex: 1, fontSize: "var(--fs-control)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
           onDoubleClick={(e) => { e.stopPropagation(); onStartRename(); }}
         >
           {group.name}
@@ -89,35 +102,42 @@ export function GroupRow({
       )}
 
       {/* Member count */}
-      <span style={{ fontSize: 9, color: "var(--text-muted)", flexShrink: 0 }}>
+      <span
+        aria-label={`${memberCount} members`}
+        style={{ fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", color: "var(--text-secondary)", flexShrink: 0 }}
+      >
         {memberCount}
       </span>
 
       {/* Lock indicator */}
       {group.locked && (
-        <span style={{ fontSize: 9, color: "var(--text-muted)" }} title="Locked">{"\uD83D\uDD12"}</span>
+        <span role="img" aria-label="Locked" title="Locked" style={{ display: "inline-flex", color: "var(--text-secondary)" }}>
+          <Icon icon={Lock} size={12} />
+        </span>
       )}
 
       {/* Active indicator */}
       {isActive && (
-        <span style={{ fontSize: 8, color: "#69db7c", fontWeight: 700 }}>EDIT</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--fs-caption)", color: "var(--success)", fontWeight: 600, flexShrink: 0 }}>
+          <Icon icon={PenLine} size={12} />
+          Editing
+        </span>
       )}
 
       {/* Actions */}
-      <button
+      <IconButton
+        icon={group.locked ? LockOpen : Lock}
+        label={group.locked ? "Unlock group" : "Lock group"}
+        size="sm"
         onClick={(e) => { e.stopPropagation(); onToggleLock(); }}
-        style={{ fontSize: 10, padding: "0 2px", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
-        title={group.locked ? "Unlock" : "Lock"}
-      >
-        {group.locked ? "\uD83D\uDD13" : "\uD83D\uDD12"}
-      </button>
-      <button
+      />
+      <IconButton
+        icon={Trash2}
+        label="Delete group"
+        size="sm"
+        danger
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        style={{ fontSize: 10, padding: "0 2px", background: "none", border: "none", color: "#ff4060", cursor: "pointer" }}
-        title="Delete group"
-      >
-        x
-      </button>
+      />
     </div>
   );
 }

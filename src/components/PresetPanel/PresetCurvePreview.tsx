@@ -1,5 +1,9 @@
 // ============================================================
 // Preset Curve Preview — Mini SVG showing preset shape
+//
+// Chrome (the well behind the curves) comes from tokens via CSS
+// `style` (SVG presentation attributes don't resolve var()); curve
+// strokes keep their EVENT_COLORS identity.
 // ============================================================
 
 import { EVENT_COLORS } from "../../constants/eventColors";
@@ -41,8 +45,8 @@ export function PresetCurvePreview({ preset, width = 80, height = 40 }: PresetCu
   const valRange = maxVal - minVal || 1;
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      <rect x={0} y={0} width={width} height={height} rx={3} fill="rgba(12,12,18,0.6)" />
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" style={{ display: "block" }}>
+      <rect x={0} y={0} width={width} height={height} rx={3} style={{ fill: "var(--bg-primary)" }} />
       {preset.template.map((tmpl, i) => {
         const points: string[] = [];
         const steps = 20;
@@ -91,7 +95,7 @@ export function PresetCurvePreview({ preset, width = 80, height = 40 }: PresetCu
             key={i}
             points={points.join(" ")}
             fill="none"
-            stroke={EVENT_COLORS[tmpl.kind] || "#888"}
+            style={{ stroke: EVENT_COLORS[tmpl.kind] || "var(--text-secondary)" }}
             strokeWidth={1.5}
           />
         );

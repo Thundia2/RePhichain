@@ -4,15 +4,19 @@
 // 3-tier panel system:
 //   Tier 1 (always visible): Inspector sidebar, Keyframe bar
 //   Tier 2 (quick-toggle):   Timeline, Lines, Effects — shown in tab bar
-//   Tier 3 (on-demand):      All other panels — overlay with "← Back" button
+//   Tier 3 (on-demand):      All other panels — overlay with a "Back" button
 //
 // Supports popping out into a separate browser window.
 // ============================================================
 
 import { createPortal } from "react-dom";
+import { ArrowLeft, PictureInPicture2, SquareArrowOutUpRight, X } from "lucide-react";
 import { useEditorStore } from "../../stores/editorStore";
 import type { PanelId } from "../../types/editor";
 import { usePopoutWindow } from "../../hooks/usePopoutWindow";
+import { Button } from "../common/Button";
+import { IconButton } from "../common/IconButton";
+import { SegmentedControl } from "../common/SegmentedControl";
 
 // Panel components
 import { EffectsEditor } from "../EffectsEditor/EffectsEditor";
@@ -39,13 +43,13 @@ const QUICK_PANELS: { id: PanelId; label: string; hotkey: string }[] = [
 const ON_DEMAND_LABELS: Record<string, string> = {
   "textures": "Textures",
   "group-manager": "Groups",
-  "bpm-list": "BPM List",
-  "chart-settings": "Chart Settings",
-  "timeline-settings": "Timeline Settings",
+  "bpm-list": "BPM list",
+  "chart-settings": "Chart settings",
+  "timeline-settings": "Timeline settings",
   "validation": "Validation",
   "game-preview": "Preview",
   "presets": "Presets",
-  "hotkey-reference": "Hotkey Reference",
+  "hotkey-reference": "Hotkey reference",
 };
 
 function renderCanvasPanel(id: PanelId) {
@@ -75,7 +79,7 @@ function renderCanvasPanel(id: PanelId) {
     case "hotkey-reference":
       return <HotkeyReferencePanel />;
     default:
-      return <div style={{ padding: 12, color: "var(--text-muted)" }}>Panel not available</div>;
+      return <div style={{ padding: "var(--space-12)", fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>Panel not available</div>;
   }
 }
 
@@ -105,7 +109,7 @@ export function CanvasPanelDrawer() {
         flexDirection: "column",
         height: "100%",
         background: "var(--bg-secondary)",
-        borderTop: isPopped ? "none" : "1px solid var(--border-color)",
+        borderTop: isPopped ? "none" : "var(--rule) solid var(--border-color)",
       }}
     >
       {/* Tab bar */}
@@ -113,90 +117,68 @@ export function CanvasPanelDrawer() {
         style={{
           display: "flex",
           alignItems: "center",
-          height: 28,
+          gap: "var(--space-4)",
+          height: 32,
+          padding: "0 var(--space-4)",
           flexShrink: 0,
           background: "var(--bg-primary)",
-          borderBottom: "1px solid var(--border-color)",
+          borderBottom: "var(--rule) solid var(--border-color)",
           overflow: "hidden",
         }}
       >
         {overlayPanelId ? (
-          /* On-demand overlay: show "← Back" + panel title */
+          /* On-demand overlay: show "Back" + panel title */
           <>
-            <button
-              onClick={() => setOnDemandOverlay(null)}
-              style={{
-                padding: "0 8px", height: 28, fontSize: 11,
-                border: "none", background: "transparent",
-                color: "var(--accent-primary)", cursor: "pointer",
-              }}
-            >
-              ← Back
-            </button>
+            <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => setOnDemandOverlay(null)}>
+              Back
+            </Button>
             <span style={{
-              fontSize: 11, fontWeight: "bold",
-              color: "var(--text-primary)", padding: "0 8px",
+              fontSize: "var(--fs-control)", fontWeight: 600,
+              color: "var(--text-primary)", padding: "0 var(--space-4)", flex: 1,
             }}>
               {ON_DEMAND_LABELS[overlayPanelId] ?? overlayPanelId}
             </span>
           </>
         ) : (
-          /* Quick-toggle tabs (Tier 2) */
-          <div style={{ display: "flex", flex: 1, gap: 0 }}>
-            {QUICK_PANELS.map((panel) => (
-              <button
-                key={panel.id}
-                onClick={() => toggleCanvasPanel(panel.id)}
-                title={panel.hotkey}
-                style={{
-                  padding: "0 12px",
-                  height: 28,
-                  fontSize: 11,
-                  border: "none",
-                  borderRight: "1px solid var(--border-color)",
-                  background: activePanelId === panel.id ? "var(--bg-secondary)" : "transparent",
-                  color: activePanelId === panel.id ? "var(--accent-primary)" : "var(--text-muted)",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  fontWeight: activePanelId === panel.id ? "bold" : "normal",
-                }}
-              >
-                {panel.label}
-              </button>
-            ))}
+          /* Quick-toggle tabs (Tier 2) — clicking the active tab closes it */
+          <div style={{ display: "flex", flex: 1, minWidth: 0 }}>
+            <SegmentedControl
+              role="tablist"
+              label="Panels"
+              size="sm"
+              value={activePanelId}
+              onChange={(id) => toggleCanvasPanel(id)}
+              options={QUICK_PANELS.map((panel) => ({
+                value: panel.id,
+                label: panel.label,
+                title: `${panel.label} (${panel.hotkey})`,
+              }))}
+            />
           </div>
         )}
 
         {/* Pop out / Pop in button */}
-        <button
+        <IconButton
+          icon={isPopped ? PictureInPicture2 : SquareArrowOutUpRight}
+          label={isPopped ? "Pop back in" : "Pop out to window"}
+          size="md"
+          active={isPopped || undefined}
+          tooltipPosition="left"
           onClick={isPopped ? closePopout : openPopout}
-          style={{
-            width: 28, height: 28, fontSize: 12,
-            border: "none", background: "transparent",
-            color: isPopped ? "var(--accent-primary)" : "var(--text-muted)",
-            cursor: "pointer", flexShrink: 0,
-          }}
-          title={isPopped ? "Pop back in" : "Pop out to window"}
-        >
-          {isPopped ? "⧉" : "↗"}
-        </button>
+        />
 
         {/* Close button */}
-        <button
+        <IconButton
+          icon={X}
+          label="Close panel"
+          size="md"
+          tooltipPosition="left"
           onClick={() => {
             closePopout();
             setOnDemandOverlay(null);
             setCanvasActivePanel(null);
           }}
-          style={{
-            width: 28, height: 28, fontSize: 14,
-            border: "none", background: "transparent",
-            color: "var(--text-muted)", cursor: "pointer", flexShrink: 0,
-          }}
-          title="Close panel"
-        >
-          x
-        </button>
+        />
       </div>
 
       {/* Panel content */}

@@ -4,10 +4,13 @@
 // Renders shader effects as colored bars on horizontal lanes,
 // one lane per unique shader type. Features:
 //   - Beat grid background with numbered major lines
-//   - Red playhead synced to audio position
+//   - Playhead (indicator colour) synced to audio position
 //   - Click to select effect
 //   - Ctrl+Scroll to zoom, Alt+Drag or middle-click to pan
 //   - Lane labels with color dots on left
+//
+// Chrome (backgrounds, grid, labels, playhead) comes from chromeTheme;
+// the per-shader lane colours are data colours.
 // ============================================================
 
 import { useRef, useEffect, useCallback, useState } from "react";
@@ -15,6 +18,7 @@ import { useAudioStore } from "../../stores/audioStore";
 import type { ShaderEffect } from "../../types/extra";
 import { beatToFloat } from "../../types/chart";
 import { getPlayheadBeat } from "../../utils/playhead";
+import { chromeTheme, monoFont, sansFont, withAlpha } from "../../canvas/chromeTheme";
 
 // ---- Lane color palette (one per shader type) ----
 const LANE_COLORS: Record<string, string> = {
@@ -99,12 +103,13 @@ export function EffectsTimeline({
       canvas.height = h * dpr;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const t = chromeTheme();
 
     // Clear
     ctx.clearRect(0, 0, w, h);
 
     // Background
-    ctx.fillStyle = getComputedStyle(canvas).getPropertyValue("--bg-primary").trim() || "#1e1e2e";
+    ctx.fillStyle = t.bgPrimary;
     ctx.fillRect(0, 0, w, h);
 
     const contentX = LANE_LABEL_WIDTH;
@@ -117,12 +122,12 @@ export function EffectsTimeline({
     // ---- Lane backgrounds ----
     for (let i = 0; i < laneOrder.length; i++) {
       const y = HEADER_HEIGHT + i * LANE_HEIGHT;
-      ctx.fillStyle = i % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)";
+      ctx.fillStyle = i % 2 === 0 ? withAlpha(t.fillHover, 0.02) : withAlpha(t.canvasBg, 0.02);
       ctx.fillRect(contentX, y, contentW, LANE_HEIGHT);
     }
 
     // ---- Lane dividers ----
-    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.strokeStyle = t.separator;
     ctx.lineWidth = 0.5;
     for (let i = 0; i <= laneOrder.length; i++) {
       const y = HEADER_HEIGHT + i * LANE_HEIGHT;
@@ -164,7 +169,7 @@ export function EffectsTimeline({
 
       // Selected outline
       if (isSelected) {
-        ctx.strokeStyle = "#fff";
+        ctx.strokeStyle = t.textPrimary;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         roundRect(ctx, clippedX1, y, barW, barH, 4);
@@ -173,8 +178,8 @@ export function EffectsTimeline({
 
       // Label inside bar if wide enough
       if (barW > 40) {
-        ctx.fillStyle = isSelected ? "#fff" : "rgba(255,255,255,0.85)";
-        ctx.font = "bold 9px system-ui, sans-serif";
+        ctx.fillStyle = isSelected ? t.onAccent : withAlpha(t.onAccent, 0.85);
+        ctx.font = monoFont(10, 600);
         ctx.textBaseline = "middle";
         ctx.save();
         ctx.beginPath();
@@ -190,14 +195,14 @@ export function EffectsTimeline({
     }
 
     // ---- Lane labels (left side) ----
-    ctx.fillStyle = getComputedStyle(canvas).getPropertyValue("--bg-secondary").trim() || "#252535";
+    ctx.fillStyle = t.bgSecondary;
     ctx.fillRect(0, 0, LANE_LABEL_WIDTH, h);
 
     // Header label
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.font = "bold 9px system-ui, sans-serif";
+    ctx.fillStyle = t.textSecondary;
+    ctx.font = sansFont(10, 600);
     ctx.textBaseline = "middle";
-    ctx.fillText("SHADER", 6, HEADER_HEIGHT / 2);
+    ctx.fillText("Shader", 6, HEADER_HEIGHT / 2);
 
     for (let i = 0; i < laneOrder.length; i++) {
       const shader = laneOrder[i];
@@ -211,14 +216,14 @@ export function EffectsTimeline({
       ctx.fill();
 
       // Name
-      ctx.fillStyle = "rgba(255,255,255,0.75)";
-      ctx.font = "500 10px system-ui, sans-serif";
+      ctx.fillStyle = t.textSecondary;
+      ctx.font = sansFont(11, 500);
       ctx.textBaseline = "middle";
       ctx.fillText(shader, 20, y + LANE_HEIGHT / 2);
     }
 
     // Divider between labels and content
-    ctx.strokeStyle = "rgba(255,255,255,0.1)";
+    ctx.strokeStyle = t.borderColor;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(LANE_LABEL_WIDTH, 0);
@@ -228,7 +233,7 @@ export function EffectsTimeline({
     // ---- Playhead ----
     const playheadX = contentX + (currentBeat * beatZoom - scrollX);
     if (playheadX >= contentX && playheadX <= w) {
-      ctx.strokeStyle = "#e06c75";
+      ctx.strokeStyle = t.indicatorColor;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(playheadX, 0);
@@ -236,7 +241,7 @@ export function EffectsTimeline({
       ctx.stroke();
 
       // Playhead triangle
-      ctx.fillStyle = "#e06c75";
+      ctx.fillStyle = t.indicatorColor;
       ctx.beginPath();
       ctx.moveTo(playheadX - 4, 0);
       ctx.lineTo(playheadX + 4, 0);
@@ -383,9 +388,9 @@ export function EffectsTimeline({
       style={{
         width: "100%",
         overflow: "hidden",
-        borderRadius: 6,
-        border: "1px solid var(--border-color)",
-        marginTop: 8,
+        borderRadius: "var(--radius-md)",
+        border: "var(--rule) solid var(--border-color)",
+        marginTop: "var(--space-8)",
         cursor: isPanning ? "grabbing" : "default",
       }}
     >
@@ -409,15 +414,15 @@ export function EffectsTimeline({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          padding: "2px 6px",
-          fontSize: 9,
-          color: "var(--text-muted)",
+          padding: "var(--space-2) var(--space-6)",
+          fontSize: "var(--fs-caption)",
+          color: "var(--text-secondary)",
           backgroundColor: "var(--bg-secondary)",
-          borderTop: "1px solid var(--border-color)",
+          borderTop: "var(--rule) solid var(--border-color)",
         }}
       >
-        <span>Ctrl+Scroll: zoom | Alt+Drag: pan</span>
-        <span>{beatZoom.toFixed(0)}px/beat</span>
+        <span>Ctrl+Scroll to zoom · Alt+Drag to pan</span>
+        <span style={{ fontFamily: "var(--font-mono)" }}>{beatZoom.toFixed(0)} px/beat</span>
       </div>
     </div>
   );
@@ -453,12 +458,13 @@ function drawBeatGrid(
   const firstBeat = Math.floor(scrollX / beatZoom);
   const lastBeat = Math.ceil((scrollX + width) / beatZoom);
 
+  const t = chromeTheme();
   for (let beat = firstBeat; beat <= lastBeat; beat++) {
     const x = x0 + (beat * beatZoom - scrollX);
     if (x < x0 || x > x0 + width) continue;
 
     const isMajor = beat % 4 === 0;
-    ctx.strokeStyle = isMajor ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)";
+    ctx.strokeStyle = isMajor ? withAlpha(t.beatLinePrimary, 0.12) : withAlpha(t.beatLineSecondary, 0.04);
     ctx.lineWidth = isMajor ? 1 : 0.5;
     ctx.beginPath();
     ctx.moveTo(x, y0);
@@ -467,8 +473,8 @@ function drawBeatGrid(
 
     // Beat number labels at top
     if (isMajor || beatZoom > 60) {
-      ctx.fillStyle = "rgba(255,255,255,0.3)";
-      ctx.font = "9px system-ui, sans-serif";
+      ctx.fillStyle = t.textSecondary;
+      ctx.font = monoFont(10);
       ctx.textBaseline = "top";
       ctx.textAlign = "center";
       ctx.fillText(String(beat), x, y0 - 16);
@@ -476,15 +482,12 @@ function drawBeatGrid(
   }
 }
 
-/** Convert hex color to rgba */
+/** Lane colour (hex or hsl) at `alpha` opacity */
 function hexToRgba(hex: string, alpha: number): string {
   // Handle HSL colors
   if (hex.startsWith("hsl")) return hex.replace(")", `, ${alpha})`).replace("hsl", "hsla");
   // Handle hex
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
+  return withAlpha(hex, alpha);
 }
 
 /** Canvas 2D rounded rectangle helper */

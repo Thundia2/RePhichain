@@ -1322,7 +1322,7 @@ export function UnifiedCanvas() {
     <div
       ref={containerRef}
       className="w-full h-full relative"
-      style={{ backgroundColor: "#000" }}
+      style={{ backgroundColor: "var(--canvas-bg)" }}
     >
       <canvas
         ref={canvasRef}
@@ -1372,10 +1372,7 @@ export function UnifiedCanvas() {
       />
       {!isLoaded && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <span
-            className="text-sm"
-            style={{ color: "var(--text-muted)" }}
-          >
+          <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-body)", fontFamily: "var(--font-sans)" }}>
             No chart loaded — import or create a chart first
           </span>
         </div>

@@ -4,12 +4,18 @@
 // A small canvas (80x60px) that animates a preset's effect.
 // Shows a simplified line/dot moving through the preset's events
 // over ~2 seconds. Auto-plays on hover or via a play button.
-// Uses requestAnimationFrame for smooth animation.
+// Uses requestAnimationFrame for smooth animation. Chrome colours
+// (background, grid, progress, line) come from chromeTheme; channel
+// markers keep their EVENT_COLORS identity.
 // ============================================================
 
 import { useRef, useEffect, useState, useCallback } from "react";
+import { Play } from "lucide-react";
+import { Icon } from "../common/Icon";
+import { chromeTheme, withAlpha } from "../../canvas/chromeTheme";
+import { EVENT_COLORS } from "../../constants/eventColors";
 import type { EventPreset, EventTemplate, BuiltinTemplateEntry } from "../../types/preset";
-import type { LineEventKind, EasingType } from "../../types/chart";
+import type { EasingType } from "../../types/chart";
 import { beatToFloat } from "../../types/chart";
 
 // Union of both template entry formats for iteration
@@ -177,18 +183,6 @@ function getTotalBeats(templates: AnyTemplateEntry[]): number {
 }
 
 // ============================================================
-// Channel color mapping for drawing
-// ============================================================
-
-const CHANNEL_COLORS: Partial<Record<LineEventKind, string>> = {
-  x: "#4fc3f7",
-  y: "#81c784",
-  rotation: "#ffb74d",
-  opacity: "#ce93d8",
-  speed: "#ef5350",
-};
-
-// ============================================================
 // Component
 // ============================================================
 
@@ -217,13 +211,14 @@ export function PresetPreviewAnimation({
 
       const w = canvas.width;
       const h = canvas.height;
+      const theme = chromeTheme();
 
       // Clear
-      ctx.fillStyle = "#1a1a2e";
+      ctx.fillStyle = theme.bgPrimary;
       ctx.fillRect(0, 0, w, h);
 
       // Draw grid lines
-      ctx.strokeStyle = "#2a2a4a";
+      ctx.strokeStyle = theme.borderColor;
       ctx.lineWidth = 0.5;
       ctx.beginPath();
       ctx.moveTo(w / 2, 0);
@@ -247,7 +242,7 @@ export function PresetPreviewAnimation({
         const px = w / 2 + (s.x / 675) * (w / 2) * 0.8;
         const py = h / 2 - (s.y / 450) * (h / 2) * 0.8;
 
-        ctx.fillStyle = `rgba(100, 200, 255, ${alpha})`;
+        ctx.fillStyle = withAlpha(theme.accentPrimary, alpha);
         ctx.beginPath();
         ctx.arc(px, py, 1.5, 0, Math.PI * 2);
         ctx.fill();
@@ -264,7 +259,7 @@ export function PresetPreviewAnimation({
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(rad);
-      ctx.strokeStyle = `rgba(255, 255, 255, ${opacityNorm})`;
+      ctx.strokeStyle = withAlpha(theme.textPrimary, opacityNorm);
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(-lineLen / 2, 0);
@@ -272,22 +267,22 @@ export function PresetPreviewAnimation({
       ctx.stroke();
 
       // Center dot
-      ctx.fillStyle = `rgba(100, 200, 255, ${opacityNorm})`;
+      ctx.fillStyle = withAlpha(theme.accentPrimary, opacityNorm);
       ctx.beginPath();
       ctx.arc(0, 0, 3, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
       // Draw progress bar at bottom
-      ctx.fillStyle = "#2a2a4a";
+      ctx.fillStyle = theme.borderColor;
       ctx.fillRect(0, h - 3, w, 3);
-      ctx.fillStyle = "#4fc3f7";
+      ctx.fillStyle = theme.accentPrimary;
       ctx.fillRect(0, h - 3, w * normalizedTime, 3);
 
       // Channel indicators at top-left
       const activeChannels = [...new Set(preset.template.map((t) => t.kind))];
       activeChannels.forEach((ch, i) => {
-        ctx.fillStyle = CHANNEL_COLORS[ch] ?? "#888";
+        ctx.fillStyle = EVENT_COLORS[ch] ?? theme.textSecondary;
         ctx.fillRect(2 + i * 6, 2, 4, 4);
       });
     },
@@ -348,6 +343,7 @@ export function PresetPreviewAnimation({
     <div
       className="relative inline-block"
       style={{ width: size.width, height: size.height }}
+      // Hover starts/stops the animation (real work, not a style change)
       onMouseEnter={autoPlayOnHover ? startAnimation : undefined}
       onMouseLeave={autoPlayOnHover ? stopAnimation : undefined}
     >
@@ -355,16 +351,18 @@ export function PresetPreviewAnimation({
         ref={canvasRef}
         width={size.width}
         height={size.height}
-        className="rounded"
-        style={{ display: "block", width: size.width, height: size.height }}
+        aria-hidden="true"
+        style={{ display: "block", width: size.width, height: size.height, borderRadius: "var(--radius-xs)" }}
       />
       {!autoPlayOnHover && !isPlaying && (
         <button
+          type="button"
+          aria-label="Play preview"
           className="absolute inset-0 flex items-center justify-center"
-          style={{ backgroundColor: "rgba(0,0,0,0.3)" }}
+          style={{ backgroundColor: "var(--overlay)", color: "var(--text-primary)", border: "none", borderRadius: "var(--radius-xs)", cursor: "pointer" }}
           onClick={startAnimation}
         >
-          <span style={{ color: "white", fontSize: "16px" }}>&#9654;</span>
+          <Icon icon={Play} size={16} />
         </button>
       )}
     </div>
