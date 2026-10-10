@@ -1,20 +1,27 @@
 // ============================================================
 // Toast Container — Renders notification toasts bottom-right
+//
+// Each toast pairs its status colour with an icon (status colours
+// are never the only signal) and sits on the popover surface.
 // ============================================================
 
 import { useEffect, useState } from "react";
+import { CircleAlert, CircleCheck, Info, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import { useToastStore, type Toast } from "../../stores/toastStore";
+import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
-const TYPE_COLORS: Record<Toast["type"], string> = {
-  error: "#ff4a6a",
-  info: "#6c8aff",
-  success: "#4aff7a",
-  warning: "#ffb74d",
+const TYPE_STYLE: Record<Toast["type"], { color: string; icon: LucideIcon; label: string }> = {
+  error: { color: "var(--error)", icon: CircleAlert, label: "Error" },
+  info: { color: "var(--info)", icon: Info, label: "Info" },
+  success: { color: "var(--success)", icon: CircleCheck, label: "Success" },
+  warning: { color: "var(--warning)", icon: TriangleAlert, label: "Warning" },
 };
 
 function ToastItem({ toast }: { toast: Toast }) {
   const removeToast = useToastStore((s) => s.removeToast);
   const [exiting, setExiting] = useState(false);
+  const { color, icon, label } = TYPE_STYLE[toast.type];
 
   useEffect(() => {
     const fadeTimer = setTimeout(() => setExiting(true), toast.duration - 200);
@@ -27,48 +34,30 @@ function ToastItem({ toast }: { toast: Toast }) {
 
   return (
     <div
+      role={toast.type === "error" ? "alert" : "status"}
       style={{
         display: "flex",
         alignItems: "flex-start",
-        gap: 10,
-        padding: "10px 14px",
-        backgroundColor: "var(--bg-secondary)",
-        border: "1px solid var(--border-color)",
-        borderLeft: `3px solid ${TYPE_COLORS[toast.type]}`,
-        borderRadius: 10,
-        boxShadow: "0 4px 20px rgba(0,0,0,0.35)",
+        gap: "var(--space-8)",
+        padding: "var(--space-8) var(--space-6) var(--space-8) var(--space-10)",
+        backgroundColor: "var(--bg-tertiary)",
+        border: "var(--rule) solid var(--border-color)",
+        borderRadius: "var(--radius-xl)",
+        boxShadow: "var(--shadow-popover)",
         maxWidth: 340,
         opacity: exiting ? 0 : 1,
-        transform: exiting ? "translateX(12px)" : "translateX(0)",
-        transition: "opacity 0.2s, transform 0.2s",
-        animation: "toastSlideIn 0.2s ease-out",
+        transform: exiting ? "translateY(4px)" : "none",
+        transition: "opacity var(--dur-base), transform var(--dur-base)",
+        animation: "toastIn var(--dur-base) var(--ease-out)",
       }}
     >
-      <div style={{ flex: 1, fontSize: 12, lineHeight: "1.45", color: "var(--text-primary)" }}>
+      <span style={{ display: "inline-flex", paddingTop: 2, color }} aria-label={label}>
+        <Icon icon={icon} />
+      </span>
+      <div style={{ flex: 1, fontSize: "var(--fs-body)", lineHeight: "18px", color: "var(--text-primary)" }}>
         {toast.message}
       </div>
-      <button
-        onClick={() => removeToast(toast.id)}
-        style={{
-          flexShrink: 0,
-          width: 18,
-          height: 18,
-          borderRadius: 4,
-          border: "none",
-          background: "transparent",
-          color: "var(--text-muted)",
-          fontSize: 11,
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          transition: "color 0.1s",
-        }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-primary)"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"; }}
-      >
-        ✕
-      </button>
+      <IconButton icon={X} label="Dismiss" size="sm" onClick={() => removeToast(toast.id)} />
     </div>
   );
 }
@@ -81,20 +70,20 @@ export function ToastContainer() {
   return (
     <>
       <style>{`
-        @keyframes toastSlideIn {
-          from { opacity: 0; transform: translateX(24px); }
-          to   { opacity: 1; transform: translateX(0); }
+        @keyframes toastIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: none; }
         }
       `}</style>
       <div
         style={{
           position: "fixed",
-          bottom: 16,
-          right: 16,
-          zIndex: 200,
+          bottom: "var(--space-24)",
+          right: "var(--space-16)",
+          zIndex: "var(--z-toast)",
           display: "flex",
           flexDirection: "column",
-          gap: 8,
+          gap: "var(--space-8)",
           pointerEvents: "auto",
         }}
       >

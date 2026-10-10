@@ -1,19 +1,28 @@
 // ============================================================
 // Tooltip Component
 //
-// A lightweight tooltip that shows on hover. Used for onboarding
-// hints and shortcut reminders across the UI.
+// Shows a label (and optional shortcut chip) on hover or keyboard
+// focus. Rendered in a portal with fixed positioning so it never
+// gets clipped by scrolling panels. The wrapper uses
+// `display: contents`, so wrapping a control doesn't change layout.
 // ============================================================
 
-import { useState, useRef, type ReactNode } from "react";
+import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { Kbd } from "./Kbd";
+
+export type TooltipPosition = "top" | "bottom" | "left" | "right";
 
 interface TooltipProps {
-  content: string;
+  content: ReactNode;
   shortcut?: string;
   children: ReactNode;
-  position?: "top" | "bottom" | "left" | "right";
+  position?: TooltipPosition;
   delay?: number;
+  disabled?: boolean;
 }
+
+const GAP = 6;
 
 export function Tooltip({
   content,
@@ -21,62 +30,65 @@ export function Tooltip({
   children,
   position = "top",
   delay = 400,
+  disabled,
 }: TooltipProps) {
-  const [visible, setVisible] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(0 as unknown as ReturnType<typeof setTimeout>);
+  const [coords, setCoords] = useState<{ left: number; top: number; transform: string } | null>(null);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const show = () => {
-    timerRef.current = setTimeout(() => setVisible(true), delay);
+  const place = useCallback(() => {
+    const target = wrapRef.current?.firstElementChild;
+    if (!target) return;
+    const r = target.getBoundingClientRect();
+    switch (position) {
+      case "bottom":
+        setCoords({ left: r.left + r.width / 2, top: r.bottom + GAP, transform: "translateX(-50%)" });
+        break;
+      case "left":
+        setCoords({ left: r.left - GAP, top: r.top + r.height / 2, transform: "translate(-100%, -50%)" });
+        break;
+      case "right":
+        setCoords({ left: r.right + GAP, top: r.top + r.height / 2, transform: "translateY(-50%)" });
+        break;
+      default:
+        setCoords({ left: r.left + r.width / 2, top: r.top - GAP, transform: "translate(-50%, -100%)" });
+    }
+  }, [position]);
+
+  const show = (immediate: boolean) => {
+    if (disabled) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (immediate) place();
+    else timerRef.current = setTimeout(place, delay);
   };
 
   const hide = () => {
-    clearTimeout(timerRef.current);
-    setVisible(false);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    setCoords(null);
   };
 
-  const positionClass = {
-    top: "bottom-full left-1/2 -translate-x-1/2 mb-1.5",
-    bottom: "top-full left-1/2 -translate-x-1/2 mt-1.5",
-    left: "right-full top-1/2 -translate-y-1/2 mr-1.5",
-    right: "left-full top-1/2 -translate-y-1/2 ml-1.5",
-  }[position];
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   return (
-    <div
-      className="relative inline-flex"
-      onMouseEnter={show}
+    <span
+      ref={wrapRef}
+      style={{ display: "contents" }}
+      onMouseEnter={() => show(false)}
       onMouseLeave={hide}
+      onMouseDown={hide}
+      onFocus={(e) => { if ((e.target as HTMLElement).matches?.(":focus-visible")) show(true); }}
+      onBlur={hide}
     >
       {children}
-      {visible && (
-        <div
-          className={`absolute z-50 ${positionClass} pointer-events-none`}
-        >
-          <div
-            className="px-2 py-1 rounded text-[11px] whitespace-nowrap flex items-center gap-2"
-            style={{
-              backgroundColor: "var(--bg-tertiary)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--border-color)",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-            }}
-          >
+      {coords &&
+        createPortal(
+          <div role="tooltip" className="ui-tooltip" style={coords}>
             <span>{content}</span>
-            {shortcut && (
-              <kbd
-                className="px-1 py-0.5 rounded text-[9px] font-mono"
-                style={{
-                  backgroundColor: "var(--bg-secondary)",
-                  color: "var(--text-muted)",
-                  border: "1px solid var(--border-color)",
-                }}
-              >
-                {shortcut}
-              </kbd>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+            {shortcut && <Kbd>{shortcut}</Kbd>}
+          </div>,
+          document.body,
+        )}
+    </span>
   );
 }

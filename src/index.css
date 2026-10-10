@@ -962,3 +962,28 @@ input[type="color"]::-webkit-color-swatch {
   flex: 1;
   min-width: 0;
 }
+
+/* Pill: a standalone toggle chip */
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 3px var(--space-10);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.ui-pill:hover:not(.is-active) {
+  background: var(--accent-wash);
+  color: var(--accent-primary);
+}
+.ui-pill.is-active {
+  background: var(--accent-primary);
+  color: var(--on-accent);
+}

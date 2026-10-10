@@ -77,6 +77,7 @@ import { triggerImportChart } from "./utils/importChart";
 import { commitRecordedKeyframes } from "./utils/recordingCommit";
 import { ToastContainer } from "./components/common/Toast";
 import { ConfirmDialog } from "./components/common/ConfirmDialog";
+import { PromptDialog } from "./components/common/PromptDialog";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
 
 // ============================================================
@@ -598,6 +599,7 @@ export default function App() {
       <FavoritesWizard />
       <ToastContainer />
       <ConfirmDialog />
+      <PromptDialog />
     </div>
   );
 }

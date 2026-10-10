@@ -8,6 +8,9 @@
 import type React from "react";
 import { useState, useEffect, useRef } from "react";
 import type { Beat } from "../../types/chart";
+import { INPUT_STYLE, SELECT_STYLE } from "./UIKit";
+
+const NUMERIC_STYLE: React.CSSProperties = { ...INPUT_STYLE, fontFamily: "var(--font-mono)" };
 
 /**
  * Safely parse a numeric input value.
@@ -49,19 +52,12 @@ export function Field({
 
   return (
     <label className="flex items-center gap-2 text-xs">
-      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-secondary)" }}>
         {label}
       </span>
       <input
         className="flex-1 px-1 py-0.5 text-xs"
-        style={{
-          backgroundColor: "var(--bg-tertiary)",
-          color: "var(--text-primary)",
-          border: "0.5px solid var(--border-color)",
-          borderRadius: 6,
-          height: 24,
-          fontSize: 11,
-        }}
+        style={type === "number" ? NUMERIC_STYLE : INPUT_STYLE}
         type={type}
         step={step}
         value={localValue}
@@ -275,20 +271,12 @@ export function SelectField({
 }) {
   return (
     <label className="flex items-center gap-2 text-xs">
-      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-secondary)" }}>
         {label}
       </span>
       <select
         className="flex-1 px-1 py-0.5 text-xs"
-        style={{
-          backgroundColor: "var(--bg-tertiary)",
-          color: "var(--text-primary)",
-          border: "0.5px solid var(--border-color)",
-          borderRadius: 6,
-          height: 24,
-          fontSize: 11,
-          cursor: "pointer",
-        }}
+        style={SELECT_STYLE}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
@@ -325,20 +313,13 @@ export function BeatField({
 
   return (
     <label className="flex items-center gap-2 text-xs">
-      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-secondary)" }}>
         {label}
       </span>
       <div className="flex gap-1 flex-1">
         <input
           className="w-10 px-1 py-0.5 text-xs text-center"
-          style={{
-            backgroundColor: "var(--bg-tertiary)",
-            color: "var(--text-primary)",
-            border: "0.5px solid var(--border-color)",
-            borderRadius: 6,
-            height: 24,
-            fontSize: 11,
-          }}
+          style={NUMERIC_STYLE}
           type="number"
           value={localWhole}
           onChange={(e) => { setLocalWhole(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([Math.trunc(n), beat[1], beat[2]]); }}
@@ -346,14 +327,7 @@ export function BeatField({
         />
         <input
           className="w-10 px-1 py-0.5 text-xs text-center"
-          style={{
-            backgroundColor: "var(--bg-tertiary)",
-            color: "var(--text-primary)",
-            border: "0.5px solid var(--border-color)",
-            borderRadius: 6,
-            height: 24,
-            fontSize: 11,
-          }}
+          style={NUMERIC_STYLE}
           type="number"
           min={0}
           value={localNum}
@@ -363,14 +337,7 @@ export function BeatField({
         <span style={{ color: "var(--text-muted)" }}>/</span>
         <input
           className="w-10 px-1 py-0.5 text-xs text-center"
-          style={{
-            backgroundColor: "var(--bg-tertiary)",
-            color: "var(--text-primary)",
-            border: "0.5px solid var(--border-color)",
-            borderRadius: 6,
-            height: 24,
-            fontSize: 11,
-          }}
+          style={NUMERIC_STYLE}
           type="number"
           min={1}
           value={localDen}
