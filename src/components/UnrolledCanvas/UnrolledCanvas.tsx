@@ -304,7 +304,7 @@ export function UnrolledCanvas({
       cancelAnimationFrame(rafRef.current);
       if (observer) observer.disconnect();
     };
-  }, [isLoaded, resizeCanvas]);
+  }, [isLoaded, resizeCanvas, getLineIndex, getScrollBeat, updateScrollBeat, followPlaybackKey]);
 
   // ---- Mouse coordinate helpers ----
   const getCanvasCoords = useCallback((e: React.MouseEvent) => {
@@ -949,7 +949,7 @@ export function UnrolledCanvas({
 
     canvas.addEventListener("wheel", handleWheel, { passive: false });
     return () => canvas.removeEventListener("wheel", handleWheel);
-  }, []);
+  }, [getScrollBeat, updateScrollBeat]);
 
   // ---- Context menu (right-click) ----
   // Two distinct flows depending on what's under the cursor:

@@ -98,8 +98,10 @@ const BASE_MODE_TABS: Record<ContextPanelMode, ModeTab[]> = {
  * Get tab definitions for a mode, conditionally including the AI tab.
  * The AI tab is inserted before the last two tabs (hotkeys, misc) in each mode.
  */
-export function getModeTabs(mode: ContextPanelMode): ModeTab[] {
-  const aiEnabled = useSettingsStore.getState().aiEnabled;
+export function getModeTabs(
+  mode: ContextPanelMode,
+  aiEnabled: boolean = useSettingsStore.getState().aiEnabled,
+): ModeTab[] {
   const baseTabs = BASE_MODE_TABS[mode];
   if (!aiEnabled) return baseTabs;
   // Insert AI tab before "hotkeys" and "misc" (last 2 items)

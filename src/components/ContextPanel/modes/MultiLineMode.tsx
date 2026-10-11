@@ -8,6 +8,7 @@ import { Copy, Gauge, Layers, Trash2, TrendingDown, TrendingUp } from "lucide-re
 import { useEditorStore } from "../../../stores/editorStore";
 import { useMultiSelectedLineIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
+import type { Line } from "../../../types/chart";
 import { BUILTIN_PRESETS } from "../../../presets/builtinPresets";
 import { applyPresetAtPlayhead } from "../../../utils/applyPreset";
 import { BatchOffsetEditor } from "../batch/BatchOffsetEditor";
@@ -87,7 +88,7 @@ function BatchOpsTab() {
 
   const handleSetCategory = useCallback((category: string) => {
     for (const idx of multiSelectedLineIndices) {
-      editLine(idx, { _category: (category || undefined) as any });
+      editLine(idx, { _category: (category || undefined) as Line["_category"] });
     }
   }, [multiSelectedLineIndices, editLine]);
 
@@ -305,38 +306,16 @@ function BatchOffsetTab() {
 
 // ---- Hotkeys sub-tab ----
 
+// Only keys that are actually bound (useHotkeys / useClipboard); registry
+// actions show their current binding from Settings > Hotkeys.
 const MULTI_HOTKEY_SECTIONS: HotkeySection[] = [
   {
     title: "Multi-line selection",
     keys: [
-      { label: "Add to selection", hotkey: "Shift+Click" },
-      { label: "Select all", hotkey: "Ctrl+A" },
-      { label: "Deselect", hotkey: "Esc" },
-      { label: "Group selection", hotkey: "Ctrl+G" },
-      { label: "Ungroup", hotkey: "Ctrl+U" },
-      { label: "Invert selection", hotkey: "Ctrl+I" },
-    ],
-  },
-  {
-    title: "Batch operations",
-    keys: [
-      { label: "Duplicate all", hotkey: "Ctrl+D" },
-      { label: "Delete all", hotkey: "Ctrl+Del" },
-      { label: "Set category", hotkey: "Ctrl+Shift+C" },
-      { label: "Set parent", hotkey: "Ctrl+Shift+P" },
-      { label: "Move to group", hotkey: "Ctrl+Shift+M" },
-      { label: "Apply preset", hotkey: "Ctrl+Shift+A" },
-    ],
-  },
-  {
-    title: "Alignment",
-    keys: [
-      { label: "Align Y", hotkey: "Alt+Up/Down" },
-      { label: "Align X", hotkey: "Alt+Left/Right" },
-      { label: "Center", hotkey: "Alt+C" },
-      { label: "Flip order", hotkey: "Alt+F" },
-      { label: "Distribute", hotkey: "Alt+D" },
-      { label: "Rotate arrangement", hotkey: "Alt+R" },
+      { label: "Add or remove a line (line strip)", hotkey: "Ctrl+Click" },
+      { label: "Delete selected lines", hotkey: { action: "delete" } },
+      { label: "Create group", hotkey: "Ctrl+Shift+G" },
+      { label: "Paste to selected lines", hotkey: { action: "cross_line_paste" } },
     ],
   },
 ];

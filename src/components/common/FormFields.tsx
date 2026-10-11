@@ -198,10 +198,13 @@ export function NumericInput({
   // Set on Escape so the blur it triggers reverts instead of committing.
   const skipCommitRef = useRef(false);
 
-  // Sync external value → local when the prop changes from outside.
-  useEffect(() => {
+  // Sync external value → local when the prop changes from outside
+  // (adjusted during render, so there is no stale frame).
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (!Object.is(value, syncedValue)) {
+    setSyncedValue(value);
     setLocalValue(value == null ? "" : String(value));
-  }, [value]);
+  }
 
   const commit = () => {
     const result = resolveNumericCommit(localValue, { min, max, integer, fallback, optional });

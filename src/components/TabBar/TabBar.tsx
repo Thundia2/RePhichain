@@ -44,11 +44,18 @@ export function TabBar() {
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
 
+  // Seed the input with the tab's label when rename mode activates
+  // (adjusted during render, so the input never shows a stale value).
+  const [seededRenameId, setSeededRenameId] = useState(renamingTabId);
+  if (renamingTabId !== seededRenameId) {
+    setSeededRenameId(renamingTabId);
+    const tab = renamingTabId ? tabs.find((t) => t.id === renamingTabId) : undefined;
+    if (tab) setRenameValue(tab.label);
+  }
+
   // Focus and select input text when rename mode activates
   useEffect(() => {
     if (renamingTabId) {
-      const tab = useTabStore.getState().tabs.find((t) => t.id === renamingTabId);
-      if (tab) setRenameValue(tab.label);
       requestAnimationFrame(() => {
         renameInputRef.current?.focus();
         renameInputRef.current?.select();

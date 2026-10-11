@@ -89,11 +89,6 @@ export function LatencyCalibration() {
     offsetMsRef.current = audioLatencyMs;
   }, [audioLatencyMs]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => cleanup();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ---- Cleanup ----
   const cleanup = useCallback(() => {
     if (audioCtxRef.current) {
@@ -107,6 +102,11 @@ export function LatencyCalibration() {
     tapFeedbacksRef.current = [];
   }, []);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => cleanup();
+  }, [cleanup]);
+
   // ---- Schedule a rolling batch of clicks ----
   const scheduleBatch = useCallback(() => {
     const ctx = audioCtxRef.current;
@@ -119,7 +119,7 @@ export function LatencyCalibration() {
   }, []);
 
   // ---- Canvas draw loop ----
-  const draw = useCallback(() => {
+  const draw = useCallback(function drawFrame() {
     const canvas = canvasRef.current;
     const ctx2d = canvas?.getContext("2d");
     const audioCtx = audioCtxRef.current;
@@ -205,7 +205,7 @@ export function LatencyCalibration() {
     scheduleBatch();
 
     // 8. Continue loop
-    rafRef.current = requestAnimationFrame(draw);
+    rafRef.current = requestAnimationFrame(drawFrame);
   }, [scheduleBatch]);
 
   // ---- Set up canvas dimensions ----

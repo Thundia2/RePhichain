@@ -20,7 +20,7 @@ import { beatToFloat } from "../../types/chart";
 import type { Line } from "../../types/chart";
 import { Dialog } from "../common/Dialog";
 import { Button } from "../common/Button";
-import { Kbd } from "../common/Kbd";
+import { ActionKbd } from "../common/Kbd";
 import { INPUT_STYLE } from "../common/UIKit";
 
 interface GoToBeatDialogProps {
@@ -275,7 +275,7 @@ export function GoToBeatDialog({ open, onClose }: GoToBeatDialogProps) {
       icon={LocateFixed}
       onClose={onClose}
       width={360}
-      headerExtra={<Kbd>Ctrl+G</Kbd>}
+      headerExtra={<ActionKbd action="go_to_beat" />}
       footer={
         <>
           <span style={{ marginRight: "auto", fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>

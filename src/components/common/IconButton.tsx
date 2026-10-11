@@ -5,6 +5,7 @@
 // tooltip still says what it is; clicks are ignored.
 //
 //   <IconButton icon={Plus} label="Add new line" shortcut="Ctrl+L" onClick={…} />
+//   <IconButton icon={Save} label="Save" shortcut={{ action: "save" }} onClick={…} />  // follows rebinds
 //   <IconButton label="Tap" shortcut="Q" active={…}><NoteGlyph kind="tap" /></IconButton>
 // ============================================================
 
@@ -12,6 +13,7 @@ import type React from "react";
 import type { LucideIcon } from "lucide-react";
 import { Icon, type IconSize } from "./Icon";
 import { Tooltip, type TooltipPosition } from "./Tooltip";
+import { useShortcutText, type ShortcutRef } from "../../hooks/useHotkeyLabel";
 
 type Size = "sm" | "md" | "lg";
 
@@ -37,7 +39,8 @@ export function IconButton({
   children?: React.ReactNode;
   /** Accessible name; also the tooltip text. */
   label: string;
-  shortcut?: string;
+  /** Fixed key text, or `{ action }` for a rebindable registry shortcut. */
+  shortcut?: ShortcutRef;
   size?: Size;
   iconSize?: IconSize;
   /** Toggle state. Leave undefined for a plain action button. */
@@ -56,12 +59,13 @@ export function IconButton({
     active ? "is-active" : "",
     className ?? "",
   ].filter(Boolean).join(" ");
+  const shortcutText = useShortcutText()(shortcut);
 
   return (
     <Tooltip content={label} shortcut={shortcut} position={tooltipPosition}>
       <button
         type="button"
-        aria-label={shortcut ? `${label} (${shortcut})` : label}
+        aria-label={shortcutText ? `${label} (${shortcutText})` : label}
         aria-pressed={active === undefined ? undefined : active}
         aria-disabled={disabled || undefined}
         onClick={disabled ? (e) => e.preventDefault() : onClick}

@@ -19,6 +19,7 @@ import { Diamond, Eraser, Footprints, Magnet, MousePointer2, PanelBottom, Rows3,
 import { useEditorStore } from "../../stores/editorStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTabStore } from "../../stores/tabStore";
+import { useHotkeyLabels } from "../../hooks/useHotkeyLabel";
 import type { EditorTool } from "../../types/editor";
 import type { NoteKind } from "../../types/chart";
 import { EVENT_COLORS } from "../../constants/eventColors";
@@ -30,40 +31,47 @@ import { Tooltip } from "../common/Tooltip";
 interface ToolDef {
   id: EditorTool;
   label: string;
-  shortcut: string;
+  /** Rebindable shortcut: an action id in DEFAULT_HOTKEYS. */
+  action?: string;
+  /** Fixed shortcut key, for tools outside the registry. */
+  key?: string;
+  /** The shortcut needs CapsLock on. */
+  capsLock?: boolean;
   glyph: React.ReactNode;
 }
 
-const NOTE_TOOL = (kind: NoteKind, label: string, shortcut: string): ToolDef => ({
+const NOTE_TOOL = (kind: NoteKind, label: string): ToolDef => ({
   id: `place_${kind}` as EditorTool,
   label,
-  shortcut,
+  action: `place_${kind}`,
   glyph: <NoteGlyph kind={kind} />,
 });
 
 const TOOLS: ToolDef[] = [
-  { id: "select", label: "Select", shortcut: "V", glyph: <Icon icon={MousePointer2} size={16} /> },
-  NOTE_TOOL("tap", "Tap note", "Q"),
-  NOTE_TOOL("drag", "Drag note", "W"),
-  NOTE_TOOL("flick", "Flick note", "E"),
-  NOTE_TOOL("hold", "Hold note", "R"),
-  { id: "eraser", label: "Eraser", shortcut: "X", glyph: <Icon icon={Eraser} size={16} /> },
+  { id: "select", label: "Select", action: "select_tool", glyph: <Icon icon={MousePointer2} size={16} /> },
+  NOTE_TOOL("tap", "Tap note"),
+  NOTE_TOOL("drag", "Drag note"),
+  NOTE_TOOL("flick", "Flick note"),
+  NOTE_TOOL("hold", "Hold note"),
+  { id: "eraser", label: "Eraser", action: "eraser_tool", glyph: <Icon icon={Eraser} size={16} /> },
 ];
 
 // Event-placement tools — shown only on unrolled tabs. Order mirrors
 // the QWERTY top row (Q W E R T Y U I O), all CapsLock-gated.
-const EVENT_TOOL = (id: EditorTool, label: string, key: string, color: string): ToolDef => ({
+// The first four share the note tools' keys (Q/W/E/R by default), so they follow a rebind.
+const EVENT_TOOL = (id: EditorTool, label: string, key: { action: string } | string, color: string): ToolDef => ({
   id,
   label,
-  shortcut: `CapsLock+${key}`,
+  ...(typeof key === "string" ? { key } : key),
+  capsLock: true,
   glyph: <Icon icon={Diamond} size={16} style={{ color, fill: color, fillOpacity: 0.25 }} />,
 });
 
 const EVENT_TOOLS: ToolDef[] = [
-  EVENT_TOOL("place_event_x", "X position event", "Q", EVENT_COLORS.x),
-  EVENT_TOOL("place_event_y", "Y position event", "W", EVENT_COLORS.y),
-  EVENT_TOOL("place_event_rotation", "Rotation event", "E", EVENT_COLORS.rotation),
-  EVENT_TOOL("place_event_opacity", "Opacity event", "R", EVENT_COLORS.opacity),
+  EVENT_TOOL("place_event_x", "X position event", { action: "place_tap" }, EVENT_COLORS.x),
+  EVENT_TOOL("place_event_y", "Y position event", { action: "place_drag" }, EVENT_COLORS.y),
+  EVENT_TOOL("place_event_rotation", "Rotation event", { action: "place_flick" }, EVENT_COLORS.rotation),
+  EVENT_TOOL("place_event_opacity", "Opacity event", { action: "place_hold" }, EVENT_COLORS.opacity),
   EVENT_TOOL("place_event_speed", "Speed event", "T", EVENT_COLORS.speed),
   EVENT_TOOL("place_event_scale_x", "Scale X event", "Y", EVENT_COLORS.scale_x),
   EVENT_TOOL("place_event_scale_y", "Scale Y event", "U", EVENT_COLORS.scale_y),
@@ -91,6 +99,9 @@ export function Toolbar() {
   const verticalLines = useEditorStore((s) => s.verticalLines);
   const setVerticalLines = useEditorStore((s) => s.setVerticalLines);
   const showBeatGrid = useSettingsStore((s) => s.showBeatGrid);
+  const hk = useHotkeyLabels();
+  const shortcutOf = (tool: ToolDef) =>
+    (tool.capsLock ? "CapsLock+" : "") + (tool.action ? hk(tool.action) : tool.key ?? "");
 
   // Event tools are only relevant on unrolled tabs — the unified
   // canvas has no clean beat-axis click for placement and the home /
@@ -124,7 +135,7 @@ export function Toolbar() {
         <IconButton
           key={tool.id}
           label={tool.label}
-          shortcut={tool.shortcut}
+          shortcut={shortcutOf(tool)}
           tooltipPosition="right"
           active={activeTool === tool.id}
           onClick={() => setTool(tool.id)}
@@ -145,7 +156,7 @@ export function Toolbar() {
             <IconButton
               key={tool.id}
               label={tool.label}
-              shortcut={tool.shortcut}
+              shortcut={shortcutOf(tool)}
               tooltipPosition="right"
               active={activeTool === tool.id}
               onClick={() => setTool(tool.id)}
@@ -169,7 +180,7 @@ export function Toolbar() {
       <IconButton
         icon={Footprints}
         label="Step record: advance the beat on each click"
-        shortcut="S"
+        shortcut={hk("step_record")}
         tooltipPosition="right"
         active={stepRecordActive}
         onClick={toggleStepRecord}

@@ -105,7 +105,7 @@ export function TransportBar() {
         <IconButton
           icon={isPlaying ? Pause : Play}
           label={isPlaying ? "Pause" : "Play"}
-          shortcut="Space"
+          shortcut={{ action: "toggle_playback" }}
           size="lg"
           iconSize={14}
           active={isPlaying}
@@ -136,12 +136,12 @@ export function TransportBar() {
         <IconButton
           icon={Repeat}
           label="Loop"
-          shortcut={"\\"}
+          shortcut={{ action: "toggle_loop" }}
           size="md"
           active={loopEnabled}
           onClick={() => useAudioStore.getState().toggleLoop()}
         />
-        <Tooltip content={loopStartBeat !== null ? `Loop start at beat ${loopStartBeat.toFixed(2)}` : "Set loop start at the playhead"} shortcut="[">
+        <Tooltip content={loopStartBeat !== null ? `Loop start at beat ${loopStartBeat.toFixed(2)}` : "Set loop start at the playhead"} shortcut={{ action: "loop_start" }}>
           <button
             type="button"
             className="ui-btn ui-btn--ghost ui-btn--sm"
@@ -152,7 +152,7 @@ export function TransportBar() {
             {loopStartBeat !== null ? loopStartBeat.toFixed(1) : "In"}
           </button>
         </Tooltip>
-        <Tooltip content={loopEndBeat !== null ? `Loop end at beat ${loopEndBeat.toFixed(2)}` : "Set loop end at the playhead"} shortcut="]">
+        <Tooltip content={loopEndBeat !== null ? `Loop end at beat ${loopEndBeat.toFixed(2)}` : "Set loop end at the playhead"} shortcut={{ action: "loop_end" }}>
           <button
             type="button"
             className="ui-btn ui-btn--ghost ui-btn--sm"

@@ -17,7 +17,7 @@ import { useChartStore } from "../../../stores/chartStore";
 import { useFavoritesStore } from "../../../stores/favoritesStore";
 import { BUILTIN_PRESETS } from "../../../presets/builtinPresets";
 import { applyPresetAtPlayhead } from "../../../utils/applyPreset";
-import type { LineEventKind, LineEvent, NoteKind } from "../../../types/chart";
+import type { Line, LineEventKind, LineEvent, NoteKind } from "../../../types/chart";
 import { EVENT_KIND_META, EXTENDED_EVENT_KINDS } from "../../../constants/eventConfig";
 import { getEasingLabel, getEventValueRange, getEventValueSummary, formatBeat } from "../../../utils/eventHelpers";
 import { NumericInput } from "../../common/FormFields";
@@ -462,7 +462,7 @@ function PropertiesTab() {
 
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value || undefined;
-    editLine(selectedLineIndex, { _category: val as any });
+    editLine(selectedLineIndex, { _category: val as Line["_category"] });
   };
 
   const handleZOrderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -734,38 +734,35 @@ function PresetsTab() {
 
 // ---- Hotkeys sub-tab ----
 
+// Only keys that are actually bound (useHotkeys / useClipboard); registry
+// actions show their current binding from Settings > Hotkeys.
 const LINE_HOTKEY_SECTIONS: HotkeySection[] = [
   {
-    title: "Line editing",
+    title: "Lines",
     keys: [
-      { label: "New line", hotkey: "Ctrl+N" },
-      { label: "Duplicate", hotkey: "Ctrl+D" },
-      { label: "Delete line", hotkey: "Ctrl+Del" },
-      { label: "Rename", hotkey: "F2" },
-      { label: "Move up", hotkey: "Alt+Up" },
-      { label: "Move down", hotkey: "Alt+Down" },
+      { label: "Delete line (nothing else selected)", hotkey: { action: "delete" } },
+      { label: "Toggle line drawer", hotkey: "L" },
+      { label: "Search lines", hotkey: "Ctrl+L" },
+      { label: "Create group", hotkey: "Ctrl+Shift+G" },
+      { label: "Paste to selected lines", hotkey: { action: "cross_line_paste" } },
     ],
   },
   {
-    title: "Event editing",
+    title: "Events",
     keys: [
-      { label: "Insert event", hotkey: "I" },
-      { label: "Split at beat", hotkey: "S" },
-      { label: "Merge events", hotkey: "M" },
-      { label: "Fill gaps", hotkey: "F" },
-      { label: "Apply preset", hotkey: "P" },
-      { label: "Lock value", hotkey: "L" },
+      { label: "Split selected at playhead", hotkey: { action: "split_event" } },
+      { label: "Toggle keyframe bar", hotkey: "K" },
+      { label: "Toggle curve editor", hotkey: "Shift+K" },
     ],
   },
   {
     title: "Note placement",
     keys: [
-      { label: "Tap", hotkey: "1" },
-      { label: "Drag", hotkey: "2" },
-      { label: "Flick", hotkey: "3" },
-      { label: "Hold", hotkey: "4" },
-      { label: "Toggle above", hotkey: "T" },
-      { label: "Toggle below", hotkey: "B" },
+      { label: "Tap", hotkey: { action: "place_tap" } },
+      { label: "Drag", hotkey: { action: "place_drag" } },
+      { label: "Flick", hotkey: { action: "place_flick" } },
+      { label: "Hold", hotkey: { action: "place_hold" } },
+      { label: "Select all notes", hotkey: { action: "select_all" } },
     ],
   },
 ];

@@ -17,6 +17,7 @@ import { saveProject } from "../utils/ipc";
 import type { ExtraConfig } from "../types/extra";
 import type { PanelId } from "../types/editor";
 import { useEditorStore } from "../stores/editorStore";
+import { useHotkeyLabels } from "./useHotkeyLabel";
 import {
   getSelectedLineIndex,
   getSelectedEventIndices,
@@ -88,16 +89,18 @@ export function useMenus(
   const isLoaded = useChartStore((s) => s.isLoaded);
   const openUnifiedEditor = useTabStore((s) => s.openUnifiedEditor);
   const openUnrolledEditor = useTabStore((s) => s.openUnrolledEditor);
+  // Registry shortcuts follow Settings > Hotkeys; the rest are fixed bindings.
+  const hk = useHotkeyLabels();
 
   return [
     {
       label: "File",
       items: [
-        { label: "New chart…", shortcut: "Ctrl+N", action: onNewChart },
+        { label: "New chart…", shortcut: hk("new_chart"), action: onNewChart },
         { separator: true, label: "" },
         {
           label: "Save project",
-          shortcut: "Ctrl+S",
+          shortcut: hk("save"),
           disabled: !isLoaded,
           action: async () => {
             if (!projectPath) return;
@@ -116,6 +119,7 @@ export function useMenus(
         { separator: true, label: "" },
         {
           label: "Import chart…",
+          shortcut: "Ctrl+O",
           action: () => triggerImportChart(),
         },
         {
@@ -171,7 +175,7 @@ export function useMenus(
     {
       label: "Edit",
       items: [
-        { label: "Undo", shortcut: "Ctrl+Z", disabled: !canUndo() && !useBookmarkStore.getState().canUndo(), action: () => {
+        { label: "Undo", shortcut: hk("undo"), disabled: !canUndo() && !useBookmarkStore.getState().canUndo(), action: () => {
           // Interleaved undo: compare sequence numbers to decide which store to undo
           const cs = useChartStore.getState();
           const bs = useBookmarkStore.getState();
@@ -179,7 +183,7 @@ export function useMenus(
           const bmTopSeq = bs._pastSeqs.length > 0 ? bs._pastSeqs[bs._pastSeqs.length - 1] : 0;
           if (bmTopSeq > chartTopSeq && bs.canUndo()) { bs.undo(); } else { cs.undo(); }
         }},
-        { label: "Redo", shortcut: "Ctrl+Shift+Z", disabled: !canRedo() && !useBookmarkStore.getState().canRedo(), action: () => {
+        { label: "Redo", shortcut: hk("redo"), disabled: !canRedo() && !useBookmarkStore.getState().canRedo(), action: () => {
           const cs = useChartStore.getState();
           const bs = useBookmarkStore.getState();
           const chartRedoSeq = cs._futureSeqs.length > 0 ? cs._futureSeqs[cs._futureSeqs.length - 1] : 0;
@@ -207,6 +211,7 @@ export function useMenus(
         },
         {
           label: "Exit group mode",
+          shortcut: "Esc",
           disabled: !useGroupStore.getState().activeGroupId,
           action: () => useGroupStore.getState().exitGroupEditMode(),
         },
@@ -227,7 +232,7 @@ export function useMenus(
           action: () => onShowShakeGenerator?.(),
         },
         {
-          label: "Improvisation mode",
+          label: "Mark mode",
           shortcut: "Shift+I",
           disabled: !isLoaded,
           action: () => {
@@ -253,13 +258,13 @@ export function useMenus(
         { separator: true, label: "" },
         {
           label: "Paste special…",
-          shortcut: "Ctrl+Alt+V",
+          shortcut: hk("paste_special"),
           disabled: !isLoaded,
           action: () => onShowPasteSpecial?.(),
         },
         {
           label: "Go to beat…",
-          shortcut: "Ctrl+G", // L7: go_to_beat moved ctrl+j → ctrl+g (registry default)
+          shortcut: hk("go_to_beat"),
           disabled: !isLoaded,
           action: () => onShowGoToBeat?.(),
         },
@@ -272,6 +277,7 @@ export function useMenus(
         { separator: true, label: "" },
         {
           label: "Split event at playhead",
+          shortcut: hk("split_event"),
           disabled: !isLoaded,
           // Shared with the split_event hotkey (L7). grep splitSelectedEventsAtPlayhead.
           action: () => splitSelectedEventsAtPlayhead(),
@@ -313,7 +319,7 @@ export function useMenus(
         },
         {
           label: "Unrolled editor",
-          shortcut: "Ctrl+Shift+U",
+          shortcut: hk("open_unrolled"),
           disabled: !isLoaded,
           action: () => openUnrolledEditor(),
         },
@@ -360,7 +366,7 @@ export function useMenus(
         { label: "Presets", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("presets") },
         { label: "Game preview", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("game-preview") },
         { label: "Hotkey reference", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("hotkey-reference") },
-        { label: "DevTools", shortcut: "F12", action: () => useEditorStore.getState().toggleDevTools() },
+        { label: "DevTools", shortcut: hk("toggle_devtools"), action: () => useEditorStore.getState().toggleDevTools() },
         { separator: true, label: "" },
         { label: "Apply default layout", action: onResetLayout },
       ],

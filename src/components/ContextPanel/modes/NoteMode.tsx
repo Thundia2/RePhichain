@@ -250,11 +250,11 @@ function EditTab() {
       {/* Quick action buttons */}
       <SectionHeader label="Quick actions" />
       <ToolGroup label="Quick actions">
-        <HotkeyButton icon={ArrowUpDown} label="Flip side" hotkey="F" onClick={handleFlip} />
-        <HotkeyButton icon={ArrowLeftRight} label="Mirror X" hotkey="M" onClick={handleMirror} />
+        <HotkeyButton icon={ArrowUpDown} label="Flip side" hotkey={{ action: "flip_notes" }} onClick={handleFlip} />
+        <HotkeyButton icon={ArrowLeftRight} label="Mirror X" hotkey={{ action: "mirror_notes" }} onClick={handleMirror} />
         <HotkeyButton icon={Copy} label="Copy" hotkey="Ctrl+C" onClick={() => performCopy()} />
-        <HotkeyButton icon={ClipboardPaste} label="Paste special…" hotkey="Ctrl+Shift+V" onClick={() => useDialogStore.getState().openDialog("paste-special")} />
-        <HotkeyButton icon={Trash2} label="Delete" hotkey="Del" onClick={handleDelete} />
+        <HotkeyButton icon={ClipboardPaste} label="Paste special…" hotkey={{ action: "paste_special" }} onClick={() => useDialogStore.getState().openDialog("paste-special")} />
+        <HotkeyButton icon={Trash2} label="Delete" hotkey={{ action: "delete" }} onClick={handleDelete} />
       </ToolGroup>
 
       {/* Create curve track from exactly 2 selected notes */}
@@ -267,8 +267,8 @@ function EditTab() {
         const noteA = a.note;
         const noteB = b.note;
         // Use note UIDs (or fallback to indices) for from/to
-        const fromUid = (noteA as any).uid ?? String(a.index);
-        const toUid = (noteB as any).uid ?? String(b.index);
+        const fromUid = noteA.uid ?? String(a.index);
+        const toUid = noteB.uid ?? String(b.index);
         const track: CurveNoteTrack = {
           from: fromUid,
           to: toUid,
@@ -503,29 +503,29 @@ function BatchTab() {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
       <SectionHeader label="Batch operations" />
       <ToolGroup label="Batch operations">
-        <HotkeyButton icon={ArrowUpDown} label="Flip side" hotkey="F" onClick={handleFlip} />
-        <HotkeyButton icon={ArrowLeftRight} label="Mirror X" hotkey="M" onClick={handleMirror} />
-        <HotkeyButton icon={Magnet} label="Quantize" hotkey="Q" onClick={handleQuantize} />
-        <HotkeyButton icon={AlignHorizontalSpaceAround} label="Distribute" hotkey="Ctrl+D" onClick={handleDistribute} />
-        <HotkeyButton icon={UnfoldHorizontal} label="Strum" hotkey="Ctrl+U" onClick={handleStrum} />
+        <HotkeyButton icon={ArrowUpDown} label="Flip side" hotkey={{ action: "flip_notes" }} onClick={handleFlip} />
+        <HotkeyButton icon={ArrowLeftRight} label="Mirror X" hotkey={{ action: "mirror_notes" }} onClick={handleMirror} />
+        <HotkeyButton icon={Magnet} label="Quantize" hotkey={{ action: "quantize_notes" }} onClick={handleQuantize} />
+        <HotkeyButton icon={AlignHorizontalSpaceAround} label="Distribute" hotkey={{ action: "distribute_notes" }} onClick={handleDistribute} />
+        <HotkeyButton icon={UnfoldHorizontal} label="Strum" hotkey={{ action: "strum_notes" }} onClick={handleStrum} />
       </ToolGroup>
 
       <SectionHeader label="Alignment" />
       <ToolGroup label="Alignment">
-        <HotkeyButton icon={AlignLeft} label="Align left" hotkey="Alt+L" onClick={handleAlignLeft} />
-        <HotkeyButton icon={AlignRight} label="Align right" hotkey="Alt+R" onClick={handleAlignRight} />
-        <HotkeyButton icon={AlignCenter} label="Align center" hotkey="Alt+C" onClick={handleCenter} />
-        <HotkeyButton icon={MoveVertical} label="Space vertically" hotkey="Alt+Y" onClick={handleSpaceY} />
-        <HotkeyButton icon={MoveHorizontal} label="Space horizontally" hotkey="Alt+X" onClick={handleSpaceX} />
+        <HotkeyButton icon={AlignLeft} label="Align left" onClick={handleAlignLeft} />
+        <HotkeyButton icon={AlignRight} label="Align right" onClick={handleAlignRight} />
+        <HotkeyButton icon={AlignCenter} label="Align center" onClick={handleCenter} />
+        <HotkeyButton icon={MoveVertical} label="Space vertically" onClick={handleSpaceY} />
+        <HotkeyButton icon={MoveHorizontal} label="Space horizontally" onClick={handleSpaceX} />
       </ToolGroup>
 
       <SectionHeader label="Transform" />
       <ToolGroup label="Transform">
-        <HotkeyButton icon={RotateCw} label="Rotate 90°" hotkey="R" onClick={handleRotate} />
-        <HotkeyButton icon={Scaling} label="Scale X 2×" hotkey="S" onClick={handleScale} />
-        <HotkeyButton icon={ArrowRightLeft} label="Shift X" hotkey="Shift+X" onClick={handleShiftX} />
-        <HotkeyButton icon={ArrowUpDown} label="Shift beat" hotkey="Shift+Y" onClick={handleShiftY} />
-        <HotkeyButton icon={RotateCcw} label="Reset properties" hotkey="Ctrl+R" onClick={handleReset} />
+        <HotkeyButton icon={RotateCw} label="Rotate 90°" onClick={handleRotate} />
+        <HotkeyButton icon={Scaling} label="Scale X 2×" onClick={handleScale} />
+        <HotkeyButton icon={ArrowRightLeft} label="Shift X" onClick={handleShiftX} />
+        <HotkeyButton icon={ArrowUpDown} label="Shift beat" onClick={handleShiftY} />
+        <HotkeyButton icon={RotateCcw} label="Reset properties" onClick={handleReset} />
       </ToolGroup>
     </div>
   );
@@ -533,37 +533,39 @@ function BatchTab() {
 
 // ---- Hotkeys sub-tab ----
 
+// Only keys that are actually bound (useHotkeys / useClipboard); registry
+// actions show their current binding from Settings > Hotkeys.
 const NOTE_HOTKEY_SECTIONS: HotkeySection[] = [
   {
-    title: "Note selection",
+    title: "Selection",
     keys: [
-      { label: "Select all", hotkey: "Ctrl+A" },
-      { label: "Extend selection", hotkey: "Shift+Click" },
-      { label: "Flip side", hotkey: "F" },
-      { label: "Mirror X", hotkey: "M" },
-      { label: "Delete", hotkey: "Del" },
-      { label: "Duplicate", hotkey: "Ctrl+D" },
+      { label: "Select all notes on the line", hotkey: { action: "select_all" } },
+      { label: "Add or remove a note (timeline)", hotkey: "Ctrl+Click" },
+      { label: "Delete", hotkey: { action: "delete" } },
+      { label: "Copy", hotkey: "Ctrl+C" },
+      { label: "Cut", hotkey: "Ctrl+X" },
+      { label: "Paste", hotkey: "Ctrl+V" },
+      { label: "Paste special", hotkey: { action: "paste_special" } },
     ],
   },
   {
-    title: "Note types",
+    title: "Batch operations",
     keys: [
-      { label: "Convert to tap", hotkey: "Ctrl+1" },
-      { label: "Convert to drag", hotkey: "Ctrl+2" },
-      { label: "Convert to flick", hotkey: "Ctrl+3" },
-      { label: "Convert to hold", hotkey: "Ctrl+4" },
-      { label: "Toggle fake", hotkey: "Ctrl+F" },
-      { label: "Create curve track", hotkey: "Ctrl+K" },
+      { label: "Flip side", hotkey: { action: "flip_notes" } },
+      { label: "Mirror X", hotkey: { action: "mirror_notes" } },
+      { label: "Quantize", hotkey: { action: "quantize_notes" } },
+      { label: "Distribute", hotkey: { action: "distribute_notes" } },
+      { label: "Strum", hotkey: { action: "strum_notes" } },
     ],
   },
   {
-    title: "Navigation",
+    title: "Moving",
     keys: [
-      { label: "Previous note", hotkey: "Left" },
-      { label: "Next note", hotkey: "Right" },
-      { label: "Previous line", hotkey: "Up" },
-      { label: "Next line", hotkey: "Down" },
-      { label: "Go to beat", hotkey: "Ctrl+G" },
+      { label: "Move later", hotkey: { action: "move_up" } },
+      { label: "Move earlier", hotkey: { action: "move_down" } },
+      { label: "Move left", hotkey: { action: "move_left" } },
+      { label: "Move right", hotkey: { action: "move_right" } },
+      { label: "Go to beat", hotkey: { action: "go_to_beat" } },
     ],
   },
 ];

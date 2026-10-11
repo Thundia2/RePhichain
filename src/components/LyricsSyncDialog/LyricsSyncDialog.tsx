@@ -20,7 +20,7 @@ import { ensureTextLine } from "../../utils/textEventHelpers";
 import { INPUT_STYLE } from "../common/UIKit";
 import { Dialog } from "../common/Dialog";
 import { Button } from "../common/Button";
-import { Kbd } from "../common/Kbd";
+import { ActionKbd, Kbd } from "../common/Kbd";
 
 interface LyricsSyncDialogProps {
   open: boolean;
@@ -186,7 +186,7 @@ export function LyricsSyncDialog({ open, onClose }: LyricsSyncDialogProps) {
 
         {/* Instructions */}
         <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-          Press <Kbd>Space</Kbd> to play, then press <Kbd>Enter</Kbd> or <Kbd>Q</Kbd> each time a lyric line starts. Timing is recorded.
+          Press <ActionKbd action="toggle_playback" /> to play, then press <Kbd>Enter</Kbd> or <Kbd>Q</Kbd> each time a lyric line starts. Timing is recorded.
         </div>
 
         {/* Progress */}

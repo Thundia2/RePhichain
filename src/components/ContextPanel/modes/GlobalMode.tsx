@@ -58,6 +58,7 @@ import { Badge, Pill, Toggle, INPUT_STYLE } from "../../common/UIKit";
 // ---- Shared sub-components (extracted to shared/) ----
 import { HotkeyButton } from "../shared/HotkeyButton";
 import { HotkeyList, type HotkeySection } from "../shared/HotkeyList";
+import type { ShortcutRef } from "../../../hooks/useHotkeyLabel";
 import { SectionHeader } from "../shared/SectionHeader";
 import { ActionButton } from "../shared/ActionButton";
 import { ContextBadge } from "../shared/ContextBadge";
@@ -87,27 +88,28 @@ const ROW: React.CSSProperties = { display: "flex", alignItems: "center", gap: "
 // ---- Tool group data ----
 
 // Selection tools use a Lucide icon; note tools show their NoteGlyph.
-const TOOL_BUTTONS: Array<{ label: string; hotkey: string; tool: EditorTool; icon?: LucideIcon; note?: NoteKind }> = [
-  { icon: MousePointer2, label: "Select", hotkey: "V", tool: "select" },
-  { icon: Eraser, label: "Eraser", hotkey: "E", tool: "eraser" },
-  { note: "tap", label: "Tap", hotkey: "1", tool: "place_tap" },
-  { note: "drag", label: "Drag", hotkey: "2", tool: "place_drag" },
-  { note: "flick", label: "Flick", hotkey: "3", tool: "place_flick" },
-  { note: "hold", label: "Hold", hotkey: "4", tool: "place_hold" },
+// Hotkeys are registry actions, so they show the binding from Settings > Hotkeys.
+const TOOL_BUTTONS: Array<{ label: string; hotkey: ShortcutRef; tool: EditorTool; icon?: LucideIcon; note?: NoteKind }> = [
+  { icon: MousePointer2, label: "Select", hotkey: { action: "select_tool" }, tool: "select" },
+  { icon: Eraser, label: "Eraser", hotkey: { action: "eraser_tool" }, tool: "eraser" },
+  { note: "tap", label: "Tap", hotkey: { action: "place_tap" }, tool: "place_tap" },
+  { note: "drag", label: "Drag", hotkey: { action: "place_drag" }, tool: "place_drag" },
+  { note: "flick", label: "Flick", hotkey: { action: "place_flick" }, tool: "place_flick" },
+  { note: "hold", label: "Hold", hotkey: { action: "place_hold" }, tool: "place_hold" },
 ];
 
-// Button arrays with action callbacks and corrected hotkey labels
-// Data errors fixed: Record="Alt+R" (not "R"), Redo="Ctrl+Y" (registered below),
-// Prev/Next use bookmark nav (not loop [ / ]), Export has no hotkey (Ctrl+E was fictitious)
+// Button arrays with action callbacks. Every hotkey shown is really bound:
+// `{ action }` entries follow Settings > Hotkeys, strings are fixed bindings,
+// "" means no shortcut.
 
-interface ActionButtonDef { icon: LucideIcon; label: string; hotkey: string; action: () => void }
+interface ActionButtonDef { icon: LucideIcon; label: string; hotkey: ShortcutRef; action: () => void }
 
 const PLAYBACK_BUTTONS: ActionButtonDef[] = [
-  { icon: Play, label: "Play", hotkey: "Space", action: () => useAudioStore.getState().togglePlayPause() },
+  { icon: Play, label: "Play", hotkey: { action: "toggle_playback" }, action: () => useAudioStore.getState().togglePlayPause() },
   { icon: Square, label: "Stop", hotkey: "", action: () => audioEngine.stop() },
   { icon: Rewind, label: "Rewind to start", hotkey: "", action: () => useAudioStore.getState().seek(0) },
-  { icon: SkipBack, label: "Previous marker", hotkey: "Ctrl+Shift+Scroll down", action: () => seekToPrevBookmark() },
-  { icon: SkipForward, label: "Next marker", hotkey: "Ctrl+Shift+Scroll up", action: () => seekToNextBookmark() },
+  { icon: SkipBack, label: "Previous marker", hotkey: { action: "prev_marker" }, action: () => seekToPrevBookmark() },
+  { icon: SkipForward, label: "Next marker", hotkey: { action: "next_marker" }, action: () => seekToNextBookmark() },
   { icon: Circle, label: "Record", hotkey: "Alt+R", action: () => useEditorStore.getState().toggleRecordMode() },
 ];
 
@@ -115,7 +117,7 @@ const EDIT_BUTTONS: ActionButtonDef[] = [
   { icon: Scissors, label: "Cut", hotkey: "Ctrl+X", action: () => performCut() },
   { icon: Copy, label: "Copy", hotkey: "Ctrl+C", action: () => performCopy() },
   { icon: ClipboardPaste, label: "Paste", hotkey: "Ctrl+V", action: () => performPaste() },
-  { icon: Undo2, label: "Undo", hotkey: "Ctrl+Z", action: () => {
+  { icon: Undo2, label: "Undo", hotkey: { action: "undo" }, action: () => {
     // Interleaved undo: compare sequence numbers to decide which store to undo
     const cs = useChartStore.getState();
     const bs = useBookmarkStore.getState();
@@ -123,14 +125,14 @@ const EDIT_BUTTONS: ActionButtonDef[] = [
     const bmTopSeq = bs._pastSeqs.length > 0 ? bs._pastSeqs[bs._pastSeqs.length - 1] : 0;
     if (bmTopSeq > chartTopSeq && bs.canUndo()) { bs.undo(); } else { cs.undo(); }
   }},
-  { icon: Redo2, label: "Redo", hotkey: "Ctrl+Y", action: () => {
+  { icon: Redo2, label: "Redo", hotkey: { action: "redo" }, action: () => {
     const cs = useChartStore.getState();
     const bs = useBookmarkStore.getState();
     const chartRedoSeq = cs._futureSeqs.length > 0 ? cs._futureSeqs[cs._futureSeqs.length - 1] : 0;
     const bmRedoSeq = bs._futureSeqs.length > 0 ? bs._futureSeqs[bs._futureSeqs.length - 1] : 0;
     if (bmRedoSeq > chartRedoSeq && bs.canRedo()) { bs.redo(); } else { cs.redo(); }
   }},
-  { icon: SquareDashedMousePointer, label: "Select all notes", hotkey: "Ctrl+A", action: () => {
+  { icon: SquareDashedMousePointer, label: "Select all notes", hotkey: { action: "select_all" }, action: () => {
     const lineIdx = getSelectedLineIndex();
     if (lineIdx === null) return;
     const notes = useChartStore.getState().chart.lines[lineIdx]?.notes;
@@ -140,7 +142,7 @@ const EDIT_BUTTONS: ActionButtonDef[] = [
 
 const FILE_BUTTONS: ActionButtonDef[] = [
   { icon: FolderOpen, label: "Open", hotkey: "Ctrl+O", action: () => triggerImportChart() },
-  { icon: Save, label: "Save", hotkey: "Ctrl+S", action: async () => {
+  { icon: Save, label: "Save", hotkey: { action: "save" }, action: async () => {
     const cs = useChartStore.getState();
     if (!cs.projectPath) return;
     const token = cs._dirtySeq; // F2: capture before the async write (see markCleanIf)
@@ -154,7 +156,7 @@ const FILE_BUTTONS: ActionButtonDef[] = [
   { icon: Upload, label: "Export…", hotkey: "", action: () => useDialogStore.getState().openDialog("selective-export") },
   { icon: FileInput, label: "Import", hotkey: "Ctrl+O", action: () => triggerImportChart() },
   { icon: Settings, label: "Settings…", hotkey: "", action: () => useDialogStore.getState().openDialog("settings") },
-  { icon: CircleHelp, label: "Help", hotkey: "F1", action: () => {
+  { icon: CircleHelp, label: "Help", hotkey: "", action: () => {
     // Switch to hotkeys tab within the context panel
     useContextPanelStore.getState().setActiveTab("global", "hotkeys");
   }},
@@ -389,9 +391,9 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
       {/* Section markers — add, navigate prev/next */}
       <SectionHeader label="Section markers" count={bookmarkCount} />
       <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <ActionButton icon={BookmarkPlus} label="Add marker (Ctrl+B)" onClick={() => addMarkerAtCurrentBeat()} />
-        <ActionButton icon={SkipBack} label="Previous marker (Ctrl+Shift+Scroll down)" onClick={() => seekToPrevBookmark()} />
-        <ActionButton icon={SkipForward} label="Next marker (Ctrl+Shift+Scroll up)" onClick={() => seekToNextBookmark()} />
+        <ActionButton icon={BookmarkPlus} label="Add marker" shortcut={{ action: "add_section_marker" }} onClick={() => addMarkerAtCurrentBeat()} />
+        <ActionButton icon={SkipBack} label="Previous marker" shortcut={{ action: "prev_marker" }} onClick={() => seekToPrevBookmark()} />
+        <ActionButton icon={SkipForward} label="Next marker" shortcut={{ action: "next_marker" }} onClick={() => seekToNextBookmark()} />
       </div>
 
       {/* ---- Select by range — beat/X range note selection ---- */}
@@ -704,36 +706,36 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
 
 const GLOBAL_HOTKEY_SECTIONS: HotkeySection[] = [
   {
-    title: "General",
+    title: "Tools",
     keys: [
-      { label: "Select tool", hotkey: "V" },
-      { label: "Eraser tool", hotkey: "E" },
-      { label: "Place tap", hotkey: "1" },
-      { label: "Place drag", hotkey: "2" },
-      { label: "Place flick", hotkey: "3" },
-      { label: "Place hold", hotkey: "4" },
+      { label: "Select tool", hotkey: { action: "select_tool" } },
+      { label: "Eraser tool", hotkey: { action: "eraser_tool" } },
+      { label: "Place tap", hotkey: { action: "place_tap" } },
+      { label: "Place drag", hotkey: { action: "place_drag" } },
+      { label: "Place flick", hotkey: { action: "place_flick" } },
+      { label: "Place hold", hotkey: { action: "place_hold" } },
+      { label: "Toggle beat sync", hotkey: "T" },
     ],
   },
   {
     title: "Navigation",
     keys: [
-      { label: "Play / pause", hotkey: "Space" },
-      { label: "Go to beat", hotkey: "Ctrl+G" },
-      { label: "Zoom in", hotkey: "Ctrl+=" },
-      { label: "Zoom out", hotkey: "Ctrl+-" },
-      { label: "Fit view", hotkey: "Ctrl+0" },
-      { label: "Home", hotkey: "Home" },
+      { label: "Play / pause", hotkey: { action: "toggle_playback" } },
+      { label: "Go to beat", hotkey: { action: "go_to_beat" } },
+      { label: "Previous marker", hotkey: { action: "prev_marker" } },
+      { label: "Next marker", hotkey: { action: "next_marker" } },
+      { label: "Fit all lines in view", hotkey: "Shift+F" },
+      { label: "Command palette", hotkey: "Ctrl+K" },
     ],
   },
   {
     title: "Editing",
     keys: [
-      { label: "Undo", hotkey: "Ctrl+Z" },
-      { label: "Redo", hotkey: "Ctrl+Y" },
-      { label: "Save", hotkey: "Ctrl+S" },
-      { label: "Select all", hotkey: "Ctrl+A" },
-      { label: "Duplicate", hotkey: "Ctrl+D" },
-      { label: "Delete", hotkey: "Del" },
+      { label: "Undo", hotkey: { action: "undo" } },
+      { label: "Redo", hotkey: { action: "redo" } },
+      { label: "Save", hotkey: { action: "save" } },
+      { label: "Select all notes", hotkey: { action: "select_all" } },
+      { label: "Delete", hotkey: { action: "delete" } },
     ],
   },
 ];

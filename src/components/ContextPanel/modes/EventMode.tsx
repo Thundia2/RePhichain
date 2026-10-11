@@ -196,7 +196,7 @@ function EditTab() {
     // If both have transition values, merge into a single transition
     if (startVal && endVal && "transition" in first.value) {
       merged.value = {
-        transition: { start: startVal.start, end: endVal.end, easing: (first.value as any).transition.easing },
+        transition: { start: startVal.start, end: endVal.end, easing: first.value.transition.easing },
       };
     }
     // Remove all selected events and insert merged one
@@ -424,11 +424,11 @@ function EditTab() {
       {/* Quick action buttons */}
       <SectionHeader label="Quick actions" />
       <ToolGroup label="Quick actions">
-        <HotkeyButton icon={Scissors} label="Split at playhead" hotkey="S" onClick={handleSplit} />
-        <HotkeyButton icon={Merge} label="Merge" hotkey="M" onClick={handleMerge} />
-        <HotkeyButton icon={Repeat} label="Swap start and end" hotkey="W" onClick={handleSwap} />
-        <HotkeyButton icon={CopyPlus} label="Duplicate" hotkey="Ctrl+D" onClick={handleDuplicate} />
-        <HotkeyButton icon={Trash2} label="Delete" hotkey="Del" onClick={handleDelete} />
+        <HotkeyButton icon={Scissors} label="Split at playhead" hotkey={{ action: "split_event" }} onClick={handleSplit} />
+        <HotkeyButton icon={Merge} label="Merge" onClick={handleMerge} />
+        <HotkeyButton icon={Repeat} label="Swap start and end" onClick={handleSwap} />
+        <HotkeyButton icon={CopyPlus} label="Duplicate" onClick={handleDuplicate} />
+        <HotkeyButton icon={Trash2} label="Delete" hotkey={{ action: "delete" }} onClick={handleDelete} />
       </ToolGroup>
     </div>
   );
@@ -646,38 +646,27 @@ function EasingChip({ easing, isActive, isFavorite, onApply, onToggleFavorite }:
 
 // ---- Hotkeys sub-tab ----
 
+// Only keys that are actually bound (useHotkeys / useClipboard); registry
+// actions show their current binding from Settings > Hotkeys.
 const EVENT_HOTKEY_SECTIONS: HotkeySection[] = [
   {
     title: "Event editing",
     keys: [
-      { label: "Split", hotkey: "S" },
-      { label: "Merge", hotkey: "M" },
-      { label: "Swap values", hotkey: "W" },
-      { label: "Duplicate", hotkey: "Ctrl+D" },
-      { label: "Delete", hotkey: "Del" },
-      { label: "Lock constant", hotkey: "L" },
-    ],
-  },
-  {
-    title: "Easing",
-    keys: [
-      { label: "Linear", hotkey: "Ctrl+1" },
-      { label: "Out quad", hotkey: "Ctrl+2" },
-      { label: "In-out sine", hotkey: "Ctrl+3" },
-      { label: "Out back", hotkey: "Ctrl+4" },
-      { label: "Out bounce", hotkey: "Ctrl+5" },
-      { label: "Open easing picker", hotkey: "Ctrl+E" },
+      { label: "Split at playhead", hotkey: { action: "split_event" } },
+      { label: "Delete", hotkey: { action: "delete" } },
+      { label: "Copy", hotkey: "Ctrl+C" },
+      { label: "Cut", hotkey: "Ctrl+X" },
+      { label: "Paste", hotkey: "Ctrl+V" },
+      { label: "Undo", hotkey: { action: "undo" } },
+      { label: "Redo", hotkey: { action: "redo" } },
     ],
   },
   {
     title: "Navigation",
     keys: [
-      { label: "Previous event", hotkey: "Left" },
-      { label: "Next event", hotkey: "Right" },
-      { label: "Previous kind", hotkey: "Up" },
-      { label: "Next kind", hotkey: "Down" },
-      { label: "Cycle kind", hotkey: "Tab" },
-      { label: "Go to beat", hotkey: "Ctrl+G" },
+      { label: "Move later", hotkey: { action: "move_up" } },
+      { label: "Move earlier", hotkey: { action: "move_down" } },
+      { label: "Go to beat", hotkey: { action: "go_to_beat" } },
     ],
   },
 ];

@@ -17,7 +17,7 @@ import type { Note, LineEvent } from "../../types/chart";
 import { NumericInput } from "../common/FormFields";
 import { Dialog } from "../common/Dialog";
 import { Button } from "../common/Button";
-import { Kbd } from "../common/Kbd";
+import { ActionKbd } from "../common/Kbd";
 import { INPUT_STYLE } from "../common/UIKit";
 
 interface Props {
@@ -136,7 +136,7 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
       icon={ClipboardPaste}
       onClose={onClose}
       width={320}
-      headerExtra={<Kbd>Ctrl+Alt+V</Kbd>}
+      headerExtra={<ActionKbd action="paste_special" />}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>

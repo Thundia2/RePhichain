@@ -45,11 +45,17 @@ export interface PopoutWindowResult {
 
 // ---- Floating overlay styles (used as Tauri fallback) ----
 
+/** The overlay element carries its drag cleanup and close button. */
+type FloatingOverlay = HTMLDivElement & {
+  __cleanupDrag?: () => void;
+  __closeBtn?: HTMLButtonElement;
+};
+
 function createFloatingOverlay(title: string, width: number, height: number): {
-  overlay: HTMLDivElement;
+  overlay: FloatingOverlay;
   container: HTMLDivElement;
 } {
-  const overlay = document.createElement("div");
+  const overlay: FloatingOverlay = document.createElement("div");
   overlay.style.cssText = `
     position: fixed;
     top: 50px; left: 50%;
@@ -135,11 +141,11 @@ function createFloatingOverlay(title: string, width: number, height: number): {
   document.addEventListener("mouseup", onMouseUp);
 
   // Store cleanup for later
-  (overlay as any).__cleanupDrag = () => {
+  overlay.__cleanupDrag = () => {
     document.removeEventListener("mousemove", onMouseMove);
     document.removeEventListener("mouseup", onMouseUp);
   };
-  (overlay as any).__closeBtn = closeBtn;
+  overlay.__closeBtn = closeBtn;
 
   return { overlay, container };
 }
@@ -157,7 +163,7 @@ export function usePopoutWindow(
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const windowRef = useRef<Window | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const overlayRef = useRef<FloatingOverlay | null>(null);
 
   const openPopout = useCallback(() => {
     // ---- Tauri mode: floating overlay (window.open is blocked by WebView2) ----
@@ -169,9 +175,9 @@ export function usePopoutWindow(
       overlayRef.current = overlay;
 
       // Wire close button
-      const closeBtn = (overlay as any).__closeBtn as HTMLButtonElement;
+      const closeBtn = overlay.__closeBtn as HTMLButtonElement;
       closeBtn.onclick = () => {
-        (overlay as any).__cleanupDrag?.();
+        overlay.__cleanupDrag?.();
         overlay.remove();
         overlayRef.current = null;
         setPopoutWindow(null);
@@ -237,7 +243,7 @@ export function usePopoutWindow(
   const closePopout = useCallback(() => {
     // ---- Tauri mode: remove floating overlay ----
     if (overlayRef.current) {
-      (overlayRef.current as any).__cleanupDrag?.();
+      overlayRef.current.__cleanupDrag?.();
       overlayRef.current.remove();
       overlayRef.current = null;
       setPopoutWindow(null);
@@ -263,7 +269,7 @@ export function usePopoutWindow(
     return () => {
       // Tauri overlay cleanup
       if (overlayRef.current) {
-        (overlayRef.current as any).__cleanupDrag?.();
+        overlayRef.current.__cleanupDrag?.();
         overlayRef.current.remove();
         overlayRef.current = null;
       }

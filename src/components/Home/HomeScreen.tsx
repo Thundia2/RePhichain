@@ -33,7 +33,7 @@ import { EditorGuideModal } from "./EditorGuideModal";
 import { Icon } from "../common/Icon";
 import { IconButton } from "../common/IconButton";
 import { Button } from "../common/Button";
-import { Kbd } from "../common/Kbd";
+import { ActionKbd, Kbd } from "../common/Kbd";
 import { NoteGlyph } from "../common/NoteGlyph";
 import type { NoteKind } from "../../types/chart";
 
@@ -43,26 +43,27 @@ interface HomeScreenProps {
 }
 
 // Note types (drawn with NoteGlyph in their note colours)
-const NOTE_TYPES: { label: string; kind: NoteKind; key: string }[] = [
-  { label: "Tap", kind: "tap", key: "Q" },
-  { label: "Drag", kind: "drag", key: "W" },
-  { label: "Flick", kind: "flick", key: "E" },
-  { label: "Hold", kind: "hold", key: "R" },
+const NOTE_TYPES: { label: string; kind: NoteKind; action: string }[] = [
+  { label: "Tap", kind: "tap", action: "place_tap" },
+  { label: "Drag", kind: "drag", action: "place_drag" },
+  { label: "Flick", kind: "flick", action: "place_flick" },
+  { label: "Hold", kind: "hold", action: "place_hold" },
 ];
 
+// Registry actions, so the chips follow Settings > Hotkeys.
 const SHORTCUTS = [
-  { label: "Play / pause", key: "Space" },
-  { label: "Undo", key: "Ctrl+Z" },
-  { label: "Redo", key: "Ctrl+Shift+Z" },
-  { label: "Select tool", key: "V" },
-  { label: "Eraser", key: "X" },
-  { label: "Flip above/below", key: "F" },
-  { label: "Delete selected", key: "Del" },
+  { label: "Play / pause", action: "toggle_playback" },
+  { label: "Undo", action: "undo" },
+  { label: "Redo", action: "redo" },
+  { label: "Select tool", action: "select_tool" },
+  { label: "Eraser", action: "eraser_tool" },
+  { label: "Flip above/below", action: "flip_notes" },
+  { label: "Delete selected", action: "delete" },
 ];
 
-const TIPS = [
+const TIPS: React.ReactNode[] = [
   "Set speed to 0 before a drop for dramatic freezes, then snap it back up.",
-  "Use F to flip notes below the line for more complex patterns.",
+  <>Use <ActionKbd action="flip_notes" /> to flip notes below the line for more complex patterns.</>,
   "Set opacity to 0 for invisible lines — a staple of hard charts.",
 ];
 
@@ -246,14 +247,14 @@ export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
             primary
             title="New chart…"
             description="Start from scratch with a blank project."
-            shortcut="Ctrl+N"
+            shortcut={<ActionKbd action="new_chart" style={{ marginTop: "var(--space-2)" }} />}
             onClick={onNewChart}
           />
           <ActionCard
             icon={FileInput}
             title="Import chart…"
             description="Open a chart file (.json, .zip, .pez, .pec)."
-            shortcut="Ctrl+O"
+            shortcut={<Kbd style={{ marginTop: "var(--space-2)" }}>Ctrl+O</Kbd>}
             onClick={onImportChart}
           />
         </div>
@@ -478,7 +479,7 @@ export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
                 <NoteGlyph kind={nt.kind} size={14} />
                 <span style={{ color: "var(--text-primary)" }}>{nt.label}</span>
                 <span style={{ flex: 1 }} />
-                <Kbd>{nt.key}</Kbd>
+                <ActionKbd action={nt.action} />
               </div>
             ))}
           </div>
@@ -499,7 +500,7 @@ export function HomeScreen({ onNewChart, onImportChart }: HomeScreenProps) {
                 }}
               >
                 <span style={{ color: "var(--text-secondary)" }}>{s.label}</span>
-                <Kbd>{s.key}</Kbd>
+                <ActionKbd action={s.action} />
               </div>
             ))}
           </div>
@@ -554,7 +555,8 @@ function ActionCard({
   primary?: boolean;
   title: string;
   description: string;
-  shortcut: string;
+  /** The shortcut chip. */
+  shortcut: React.ReactNode;
   onClick: () => void;
 }) {
   return (
@@ -606,7 +608,7 @@ function ActionCard({
       <div style={{ fontSize: "var(--fs-control)", lineHeight: "15px", color: "var(--text-secondary)" }}>
         {description}
       </div>
-      <Kbd style={{ marginTop: "var(--space-2)" }}>{shortcut}</Kbd>
+      {shortcut}
     </button>
   );
 }

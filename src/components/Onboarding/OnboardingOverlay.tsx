@@ -9,7 +9,7 @@
 import { useState, useCallback, useId, type ReactNode } from "react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { Button } from "../common/Button";
-import { Kbd } from "../common/Kbd";
+import { ActionKbd, Kbd } from "../common/Kbd";
 
 const STEPS: { title: string; body: ReactNode }[] = [
   {
@@ -20,8 +20,9 @@ const STEPS: { title: string; body: ReactNode }[] = [
     title: "Toolbar",
     body: (
       <>
-        Use the toolbar on the left to switch between tools: Select <Kbd>V</Kbd>, Tap <Kbd>Q</Kbd>, Drag <Kbd>W</Kbd>,
-        Flick <Kbd>E</Kbd>, Hold <Kbd>R</Kbd>, and Eraser <Kbd>X</Kbd>. Each tool changes how clicks on the timeline behave.
+        Use the toolbar on the left to switch between tools: Select <ActionKbd action="select_tool" />,
+        Tap <ActionKbd action="place_tap" />, Drag <ActionKbd action="place_drag" />, Flick <ActionKbd action="place_flick" />,
+        Hold <ActionKbd action="place_hold" />, and Eraser <ActionKbd action="eraser_tool" />. Each tool changes how clicks on the timeline behave.
       </>
     ),
   },
@@ -37,8 +38,8 @@ const STEPS: { title: string; body: ReactNode }[] = [
     title: "Keyboard shortcuts",
     body: (
       <>
-        Press <Kbd>Ctrl+K</Kbd> to open the command palette. Use <Kbd>Space</Kbd> for play/pause,{" "}
-        <Kbd>Ctrl+Z</Kbd> / <Kbd>Ctrl+Shift+Z</Kbd> for undo/redo, and the arrow keys to nudge selected items.
+        Press <Kbd>Ctrl+K</Kbd> to open the command palette. Use <ActionKbd action="toggle_playback" /> for play/pause,{" "}
+        <ActionKbd action="undo" /> / <ActionKbd action="redo" /> for undo/redo, and the arrow keys to nudge selected items.
       </>
     ),
   },

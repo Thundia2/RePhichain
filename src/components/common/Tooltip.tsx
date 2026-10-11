@@ -13,12 +13,14 @@
 import { useState, useRef, useEffect, useCallback, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Kbd } from "./Kbd";
+import { useShortcutText, type ShortcutRef } from "../../hooks/useHotkeyLabel";
 
 export type TooltipPosition = "top" | "bottom" | "left" | "right";
 
 interface TooltipProps {
   content: ReactNode;
-  shortcut?: string;
+  /** Fixed key text, or `{ action }` for a rebindable registry shortcut. */
+  shortcut?: ShortcutRef;
   children: ReactNode;
   position?: TooltipPosition;
   delay?: number;
@@ -41,6 +43,7 @@ export function Tooltip({
   const wrapRef = useRef<HTMLSpanElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const descId = useId();
+  const shortcutText = useShortcutText()(shortcut);
 
   // Link the target to the hidden description, as a native title would be.
   useEffect(() => {
@@ -109,7 +112,7 @@ export function Tooltip({
         createPortal(
           <div role="tooltip" className="ui-tooltip" style={coords}>
             <span>{content}</span>
-            {shortcut && <Kbd>{shortcut}</Kbd>}
+            {shortcutText && <Kbd>{shortcutText}</Kbd>}
           </div>,
           host ?? document.body,
         )}

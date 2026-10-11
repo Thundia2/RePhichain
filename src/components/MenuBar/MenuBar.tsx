@@ -179,9 +179,58 @@ function MenuDropdown({
   onHoverEnter: () => void;
   onClose: () => void;
 }) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Escape closes the open menu and returns focus to its trigger,
+  // wherever focus is (a mouse-opened menu leaves it on the trigger or body).
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+      triggerRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [isOpen, onClose]);
+
+  /** Move focus among the enabled items: +1/-1 steps, "first"/"last" jumps. */
+  const focusItem = (to: 1 | -1 | "first" | "last") => {
+    const items = Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? []);
+    if (items.length === 0) return;
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next =
+      to === "first" ? 0
+      : to === "last" ? items.length - 1
+      : i === -1 ? (to === 1 ? 0 : items.length - 1)
+      : (i + to + items.length) % items.length;
+    items[next].focus();
+  };
+
+  const onListKeyDown = (e: React.KeyboardEvent) => {
+    const to = ({ ArrowDown: 1, ArrowUp: -1, Home: "first", End: "last" } as const)[e.key as "ArrowDown"];
+    if (to === undefined) return;
+    e.preventDefault();
+    e.stopPropagation(); // keep arrow keys away from the editor's hotkeys
+    focusItem(to);
+  };
+
+  const onTriggerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isOpen) onToggle();
+    const to = e.key === "ArrowDown" ? "first" : "last";
+    requestAnimationFrame(() => focusItem(to));
+  };
+
   return (
     <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         role="menuitem"
         aria-haspopup="menu"
@@ -199,19 +248,25 @@ function MenuDropdown({
         }}
         onMouseEnter={onHoverEnter}
         onClick={onToggle}
+        onKeyDown={onTriggerKeyDown}
       >
         {menu.label}
       </button>
 
       {isOpen && (
         <div
+          ref={listRef}
           role="menu"
           aria-label={menu.label}
+          onKeyDown={onListKeyDown}
           className="absolute top-full left-0 ui-popover"
           style={{
             zIndex: "var(--z-dropdown)",
             marginTop: "var(--space-2)",
             minWidth: 220,
+            // Size to the longest label + shortcut; the trigger it is
+            // positioned in is narrower than the menu.
+            width: "max-content",
           }}
         >
           {menu.items.map((item, i) =>
@@ -230,7 +285,7 @@ function MenuDropdown({
                   onClose();
                 }}
               >
-                <span>{item.label}</span>
+                <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>
                 {item.shortcut && (
                   <span
                     style={{
@@ -239,6 +294,7 @@ function MenuDropdown({
                       color: "var(--text-secondary)",
                       fontSize: "var(--fs-caption)",
                       fontFamily: "var(--font-mono)",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {item.shortcut}

@@ -17,7 +17,7 @@ import { IconButton } from "../common/IconButton";
 import { NoteGlyph } from "../common/NoteGlyph";
 import { SegmentedControl } from "../common/SegmentedControl";
 import { Button } from "../common/Button";
-import { Kbd } from "../common/Kbd";
+import { ActionKbd, Kbd } from "../common/Kbd";
 import { Pill } from "../common/UIKit";
 import { STEP_PRESETS, formatStepSize } from "../../utils/stepPresets";
 import { snapBeat, formatBeat } from "../../utils/beat";
@@ -122,7 +122,8 @@ export function StepRecordBanner() {
       {/* ---- Note kind selector ---- */}
       <div>
         <div style={HINT_ROW}>
-          Note kind <Kbd>Q/W/E/R</Kbd>
+          Note kind <ActionKbd action="place_tap" /> <ActionKbd action="place_drag" />{" "}
+          <ActionKbd action="place_flick" /> <ActionKbd action="place_hold" />
         </div>
         <SegmentedControl
           label="Step record note kind"

@@ -8,7 +8,7 @@
 import type React from "react";
 import { Minus, Spline } from "lucide-react";
 import { GCard, STitle, ColorDot } from "./guideComponents";
-import { Kbd } from "../common/Kbd";
+import { ActionKbd, Kbd, ShortcutKbd } from "../common/Kbd";
 import { Icon } from "../common/Icon";
 import { NoteGlyph } from "../common/NoteGlyph";
 import { Badge } from "../common/UIKit";
@@ -72,9 +72,9 @@ export function WelcomeTab() {
 
       <GCard>
         <div style={{ ...BODY, lineHeight: 1.8 }}>
-          <strong style={STRONG}>Quick start:</strong> Press <Kbd>Ctrl+N</Kbd> to create a new chart,
+          <strong style={STRONG}>Quick start:</strong> Press <ActionKbd action="new_chart" /> to create a new chart,
           or <Kbd>Ctrl+O</Kbd> to import an existing chart. Then use the toolbar to place notes
-          and the keyframe bar to animate lines. Press <Kbd>Space</Kbd> to preview your work.
+          and the keyframe bar to animate lines. Press <ActionKbd action="toggle_playback" /> to preview your work.
         </div>
       </GCard>
 
@@ -106,7 +106,7 @@ export function CanvasTab({ active }: { active: boolean }) {
         <div style={{ ...CAPTION, textAlign: "center", marginTop: "var(--space-4)" }}>
           Notes can fall from <strong style={STRONG}>above</strong> or
           rise from <strong style={STRONG}>below</strong> the judgment line.
-          Press <Kbd>F</Kbd> to flip selected notes between sides.
+          Press <ActionKbd action="flip_notes" /> to flip selected notes between sides.
         </div>
       </GCard>
 
@@ -142,7 +142,7 @@ export function NotesTab({ active }: { active: boolean }) {
             <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", marginBottom: "var(--space-4)" }}>
               <NoteGlyph kind={n.kind} size={16} />
               <span style={{ fontWeight: 600, fontSize: "var(--fs-body)", color: "var(--text-primary)" }}>{n.label}</span>
-              <Kbd>{n.shortcut}</Kbd>
+              <ShortcutKbd value={n.shortcut} />
             </div>
             <div style={CAPTION}>{n.desc}</div>
           </GCard>
@@ -262,7 +262,7 @@ export function ToolsTab() {
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
                   <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "var(--fs-control)" }}>{t.label}</span>
-                  <Kbd>{t.key}</Kbd>
+                  <ShortcutKbd value={t.key} />
                 </div>
                 <div style={{ ...CAPTION, marginTop: 1 }}>{t.desc}</div>
               </div>
@@ -356,9 +356,9 @@ export function ShortcutsTab() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
               {cat.keys.map(k => (
-                <div key={k.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-8)", fontSize: "var(--fs-caption)", padding: "var(--space-2) 0" }}>
+                <div key={k.action} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-8)", fontSize: "var(--fs-caption)", padding: "var(--space-2) 0" }}>
                   <span style={{ color: "var(--text-secondary)" }}>{k.action}</span>
-                  <Kbd>{k.key}</Kbd>
+                  <ShortcutKbd value={k.key} />
                 </div>
               ))}
             </div>
@@ -386,8 +386,9 @@ export function AdvancedTab() {
       <STitle>Mark / improvisation mode</STitle>
       <GCard>
         <div style={{ ...CAPTION, lineHeight: 1.6 }}>
-          <Kbd>Shift+I</Kbd> — Place colored bookmarks during playback by pressing Q/W/E/R (note types)
-          or 1/2/3 (colored markers). Convert bookmarks to real notes afterwards.
+          <Kbd>Shift+I</Kbd> — Place colored bookmarks during playback by pressing{" "}
+          <ActionKbd action="place_tap" /> <ActionKbd action="place_drag" /> <ActionKbd action="place_flick" />{" "}
+          <ActionKbd action="place_hold" /> (note types) or 1/2/3 (colored markers). Convert bookmarks to real notes afterwards.
           Built-in latency compensation (-40ms default).
         </div>
       </GCard>
@@ -431,15 +432,15 @@ export function AdvancedTab() {
 // ---- Tips ----
 
 export function TipsTab() {
-  const tips = [
+  const tips: { title: string; desc: React.ReactNode }[] = [
     { title: "Start simple", desc: "Begin with one line at the center. Add notes first, then animate with events." },
     { title: "Use the grid", desc: "Set density to match the song's rhythm (4 = quarter-beat, 8 = eighth-note, 16 = sixteenth)." },
-    { title: "Preview often", desc: "Press Space to play. Use 0.5× speed for tricky sections. The game preview shows exactly what players see." },
+    { title: "Preview often", desc: <>Press <ActionKbd action="toggle_playback" /> to play. Use 0.5× speed for tricky sections. The game preview shows exactly what players see.</> },
     { title: "Multiple lines", desc: "Real Phigros charts use many independently moving lines. Start with 2-3, then add more for complexity." },
-    { title: "Undo is your friend", desc: "Ctrl+Z gives you 200 undo steps. Experiment freely!" },
+    { title: "Undo is your friend", desc: <><ActionKbd action="undo" /> gives you 200 undo steps. Experiment freely!</> },
     { title: "Speed events for drama", desc: "Set speed to 0 before a music drop (freeze notes), then snap back to 1 for impact." },
     { title: "Invisible lines are powerful", desc: "Set opacity to 0 — notes still fall, but the line is invisible. Used in almost every hard chart." },
-    { title: "Command palette", desc: "Press Ctrl+K to access any action instantly. Search for presets, generators, settings, and more." },
+    { title: "Command palette", desc: <>Press <Kbd>Ctrl+K</Kbd> to access any action instantly. Search for presets, generators, settings, and more.</> },
     { title: "Learn easing curves", desc: "The difference between a good and great chart is in the easing. ease_out gives smooth landings, ease_in_out gives gentle motion." },
     { title: "Happy charting!", desc: "Join the Phigros custom chart community, share your work, and play other people's charts for inspiration." },
   ];

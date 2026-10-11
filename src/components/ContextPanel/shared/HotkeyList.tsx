@@ -4,13 +4,16 @@
 import { Card } from "../../common/UIKit";
 import { Kbd } from "../../common/Kbd";
 import { SectionHeader } from "./SectionHeader";
+import { useShortcutText, type ShortcutRef } from "../../../hooks/useHotkeyLabel";
 
 export interface HotkeySection {
   title: string;
-  keys: { label: string; hotkey: string }[];
+  /** `hotkey` is fixed key text, or `{ action }` for a rebindable registry shortcut. */
+  keys: { label: string; hotkey: ShortcutRef }[];
 }
 
 export function HotkeyList({ sections }: { sections: HotkeySection[] }) {
+  const text = useShortcutText();
   return (
     <div>
       {sections.map((section) => (
@@ -32,7 +35,7 @@ export function HotkeyList({ sections }: { sections: HotkeySection[] }) {
                 }}
               >
                 <span style={{ color: "var(--text-primary)" }}>{k.label}</span>
-                {k.hotkey ? <Kbd>{k.hotkey}</Kbd> : <span style={{ color: "var(--text-muted)" }}>—</span>}
+                {k.hotkey ? <Kbd>{text(k.hotkey)}</Kbd> : <span style={{ color: "var(--text-muted)" }}>—</span>}
               </div>
             ))}
           </Card>

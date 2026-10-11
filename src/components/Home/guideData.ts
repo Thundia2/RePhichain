@@ -13,16 +13,17 @@ import {
   Wrench, PanelsTopLeft, Keyboard, Settings2, Lightbulb,
 } from "lucide-react";
 import type { NoteKind } from "../../types/chart";
+import type { ShortcutRef } from "../../hooks/useHotkeyLabel";
 
 // ---- Note & Event Data ----
 // Note and event colours are the domain identity tokens; note
 // types are drawn with NoteGlyph, tools with Lucide icons.
 
-export const NOTE_TYPES: { kind: NoteKind; label: string; shortcut: string; color: string; desc: string }[] = [
-  { kind: "tap", label: "Tap", shortcut: "Q", color: "var(--note-tap)", desc: "Tap the screen when the note reaches the judgment line. The most common note type." },
-  { kind: "drag", label: "Drag", shortcut: "W", color: "var(--note-drag)", desc: "Slide through — no need to lift your finger. Doesn't break combo if held." },
-  { kind: "flick", label: "Flick", shortcut: "E", color: "var(--note-flick)", desc: "Swipe upward when the note reaches the line. Requires directional input." },
-  { kind: "hold", label: "Hold", shortcut: "R", color: "var(--note-hold)", desc: "Hold down for a duration. Has both a head beat and a hold duration." },
+export const NOTE_TYPES: { kind: NoteKind; label: string; shortcut: ShortcutRef; color: string; desc: string }[] = [
+  { kind: "tap", label: "Tap", shortcut: { action: "place_tap" }, color: "var(--note-tap)", desc: "Tap the screen when the note reaches the judgment line. The most common note type." },
+  { kind: "drag", label: "Drag", shortcut: { action: "place_drag" }, color: "var(--note-drag)", desc: "Slide through — no need to lift your finger. Doesn't break combo if held." },
+  { kind: "flick", label: "Flick", shortcut: { action: "place_flick" }, color: "var(--note-flick)", desc: "Swipe upward when the note reaches the line. Requires directional input." },
+  { kind: "hold", label: "Hold", shortcut: { action: "place_hold" }, color: "var(--note-hold)", desc: "Hold down for a duration. Has both a head beat and a hold duration." },
 ];
 
 export const EVENT_TYPES = [
@@ -40,34 +41,39 @@ export const EVENT_TYPES = [
 ];
 
 /** A tool is shown either as a Lucide icon or (note tools) as its NoteGlyph. */
-export const TOOLS: { id: string; label: string; icon?: LucideIcon; note?: NoteKind; key: string; desc: string }[] = [
-  { id: "select", label: "Select", icon: MousePointer2, key: "V", desc: "Click to select notes/events. Drag to box-select. Ctrl+click to toggle." },
-  { id: "place_tap", label: "Tap", note: "tap", key: "Q", desc: "Click on the timeline or canvas to place a Tap note." },
-  { id: "place_drag", label: "Drag", note: "drag", key: "W", desc: "Click to place a Drag note." },
-  { id: "place_flick", label: "Flick", note: "flick", key: "E", desc: "Click to place a Flick note." },
-  { id: "place_hold", label: "Hold", note: "hold", key: "R", desc: "Click to start a Hold note, click again to set the end beat." },
-  { id: "eraser", label: "Eraser", icon: Eraser, key: "X", desc: "Click to delete notes or events." },
-  { id: "pattern", label: "Pattern", icon: Shapes, key: "Ctrl+G", desc: "Generate note patterns from shapes (sine, zigzag, arc, etc.)." },
+export const TOOLS: { id: string; label: string; icon?: LucideIcon; note?: NoteKind; key: ShortcutRef; desc: string }[] = [
+  { id: "select", label: "Select", icon: MousePointer2, key: { action: "select_tool" }, desc: "Click to select notes/events. Drag to box-select. Ctrl+click to toggle." },
+  { id: "place_tap", label: "Tap", note: "tap", key: { action: "place_tap" }, desc: "Click on the timeline or canvas to place a Tap note." },
+  { id: "place_drag", label: "Drag", note: "drag", key: { action: "place_drag" }, desc: "Click to place a Drag note." },
+  { id: "place_flick", label: "Flick", note: "flick", key: { action: "place_flick" }, desc: "Click to place a Flick note." },
+  { id: "place_hold", label: "Hold", note: "hold", key: { action: "place_hold" }, desc: "Click to start a Hold note, click again to set the end beat." },
+  { id: "eraser", label: "Eraser", icon: Eraser, key: { action: "eraser_tool" }, desc: "Click to delete notes or events." },
+  { id: "pattern", label: "Pattern", icon: Shapes, key: { action: "pattern_tool" }, desc: "Generate note patterns from shapes (sine, zigzag, arc, etc.)." },
 ];
 
-export const HOTKEYS = [
+// `key` is fixed text, or `{ action }` for a rebindable registry shortcut.
+export const HOTKEYS: { cat: string; keys: { key: ShortcutRef; action: string }[] }[] = [
   { cat: "Tools", keys: [
-    { key: "V", action: "Select tool" }, { key: "Q", action: "Place tap" }, { key: "W", action: "Place drag" },
-    { key: "E", action: "Place flick" }, { key: "R", action: "Place hold" }, { key: "X", action: "Eraser tool" },
-    { key: "T", action: "Toggle beat sync" }, { key: "F", action: "Flip notes above/below" },
+    { key: { action: "select_tool" }, action: "Select tool" }, { key: { action: "place_tap" }, action: "Place tap" },
+    { key: { action: "place_drag" }, action: "Place drag" }, { key: { action: "place_flick" }, action: "Place flick" },
+    { key: { action: "place_hold" }, action: "Place hold" }, { key: { action: "eraser_tool" }, action: "Eraser tool" },
+    { key: "T", action: "Toggle beat sync" }, { key: { action: "flip_notes" }, action: "Flip notes above/below" },
   ]},
   { cat: "Playback", keys: [
-    { key: "Space", action: "Play / pause" }, { key: "Left / Right", action: "Seek backward / forward" },
+    { key: { action: "toggle_playback" }, action: "Play / pause" },
+    { key: { action: "loop_start" }, action: "Set loop start" }, { key: { action: "loop_end" }, action: "Set loop end" },
+    { key: { action: "toggle_loop" }, action: "Toggle loop" },
   ]},
   { cat: "File", keys: [
-    { key: "Ctrl+N", action: "New chart…" }, { key: "Ctrl+O", action: "Import chart…" },
-    { key: "Ctrl+S", action: "Save project" }, { key: "Ctrl+K", action: "Command palette" },
+    { key: { action: "new_chart" }, action: "New chart…" }, { key: "Ctrl+O", action: "Import chart…" },
+    { key: { action: "save" }, action: "Save project" }, { key: "Ctrl+K", action: "Command palette" },
   ]},
   { cat: "Editing", keys: [
-    { key: "Ctrl+Z", action: "Undo" }, { key: "Ctrl+Shift+Z", action: "Redo" },
-    { key: "Ctrl+A", action: "Select all notes" }, { key: "Delete", action: "Delete selected" },
+    { key: { action: "undo" }, action: "Undo" }, { key: { action: "redo" }, action: "Redo" },
+    { key: { action: "select_all" }, action: "Select all notes" }, { key: { action: "delete" }, action: "Delete selected" },
     { key: "Ctrl+C / X / V", action: "Copy / Cut / Paste" },
-    { key: "Up / Down", action: "Move notes in time" }, { key: "Left / Right", action: "Move notes left/right" },
+    { key: { action: "move_up" }, action: "Move notes later" }, { key: { action: "move_down" }, action: "Move notes earlier" },
+    { key: { action: "move_left" }, action: "Move notes left" }, { key: { action: "move_right" }, action: "Move notes right" },
   ]},
   { cat: "Panels", keys: [
     { key: "L", action: "Line drawer" }, { key: "I", action: "Inspector" },
@@ -76,8 +82,8 @@ export const HOTKEYS = [
     { key: "Shift+F", action: "Fit all (reset zoom)" }, { key: "Ctrl+L", action: "LineStrip search" },
   ]},
   { cat: "Groups", keys: [
-    { key: "Ctrl+G", action: "Toggle pattern tool" }, { key: "Ctrl+Shift+G", action: "Create group" },
-    { key: "G", action: "Enter group edit" }, { key: "Escape", action: "Exit group edit" },
+    { key: { action: "pattern_tool" }, action: "Toggle pattern tool" }, { key: "Ctrl+Shift+G", action: "Create group" },
+    { key: { action: "enter_group_edit" }, action: "Enter group edit" }, { key: "Escape", action: "Exit group edit" },
   ]},
   { cat: "Modes", keys: [
     { key: "Shift+I", action: "Toggle mark/improv mode" }, { key: "Alt+R", action: "Toggle record mode" },

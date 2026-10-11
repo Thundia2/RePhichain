@@ -1,35 +1,13 @@
 // ============================================================
-// Editor Guide — Shared UI Components & Animation Hook
+// Editor Guide — Shared UI Components
 //
-// Small reusable atoms and the animation loop hook used by
-// both the animation demos and the tab content components.
+// Small reusable atoms used by both the animation demos and the
+// tab content components. The animation loop hook is in
+// useAnimationLoop.ts.
 // ============================================================
 
-import React, { useRef, useEffect } from "react";
+import type React from "react";
 import { easingFns } from "./guideData";
-
-// ---- Animation Hook ----
-
-/** Returns a ref containing elapsed seconds, driven by requestAnimationFrame */
-export function useAnimationLoop(active: boolean): React.MutableRefObject<number> {
-  const progressRef = useRef(0);
-  const rafRef = useRef(0);
-
-  useEffect(() => {
-    if (!active) return;
-    const start = performance.now();
-
-    const tick = (now: number) => {
-      const elapsed = now - start;
-      progressRef.current = elapsed / 1000;
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [active]);
-
-  return progressRef;
-}
 
 // ---- Shared Atoms ----
 

@@ -24,7 +24,7 @@ import { safeParseNumber, NumericInput } from "../common/FormFields";
 import { Dialog } from "../common/Dialog";
 import { Button } from "../common/Button";
 import { Icon } from "../common/Icon";
-import { Kbd } from "../common/Kbd";
+import { ActionKbd } from "../common/Kbd";
 import { SegmentedControl } from "../common/SegmentedControl";
 import { INPUT_STYLE as KIT_INPUT_STYLE } from "../common/UIKit";
 
@@ -472,7 +472,7 @@ export function NewProjectDialog({ open, onClose }: Props) {
         width={480}
         footer={
           <>
-            <Kbd style={{ marginRight: "auto" }}>Ctrl+N</Kbd>
+            <ActionKbd action="new_chart" style={{ marginRight: "auto" }} />
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>

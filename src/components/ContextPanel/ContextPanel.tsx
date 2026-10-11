@@ -62,12 +62,9 @@ export function ContextPanel(props: ContextPanelProps) {
   } = props;
 
   const mode = useContextPanelMode();
-  // Subscribe to aiEnabled — `getModeTabs` reads the setting internally,
-  // but without this subscription the component wouldn't re-render when
-  // the user toggles AI on/off, so the AI tab wouldn't appear/disappear.
-  // The useMemo dep on `aiEnabled` ensures tabs are recomputed on toggle.
+  // Subscribe to aiEnabled so the AI tab appears/disappears on toggle.
   const aiEnabled = useSettingsStore((s) => s.aiEnabled);
-  const tabs = useMemo(() => getModeTabs(mode), [mode, aiEnabled]);
+  const tabs = useMemo(() => getModeTabs(mode, aiEnabled), [mode, aiEnabled]);
   const defaultTab = tabs[0]?.id ?? "actions";
 
   const activeTab = useContextPanelStore((s) => s.getActiveTab(mode, defaultTab));

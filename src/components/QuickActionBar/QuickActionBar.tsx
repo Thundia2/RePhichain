@@ -74,7 +74,7 @@ export function QuickActionBar() {
         <IconButton
           icon={isPlaying ? Pause : Play}
           label={isPlaying ? "Pause" : "Play"}
-          shortcut="Space"
+          shortcut={{ action: "toggle_playback" }}
           size="md"
           tooltipPosition="bottom"
           style={{ color: "var(--text-primary)" }}

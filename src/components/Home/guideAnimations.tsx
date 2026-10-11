@@ -9,7 +9,8 @@
 // ============================================================
 
 import { useRef, useEffect, useState } from "react";
-import { useAnimationLoop, EasingMini } from "./guideComponents";
+import { EasingMini } from "./guideComponents";
+import { useAnimationLoop } from "./useAnimationLoop";
 import { SegmentedControl } from "../common/SegmentedControl";
 import { Pill } from "../common/UIKit";
 import { NOTE_TYPES, easingFns, EASING_NAMES, EASING_FAMILIES } from "./guideData";

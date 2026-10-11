@@ -246,7 +246,7 @@ export function DevToolsPanel() {
         <IconButton
           icon={X}
           label="Close DevTools"
-          shortcut="F12"
+          shortcut={{ action: "toggle_devtools" }}
           size="md"
           tooltipPosition="left"
           onClick={toggleDevTools}

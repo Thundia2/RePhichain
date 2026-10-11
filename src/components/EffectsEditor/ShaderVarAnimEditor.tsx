@@ -434,6 +434,17 @@ function MiniKeyframeStrip({
 // Full Keyframe Editor (expanded view)
 // ============================================================
 
+// E5 stable React keys for keyframe rows (see KeyframeEditor). Keyed by object
+// identity, so one map serves every editor instance and entries are freed with
+// their events.
+const KEYFRAME_KEYS = new WeakMap<AnimationEvent, string>();
+let keyframeKeySeq = 0;
+function keyFor(ev: AnimationEvent): string {
+  let k = KEYFRAME_KEYS.get(ev);
+  if (!k) { k = `kf${keyframeKeySeq++}`; KEYFRAME_KEYS.set(ev, k); }
+  return k;
+}
+
 function KeyframeEditor({
   events,
   onChange,
@@ -451,13 +462,7 @@ function KeyframeEditor({
   // edit then lands on the wrong keyframe). Give each event object a persistent id via a
   // WeakMap and carry it onto the edited event's new object so React follows the row
   // through the sort. The data stays sorted (export-safe) — only the React keys are stable.
-  const keyMap = useRef(new WeakMap<AnimationEvent, string>());
-  const keySeq = useRef(0);
-  const keyFor = (ev: AnimationEvent): string => {
-    let k = keyMap.current.get(ev);
-    if (!k) { k = `kf${keySeq.current++}`; keyMap.current.set(ev, k); }
-    return k;
-  };
+  // The map lives at module scope (KEYFRAME_KEYS), since it is keyed by object identity.
 
   const addAtCurrentBeat = useCallback(() => {
     // Find what value to use at the current beat
@@ -504,8 +509,8 @@ function KeyframeEditor({
       const updated = events.map((ev, i) => {
         if (i !== index) return ev;
         const next = { ...ev, ...changes };
-        const id = keyMap.current.get(ev); // E5: carry the stable id onto the new object
-        if (id) keyMap.current.set(next, id);
+        const id = KEYFRAME_KEYS.get(ev); // E5: carry the stable id onto the new object
+        if (id) KEYFRAME_KEYS.set(next, id);
         return next;
       });
       onChange(updated.sort(
