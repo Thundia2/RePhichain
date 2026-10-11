@@ -2,10 +2,33 @@
 // Color Picker — HSL wheel + RGB sliders + hex input + swatches
 //
 // Reusable popup for color events and note tint properties.
+// Chrome uses the popover surface; the wheel, square, preview and
+// swatches show the user's colour data as-is.
 // ============================================================
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ActionButton } from "./UIKit";
+import { Button } from "./Button";
+import { Tooltip } from "./Tooltip";
+import { chromeTheme } from "../../canvas/chromeTheme";
+
+/** Small numeric / text input well. */
+const WELL_STYLE: React.CSSProperties = {
+  height: "var(--control-sm)",
+  backgroundColor: "var(--bg-tertiary)",
+  color: "var(--text-primary)",
+  border: "var(--hairline) solid var(--border-color)",
+  borderRadius: "var(--radius-md)",
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--fs-caption)",
+  padding: "0 var(--space-4)",
+};
+
+/** Field label (R, G, B, Hex, Swatches). */
+const LABEL_STYLE: React.CSSProperties = {
+  fontSize: "var(--fs-caption)",
+  color: "var(--text-secondary)",
+  fontWeight: 600,
+};
 
 interface ColorPickerProps {
   value: [number, number, number];
@@ -117,7 +140,8 @@ export function ColorPicker({ value, onChange, onClose }: ColorPickerProps) {
     const iy = cy + Math.sin(hueRad) * indicR;
     ctx.beginPath();
     ctx.arc(ix, iy, 6, 0, Math.PI * 2);
-    ctx.strokeStyle = "#fff";
+    // Indicator rings contrast against the colour field itself, not the chrome.
+    ctx.strokeStyle = chromeTheme().pickerRingLight;
     ctx.lineWidth = 2;
     ctx.stroke();
   }, [hue]);
@@ -150,7 +174,7 @@ export function ColorPicker({ value, onChange, onClose }: ColorPickerProps) {
     const iy = (1 - hsl[2]) * (size - 1);
     ctx.beginPath();
     ctx.arc(ix, iy, 5, 0, Math.PI * 2);
-    ctx.strokeStyle = hsl[2] > 0.5 ? "#000" : "#fff";
+    ctx.strokeStyle = hsl[2] > 0.5 ? chromeTheme().pickerRingDark : chromeTheme().pickerRingLight;
     ctx.lineWidth = 2;
     ctx.stroke();
   }, [hsl]);
@@ -205,27 +229,26 @@ export function ColorPicker({ value, onChange, onClose }: ColorPickerProps) {
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 200,
+        zIndex: "var(--z-overlay)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "rgba(0,0,0,0.4)",
+        backgroundColor: "var(--overlay)",
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
+        role="dialog"
+        aria-label="Color picker"
+        className="ui-popover"
         style={{
-          backgroundColor: "var(--bg-secondary)",
-          border: "1px solid var(--border-color)",
-          borderRadius: 12,
-          padding: 16,
+          padding: "var(--space-16)",
           width: 280,
-          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Hue wheel + SL square */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: "var(--space-12)", marginBottom: "var(--space-12)" }}>
           <canvas
             ref={wheelCanvasRef}
             width={180}
@@ -233,103 +256,100 @@ export function ColorPicker({ value, onChange, onClose }: ColorPickerProps) {
             style={{ width: 180, height: 180, cursor: "crosshair" }}
             onClick={handleWheelClick}
           />
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
             <canvas
               ref={slCanvasRef}
               width={120}
               height={120}
-              style={{ width: 80, height: 80, borderRadius: 4, cursor: "crosshair" }}
+              style={{ width: 80, height: 80, borderRadius: "var(--radius-xs)", cursor: "crosshair" }}
               onClick={handleSLClick}
             />
             {/* Preview swatch */}
-            <div style={{
-              width: 80, height: 32, borderRadius: 6,
-              backgroundColor: `rgb(${r}, ${g}, ${b})`,
-              border: "1px solid var(--border-color)",
-            }} />
+            <div
+              aria-label={`Current color ${rgbToHex(r, g, b)}`}
+              role="img"
+              style={{
+                width: 80, height: 32, borderRadius: "var(--radius-md)",
+                backgroundColor: `rgb(${r}, ${g}, ${b})`,
+                border: "var(--hairline) solid var(--border-color)",
+              }}
+            />
           </div>
         </div>
 
         {/* RGB sliders */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)", marginBottom: "var(--space-8)" }}>
           {(["R", "G", "B"] as const).map((ch, i) => (
-            <div key={ch} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 10, color: "var(--text-muted)", width: 12, fontWeight: 600 }}>{ch}</span>
+            <div key={ch} style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+              <span style={{ ...LABEL_STYLE, width: 12 }}>{ch}</span>
               <input
                 type="range"
                 min={0}
                 max={255}
                 value={value[i]}
+                aria-label={`${ch} channel`}
                 onChange={(e) => handleRGBChange(i as 0 | 1 | 2, parseInt(e.target.value))}
-                style={{ flex: 1, accentColor: ch === "R" ? "#ff6b6b" : ch === "G" ? "#51cf66" : "#4dabf7" }}
+                style={{ flex: 1, accentColor: "var(--accent-primary)" }}
               />
               <input
                 type="number"
                 min={0}
                 max={255}
                 value={value[i]}
+                aria-label={`${ch} value`}
                 onChange={(e) => handleRGBChange(i as 0 | 1 | 2, parseInt(e.target.value) || 0)}
-                style={{
-                  width: 42,
-                  backgroundColor: "var(--bg-primary)",
-                  color: "var(--text-primary)",
-                  border: "1px solid var(--border-color)",
-                  borderRadius: 4,
-                  fontSize: 10,
-                  padding: "2px 4px",
-                  textAlign: "center",
-                }}
+                style={{ ...WELL_STYLE, width: 42, textAlign: "center" }}
               />
             </div>
           ))}
         </div>
 
         {/* Hex input */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-          <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600 }}>Hex</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", marginBottom: "var(--space-10)" }}>
+          <span style={LABEL_STYLE}>Hex</span>
           <input
             type="text"
             value={hexInput}
             onChange={(e) => setHexInput(e.target.value)}
             onBlur={handleHexSubmit}
             onKeyDown={(e) => { if (e.key === "Enter") handleHexSubmit(); }}
-            style={{
-              flex: 1,
-              backgroundColor: "var(--bg-primary)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--border-color)",
-              borderRadius: 4,
-              fontSize: 11,
-              padding: "3px 6px",
-              fontFamily: "monospace",
-            }}
+            aria-label="Hex color"
+            style={{ ...WELL_STYLE, flex: 1, height: "var(--control-md)", fontSize: "var(--fs-control)", padding: "0 var(--space-6)" }}
           />
         </div>
 
         {/* Swatches */}
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 4 }}>Swatches</div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {DEFAULT_SWATCHES.map((swatch, i) => (
-              <div
-                key={i}
-                onClick={() => onChange(swatch)}
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 4,
-                  backgroundColor: `rgb(${swatch[0]}, ${swatch[1]}, ${swatch[2]})`,
-                  border: "1px solid var(--border-color)",
-                  cursor: "pointer",
-                }}
-              />
-            ))}
+        <div style={{ marginBottom: "var(--space-10)" }}>
+          <div style={{ ...LABEL_STYLE, marginBottom: "var(--space-4)" }}>Swatches</div>
+          <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap" }}>
+            {DEFAULT_SWATCHES.map((swatch, i) => {
+              const hex = rgbToHex(swatch[0], swatch[1], swatch[2]);
+              return (
+                <Tooltip key={i} content={hex}>
+                  <button
+                    type="button"
+                    aria-label={`Use ${hex}`}
+                    onClick={() => onChange(swatch)}
+                    style={{
+                      width: 22,
+                      height: 22,
+                      padding: 0,
+                      borderRadius: "var(--radius-sm)",
+                      // Swatch fill is colour data, not chrome.
+                      backgroundColor: `rgb(${swatch[0]}, ${swatch[1]}, ${swatch[2]})`,
+                      border: "var(--hairline) solid var(--border-color)",
+                      cursor: "pointer",
+                    }}
+                  />
+                </Tooltip>
+              );
+            })}
           </div>
         </div>
 
         {/* Actions */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <ActionButton onClick={onClose}>Close</ActionButton>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-8)" }}>
+          <Button onClick={onClose}>Close</Button>
         </div>
       </div>
     </div>

@@ -4,8 +4,9 @@ import { audioEngine } from "../../audio/audioEngine";
 import { beatToFloat } from "../../types/chart";
 import { BpmList } from "../../utils/bpmList";
 import { useMemo } from "react";
-import { Tooltip } from "../common/Tooltip";
-import { Pill } from "../common/UIKit";
+import { Play, Pause, Square } from "lucide-react";
+import { IconButton } from "../common/IconButton";
+import { SegmentedControl } from "../common/SegmentedControl";
 
 // ============================================================
 // CONFIGURABLE: Available playback speed presets
@@ -65,29 +66,28 @@ export function QuickActionBar() {
       className="flex items-center h-8 px-3 gap-3 flex-shrink-0"
       style={{
         backgroundColor: "var(--bg-secondary)",
-        borderBottom: "1px solid var(--border-color)",
+        borderBottom: "var(--rule) solid var(--border-color)",
       }}
     >
       {/* ---- Transport Controls ---- */}
       <div className="flex items-center gap-1">
-        <Tooltip content={isPlaying ? "Pause" : "Play"} shortcut="Space" position="bottom">
-          <button
-            className="w-7 h-6 flex items-center justify-center rounded text-xs hover:bg-white/10 transition-colors"
-            style={{ color: "var(--text-primary)" }}
-            onClick={togglePlayPause}
-          >
-            {isPlaying ? "⏸" : "▶"}
-          </button>
-        </Tooltip>
-        <Tooltip content="Stop" position="bottom">
-          <button
-            className="w-7 h-6 flex items-center justify-center rounded text-xs hover:bg-white/10 transition-colors"
-            style={{ color: "var(--text-primary)" }}
-            onClick={() => audioEngine.stop()}
-          >
-            ⏹
-          </button>
-        </Tooltip>
+        <IconButton
+          icon={isPlaying ? Pause : Play}
+          label={isPlaying ? "Pause" : "Play"}
+          shortcut={{ action: "toggle_playback" }}
+          size="md"
+          tooltipPosition="bottom"
+          style={{ color: "var(--text-primary)" }}
+          onClick={togglePlayPause}
+        />
+        <IconButton
+          icon={Square}
+          label="Stop"
+          size="md"
+          tooltipPosition="bottom"
+          style={{ color: "var(--text-primary)" }}
+          onClick={() => audioEngine.stop()}
+        />
       </div>
 
       {/* ---- Divider ---- */}
@@ -95,16 +95,15 @@ export function QuickActionBar() {
 
       {/* ---- Speed Control ---- */}
       <div className="flex items-center gap-1.5">
-        <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Speed:</span>
-        {SPEED_PRESETS.map((s) => (
-          <Pill
-            key={s}
-            active={playbackRate === s}
-            onClick={() => setPlaybackRate(s)}
-          >
-            {s}x
-          </Pill>
-        ))}
+        <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Speed</span>
+        <SegmentedControl
+          options={SPEED_PRESETS.map((s) => ({ value: s, label: `${s}×` }))}
+          value={playbackRate}
+          onChange={setPlaybackRate}
+          tone="accent"
+          size="sm"
+          label="Playback speed"
+        />
       </div>
 
       {/* ---- Spacer pushes the rest to the right ---- */}
@@ -119,6 +118,7 @@ export function QuickActionBar() {
           step={0.1}
           value={Math.min(progressPercent, 100)}
           onChange={(e) => seek((Number(e.target.value) / 100) * maxTime)}
+          aria-label="Playback position"
           className="flex-1 h-1 cursor-pointer"
           style={{ accentColor: "var(--accent-primary)" }}
         />

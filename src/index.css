@@ -1,64 +1,207 @@
 /* Tailwind base import */
 @import "tailwindcss";
 
+/* Tailwind scale aligned with the design system (radius + families), so
+   `rounded-*` / `font-mono` utilities match the inline-style tokens below. */
+@theme {
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 14px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", monospace;
+  /* Utilities are rem-based by default, and the root font is the 12px body
+     size, so text-xs came out at 9px and w-16 at 48px. Pin them to the
+     design system instead: a 4px spacing unit and the 11px control text. */
+  --spacing: 4px;
+  --text-xs: var(--fs-control);
+  --text-xs--line-height: 16px;
+}
+
 /* ============================================================
-   CONFIGURABLE: Color palette for the editor theme.
-   Change these CSS variables to restyle the entire app.
+   DESIGN TOKENS — PhiChain design system (tokens.json).
+   Every colour, size, radius and shadow in the chrome comes from
+   here. Canvas renderers read the same variables through
+   src/canvas/chromeTheme.ts.
    ============================================================ */
 :root {
-  /* Background shades (darkest to lightest) */
-  --bg-primary: #111118;       /* Main background */
-  --bg-secondary: #16161d;     /* Panel backgrounds */
-  --bg-tertiary: #1a1a22;      /* Hover / raised surfaces */
-  --bg-active: #222230;        /* Active/selected panel header */
-  --bg-accent: #141419;        /* Accent backgrounds (keyframe bar, tab bar) */
+  /* Surfaces, darkest → closest to the user */
+  --bg-primary: #111118;       /* Window chrome, behind the canvas */
+  --bg-secondary: #16161d;     /* Panels and sidebars */
+  --bg-tertiary: #1a1a22;      /* Menus, popovers, tooltips, input wells */
+  --bg-active: #222230;        /* Filled controls and cards */
+
+  /* Washes (hover / pressed on transparent items — never a resting fill) */
+  --fill-hover: rgba(255, 255, 255, 0.05);
+  --fill-strong: rgba(255, 255, 255, 0.10);
+
+  /* Lines */
+  --border-color: #2a2a35;
+  --separator: rgba(42, 42, 53, 0.55);
 
   /* Text */
   --text-primary: #e0e0e8;
-  --text-secondary: #888;
-  --text-muted: #555;
+  --text-secondary: #888888;
+  --text-muted: #555555;       /* Placeholders, disabled, decorative only */
 
-  /* Accent colors */
-  --accent-primary: #6c8aff;   /* Buttons, links, active indicators */
+  /* Accent */
+  --accent-primary: #6c8aff;
   --accent-hover: #8aa4ff;
+  --accent-selected: rgba(108, 138, 255, 0.18);
+  --accent-tint: rgba(108, 138, 255, 0.12);
+  --accent-wash: rgba(108, 138, 255, 0.09);
+  --on-accent: #ffffff;
+  --overlay: rgba(0, 0, 0, 0.5);
 
-  /* Note type colors — used in toolbar icons, timeline, inspector */
-  --note-tap: #48b5ff;         /* Blue */
-  --note-drag: #ffd24a;        /* Yellow */
-  --note-hold: #4aff7a;        /* Green */
-  --note-flick: #ff4a6a;       /* Red */
+  /* Status (always paired with a word or icon) */
+  --error: #ff4a6a;
+  --warning: #ffd43b;
+  --success: #4aff7a;
+  --info: #4dabf7;
+  --unsaved: #ffb43c;
+  --unsaved-bg: rgba(255, 180, 60, 0.15);
+  --danger-hover-bg: rgba(255, 70, 70, 0.3);
+  --danger-hover-fg: #ff6b6b;
 
-  /* Event type colors — used in timeline event columns */
+  /* Domain: notes, events, canvas */
+  --note-tap: #48b5ff;
+  --note-drag: #ffd24a;
+  --note-hold: #4aff7a;
+  --note-flick: #ff4a6a;
   --event-x: #ff6b6b;
   --event-y: #51cf66;
   --event-rotation: #ffd43b;
   --event-opacity: #cc5de8;
   --event-speed: #4dabf7;
-
-  /* Selection / indicators */
-  --selection-color: #90ee90;   /* Light green — matches original phichain */
-  --indicator-color: #00e5ff;   /* Cyan playhead line */
+  --event-scale-x: #ff922b;
+  --event-scale-y: #20c997;
+  --event-color: #e599f7;
+  --event-text: #a9e34b;
+  --event-incline: #74c0fc;
+  --event-gif: #f06595;
+  --selection-color: #90ee90;  /* Canvas only, never chrome */
+  --indicator-color: #00e5ff;  /* Playhead */
+  --onset-color: #ffaa32;      /* Detected onsets on the timeline */
   --beat-line-primary: rgba(255, 255, 255, 0.25);
   --beat-line-secondary: rgba(255, 255, 255, 0.10);
+  --canvas-bg: #000000;
+  /* Series: one colour per overlaid line / group member, in order */
+  --series-1: #ff6b6b;
+  --series-2: #4dabf7;
+  --series-3: #69db7c;
+  --series-4: #ffd43b;
+  --series-5: #da77f2;
+  --series-6: #38d9a9;
+  --series-7: #ffa94d;
+  --series-8: #748ffc;
+  /* Effect lanes: one colour per built-in shader in the effects timeline */
+  --effect-chromatic: #e06c75;
+  --effect-circle-blur: #61afef;
+  --effect-fisheye: #c678dd;
+  --effect-glitch: #e5c07b;
+  --effect-grayscale: #abb2bf;
+  --effect-noise: #d19a66;
+  --effect-pixel: #56b6c2;
+  --effect-radial-blur: #98c379;
+  --effect-shockwave: #be5046;
+  --effect-vignette: #c882e7;
+  --judgment-line: #ffffff;     /* Judgment line in editor canvases */
+  /* Tap-to-mark bookmark presets (copied into each bookmark when set) */
+  --mark-tap: #48b5ff;
+  --mark-drag: #ffd24a;
+  --mark-flick: #ff4a6a;
+  --mark-hold: #2a7fbf;
+  --mark-orange: #ffa94d;
+  --mark-green: #69db7c;
+  --mark-violet: #da77f2;
+  /* Colour picker indicator rings: whichever contrasts with the picked colour */
+  --picker-ring-light: #ffffff;
+  --picker-ring-dark: #000000;
 
-  /* Borders */
-  --border-color: #2a2a35;
-  --border-active: #6c8aff;
+  /* Type */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", monospace;
+  --fs-display: 20px;
+  --fs-title: 15px;
+  --fs-headline: 13px;
+  --fs-body: 12px;
+  --fs-control: 11px;
+  --fs-caption: 10px;
+  --fs-badge: 9px;
 
-  /* Status colors */
-  --error: #ff4a6a;
-  --warning: #ffd43b;
-  --success: #4aff7a;
-  --info: #4dabf7;
+  /* Space */
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-14: 14px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+
+  /* Shape */
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 14px;
+  --radius-full: 9999px;
+  --hairline: 0.5px;
+  --rule: 1px;
+  --accent-edge: 2px;
+
+  /* Elevation */
+  --shadow-popover: 0 8px 30px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 20px 50px rgba(0, 0, 0, 0.5);
+  --shadow-thumb: 0 0 6px rgba(108, 138, 255, 0.4);
+
+  /* Sizes */
+  --control-sm: 20px;
+  --control-md: 24px;
+  --control-lg: 28px;
+  --topbar-height: 42px;
+  --tab-height: 34px;
+  --panel-header-height: 36px;
+  --rail-width: 44px;
+  --panel-width: 290px;
+  --statusbar-height: 20px;
+  --opacity-disabled: 0.4;
+
+  /* Stacking order, low → high */
+  --z-raised: 10;
+  --z-sticky: 50;
+  --z-dropdown: 100;
+  --z-drawer: 150;
+  --z-overlay: 200;
+  --z-modal: 1000;
+  --z-toast: 10000;
+  --z-tooltip: 10001;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 0.12s;
+  --dur-base: 0.2s;
+
+  color-scheme: dark;
 }
 
 /* ============================================================
    Base styles
    ============================================================ */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* In the base layer (like Tailwind's preflight), so spacing utilities
+   such as px-2 / mb-3 can override it. Unlayered, it beat every utility. */
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 }
 
 html, body, #root {
@@ -67,9 +210,10 @@ html, body, #root {
   overflow: hidden;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
   /* Prevent text selection while dragging in the editor */
   user-select: none;
 }
@@ -79,10 +223,191 @@ input, textarea, [contenteditable="true"] {
   user-select: text;
 }
 
+::selection {
+  background: var(--accent-selected);
+}
+
+::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
 /* Unified editor monospace font */
+/* Editor chrome is sans like the rest of the app; numbers, beats and
+   timecodes opt into --font-mono where they are rendered. */
 .unified-editor {
-  font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+}
+
+/* Numeric fields read as values: mono with even-width figures. */
+input[type="number"] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   Focus — one ring everywhere: 2px accent, offset 1px.
+   !important so it wins over legacy inline `outline: none`.
+   ============================================================ */
+:focus-visible {
+  outline: var(--accent-edge) solid var(--accent-primary) !important;
+  outline-offset: 1px !important;
+}
+
+canvas:focus-visible,
+[data-focus-ring="none"]:focus-visible {
+  outline: none !important;
+}
+
+/* ============================================================
+   Native form controls, restyled once for the whole app
+   ============================================================ */
+button {
+  font-family: inherit;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 6px center !important;
+  background-size: 12px 12px !important;
+  padding-right: 22px !important;
+  cursor: pointer;
+}
+
+select option {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  border: var(--hairline) solid var(--text-muted);
+  border-radius: 4px;
+  background-color: var(--bg-tertiary);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 10px 10px;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background-color var(--dur-fast), border-color var(--dur-fast);
+}
+
+input[type="radio"] {
+  border-radius: var(--radius-full);
+}
+
+input[type="checkbox"]:checked {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-primary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+
+input[type="radio"]:checked {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-primary);
+  box-shadow: inset 0 0 0 3px var(--bg-tertiary);
+}
+
+input[type="checkbox"]:disabled,
+input[type="radio"]:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+input[type="range"] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--track-bg, var(--bg-active));
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--on-accent);
+  box-shadow: var(--shadow-thumb);
+  transition: transform var(--dur-fast);
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--track-bg, var(--bg-active));
+}
+
+input[type="range"]::-moz-range-progress {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--accent-primary);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--on-accent);
+  box-shadow: var(--shadow-thumb);
+}
+
+input[type="range"]:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+input[type="color"] {
+  -webkit-appearance: none;
+  appearance: none;
+  border: var(--hairline) solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  padding: 2px;
+  cursor: pointer;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
 }
 
 /* ============================================================
@@ -94,16 +419,431 @@ input, textarea, [contenteditable="true"] {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-primary);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-tertiary);
-  border-radius: 4px;
+  background: var(--bg-active);
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--fill-strong);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ============================================================
+   UI primitives (used by src/components/common/*). Hover and
+   pressed states live here instead of JS mouse handlers.
+   ============================================================ */
+
+/* Generic hover wash for transparent rows / items */
+.ui-hover {
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.ui-hover:hover:not(:disabled) {
+  background-color: var(--fill-hover);
+  color: var(--text-primary);
+}
+.ui-hover:active:not(:disabled) {
+  background-color: var(--fill-strong);
+}
+
+/* Buttons */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  height: var(--control-md);
+  padding: 0 var(--space-10);
+  border: none;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--fs-control);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  background-color: var(--bg-active);
+  color: var(--text-primary);
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.ui-btn:hover:not(:disabled) {
+  background-image: linear-gradient(var(--fill-hover), var(--fill-hover));
+}
+.ui-btn:active:not(:disabled) {
+  background-image: linear-gradient(var(--fill-strong), var(--fill-strong));
+}
+.ui-btn:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.ui-btn--primary {
+  background-color: var(--accent-primary);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.ui-btn--primary:hover:not(:disabled) {
+  background-image: none;
+  background-color: var(--accent-hover);
+}
+.ui-btn--danger {
+  background-color: var(--error);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.ui-btn--ghost {
+  background-color: transparent;
+  color: var(--text-secondary);
+}
+.ui-btn--ghost:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+.ui-btn--sm {
+  height: var(--control-sm);
+  padding: 0 var(--space-6);
+  font-size: var(--fs-caption);
+}
+.ui-btn--lg {
+  height: var(--control-lg);
+  padding: 0 var(--space-12);
+  font-size: var(--fs-body);
+}
+.ui-btn--block {
+  display: flex;
+  width: 100%;
+}
+.ui-btn--row {
+  justify-content: flex-start;
+  width: 100%;
+  height: auto;
+  min-height: var(--control-lg);
+  padding: var(--space-6) var(--space-10);
+  font-weight: 400;
+  text-align: left;
+}
+
+/* Icon-only buttons */
+.ui-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--control-lg);
+  height: var(--control-lg);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.ui-icon-btn--md { width: var(--control-md); height: var(--control-md); }
+.ui-icon-btn--sm { width: var(--control-sm); height: var(--control-sm); border-radius: var(--radius-sm); }
+.ui-icon-btn:hover:not(:disabled, [aria-disabled="true"]) {
+  background-color: var(--fill-hover);
+  color: var(--text-primary);
+}
+.ui-icon-btn--sm:hover:not(:disabled, [aria-disabled="true"]) {
+  background-color: var(--fill-strong);
+}
+.ui-icon-btn:active:not(:disabled, [aria-disabled="true"]) {
+  background-color: var(--fill-strong);
+}
+.ui-icon-btn.is-active,
+.ui-icon-btn[aria-pressed="true"] {
+  background-color: var(--accent-selected);
+  color: var(--accent-primary);
+}
+/* A per-row toggle (favourite star) shows its state in the icon alone,
+   so a list of them doesn't fill with accent tiles. */
+.ui-icon-btn--quiet.is-active,
+.ui-icon-btn--quiet[aria-pressed="true"] {
+  background-color: transparent;
+}
+.ui-icon-btn--quiet.is-active:hover,
+.ui-icon-btn--quiet[aria-pressed="true"]:hover {
+  background-color: var(--fill-hover);
+}
+.ui-icon-btn--danger:hover:not(:disabled, [aria-disabled="true"]) {
+  background-color: var(--danger-hover-bg);
+  color: var(--danger-hover-fg);
+}
+.ui-icon-btn:disabled,
+.ui-icon-btn[aria-disabled="true"] {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+/* Tool group: a filled strip of icon buttons */
+.ui-tool-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
   background: var(--bg-active);
+}
+.ui-tool-group--vertical {
+  flex-direction: column;
+  border-radius: var(--radius-md);
+}
+
+/* Segmented control */
+.ui-segmented {
+  display: inline-flex;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--bg-active);
+}
+.ui-segmented--block {
+  display: flex;
+  width: 100%;
+}
+.ui-segmented--block .ui-segmented__opt {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.ui-segmented__opt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  min-height: var(--control-sm);
+  padding: 0 var(--space-8);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-control);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.ui-segmented--sm .ui-segmented__opt {
+  min-height: 18px;
+  padding: 0 var(--space-6);
+  font-size: var(--fs-caption);
+}
+.ui-segmented__opt:hover:not(.is-selected):not(:disabled) {
+  background: var(--fill-hover);
+  color: var(--text-primary);
+}
+.ui-segmented--accent .ui-segmented__opt:hover:not(.is-selected):not(:disabled) {
+  background: var(--accent-wash);
+  color: var(--accent-primary);
+}
+.ui-segmented__opt.is-selected {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.ui-segmented--accent .ui-segmented__opt.is-selected {
+  background: var(--accent-primary);
+  color: var(--on-accent);
+}
+.ui-segmented__opt:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+/* Horizontal scroller (useScrollFade): no scrollbar; the side with hidden
+   content fades out so a clipped item reads as "more this way". */
+.ui-scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.ui-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+.ui-scroll-x[data-fade="end"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--space-24)), transparent);
+}
+.ui-scroll-x[data-fade="start"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - var(--space-24)), transparent);
+}
+.ui-scroll-x[data-fade="both"] {
+  mask-image: linear-gradient(to right, transparent, #000 var(--space-24), #000 calc(100% - var(--space-24)), transparent);
+}
+/* The scroller clips outlines; draw focus rings inside the item. */
+.ui-scroll-x :focus-visible {
+  outline-offset: -2px;
+}
+
+/* Keyboard shortcut chip */
+/* On a filled surface (bg-active cards and buttons) the chip and a slider
+   track step back to bg-tertiary so they stay visible; those surfaces set
+   --kbd-bg / --track-bg. */
+.ui-btn,
+.ui-filled {
+  --kbd-bg: var(--bg-tertiary);
+  --track-bg: var(--bg-tertiary);
+}
+.ui-kbd {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-xs);
+  background: var(--kbd-bg, var(--bg-active));
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+/* Tooltip */
+.ui-tooltip {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-md);
+  border: var(--rule) solid var(--border-color);
+  background: var(--bg-tertiary);
+  box-shadow: var(--shadow-popover);
+  color: var(--text-primary);
+  font-size: var(--fs-control);
+  line-height: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: ui-fade-in var(--dur-fast) var(--ease-out);
+}
+
+/* Floating menus and popovers */
+.ui-popover {
+  border-radius: var(--radius-xl);
+  border: var(--rule) solid var(--border-color);
+  background: var(--bg-tertiary);
+  box-shadow: var(--shadow-popover);
+  padding: var(--space-4);
+}
+.ui-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  min-height: var(--control-md);
+  padding: var(--space-4) var(--space-10);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-body);
+  text-align: left;
+  cursor: pointer;
+}
+.ui-menu-item:hover:not(:disabled) {
+  background: var(--bg-active);
+}
+.ui-menu-item:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.ui-menu-item--danger {
+  color: var(--error);
+}
+.ui-menu-separator {
+  height: 1px;
+  margin: var(--space-4) var(--space-6);
+  background: var(--border-color);
+}
+
+/* Dialogs */
+.ui-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay);
+  animation: ui-fade-in var(--dur-base) var(--ease-out);
+}
+.ui-dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  border-radius: var(--radius-2xl);
+  border: var(--rule) solid var(--border-color);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-modal);
+  color: var(--text-primary);
+  overflow: hidden;
+  animation: ui-dialog-in var(--dur-base) var(--ease-out);
+}
+
+/* The panel itself takes focus only as a fallback target when a dialog
+   has no autofocus control; it is not a control, so no ring around the
+   whole dialog. Controls inside still get the standard ring. */
+.ui-dialog[tabindex="-1"]:focus-visible {
+  outline: none !important;
+}
+.ui-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-16) var(--space-12) var(--space-8) var(--space-20);
+  flex-shrink: 0;
+}
+.ui-dialog__title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-title);
+  line-height: 20px;
+  font-weight: 500;
+}
+.ui-dialog__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-8) var(--space-20) var(--space-16);
+}
+.ui-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-20) var(--space-16);
+  border-top: var(--rule) solid var(--separator);
+  flex-shrink: 0;
+}
+
+@keyframes ui-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ui-dialog-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Busy cue for work in progress (e.g. audio analysis). */
+.ui-pulse {
+  animation: ui-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ui-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 /* ============================================================
@@ -111,7 +851,6 @@ input, textarea, [contenteditable="true"] {
    ============================================================ */
 .panel-container {
   background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -119,140 +858,145 @@ input, textarea, [contenteditable="true"] {
 }
 
 .panel-header {
-  background-color: var(--bg-tertiary);
-  padding: 4px 8px;
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 var(--space-10);
+  background-color: var(--bg-secondary);
+  font-size: var(--fs-control);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: var(--rule) solid var(--border-color);
   flex-shrink: 0;
 }
 
 .panel-body {
   flex: 1;
   overflow: auto;
-  padding: 6px;
+  padding: var(--space-8);
 }
 
 /* ============================================================
-   react-mosaic window toolbar overrides
-   The library expects Blueprint 3 icon fonts which we don't load.
-   Replace with Unicode icons and style the controls properly.
+   react-mosaic overrides. The library expects Blueprint icon
+   fonts, which we don't load; controls draw Lucide icons via
+   CSS masks instead.
    ============================================================ */
-
-/* Toolbar header bar */
-.mosaic-window-toolbar {
-  background-color: var(--bg-tertiary) !important;
-  border-bottom: 1px solid var(--border-color);
-  height: 26px;
+.mosaic-dark-theme .mosaic-window,
+.mosaic-dark-theme .mosaic-preview {
+  box-shadow: none;
 }
 
-.mosaic-window-toolbar .mosaic-window-title {
-  font-size: 11px;
+.mosaic-dark-theme .mosaic-window .mosaic-window-body {
+  background-color: var(--bg-secondary);
+}
+
+.mosaic-window-toolbar,
+.mosaic-dark-theme .mosaic-window .mosaic-window-toolbar {
+  background-color: var(--bg-secondary) !important;
+  border-bottom: var(--rule) solid var(--border-color);
+  box-shadow: none !important;
+  height: 28px;
+}
+
+.mosaic-window-toolbar .mosaic-window-title,
+.mosaic-dark-theme .mosaic-window .mosaic-window-title {
+  font-size: var(--fs-control);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   color: var(--text-secondary);
-  padding-left: 6px;
+  padding-left: var(--space-10);
 }
 
-/* Controls container — add gaps between buttons */
+/* Controls container */
 .mosaic-window-controls {
   display: flex;
-  gap: 2px;
-  padding-right: 4px;
+  align-items: center;
+  gap: var(--space-2);
+  padding-right: var(--space-4);
 }
 
-/* Base button style — fully strip Blueprint defaults */
+/* Base control — fully strip Blueprint defaults */
 .mosaic-default-control.bp3-button.bp3-minimal {
   all: unset;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 3px;
+  width: var(--control-sm);
+  height: var(--control-sm);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0;           /* Hide any inherited icon-font text */
   line-height: 1;
-  color: var(--text-muted);
-  transition: background-color 0.15s, color 0.15s;
+  color: var(--text-secondary);
+  transition: background-color var(--dur-fast), color var(--dur-fast);
 }
 
 .mosaic-default-control.bp3-button.bp3-minimal:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--fill-strong);
   color: var(--text-primary);
+}
+
+.mosaic-default-control.bp3-button.bp3-minimal:focus-visible {
+  outline: var(--accent-edge) solid var(--accent-primary);
 }
 
 .mosaic-default-control.close-button:hover {
-  background-color: rgba(255, 70, 70, 0.3);
-  color: #ff6b6b;
+  background-color: var(--danger-hover-bg) !important;
+  color: var(--danger-hover-fg) !important;
 }
 
-/* Replace broken Blueprint icon ::before with our own Unicode icons.
-   Only expand + close remain (replace/split removed to prevent crashes). */
-.mosaic-default-control.bp3-button.expand-button[class*="bp3-icon"]::before {
-  content: "\2922" !important;   /* ⤢ */
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-  font-size: 12px !important;
-}
-.mosaic-default-control.bp3-button.close-button[class*="bp3-icon"]::before {
-  content: "\2715" !important;   /* ✕ */
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-  font-size: 12px !important;
+/* Lucide icons as masks, painted in currentColor */
+.mosaic-default-control.bp3-button[class*="bp3-icon"]::before,
+.mosaic-default-control.custom-expand-button::before,
+.mosaic-default-control.collapse-button::before {
+  content: "" !important;
+  display: block;
+  width: 12px;
+  height: 12px;
+  background-color: currentColor;
+  -webkit-mask: var(--mosaic-icon) center / contain no-repeat;
+  mask: var(--mosaic-icon) center / contain no-repeat;
 }
 
-/* Custom expand button — first click expands, second opens as tab */
-.mosaic-default-control.custom-expand-button::before {
-  content: "\2922" !important;   /* ⤢ — expand icon */
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-  font-size: 12px !important;
+.mosaic-default-control.expand-button,
+.mosaic-default-control.custom-expand-button {
+  --mosaic-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='15 3 21 3 21 9'/%3E%3Cpolyline points='9 21 3 21 3 15'/%3E%3Cline x1='21' x2='14' y1='3' y2='10'/%3E%3Cline x1='3' x2='10' y1='21' y2='14'/%3E%3C/svg%3E");
 }
-.mosaic-default-control.custom-expand-button.is-expanded::before {
-  content: "\21D7" !important;   /* ⇗ — open-as-tab icon */
+
+.mosaic-default-control.close-button {
+  --mosaic-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E");
 }
+
+/* Second click on expand opens the panel as a tab */
 .mosaic-default-control.custom-expand-button.is-expanded {
   color: var(--accent-primary);
+  --mosaic-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 3h6v6'/%3E%3Cpath d='M10 14 21 3'/%3E%3Cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/%3E%3C/svg%3E");
 }
 
-/* Collapse button — shown when a panel is expanded (first click) */
-.mosaic-default-control.collapse-button::before {
-  content: "\2190" !important;   /* ← — back/collapse icon */
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-  font-size: 12px !important;
+/* Collapse an expanded panel */
+.mosaic-default-control.collapse-button {
+  --mosaic-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='4 14 10 14 10 20'/%3E%3Cpolyline points='20 10 14 10 14 4'/%3E%3Cline x1='14' x2='21' y1='10' y2='3'/%3E%3Cline x1='3' x2='10' y1='21' y2='14'/%3E%3C/svg%3E");
 }
 
-/* Separator line between mosaic tiles */
-.mosaic-split {
+/* Splitters between tiles */
+.mosaic-split,
+.mosaic-dark-theme .mosaic-split {
   background-color: var(--border-color) !important;
+  transition: background-color var(--dur-fast);
 }
+.mosaic-dark-theme .mosaic-split.-row { width: 4px !important; }
+.mosaic-dark-theme .mosaic-split.-column { height: 4px !important; }
 
-.mosaic-split:hover {
+.mosaic-split:hover,
+.mosaic-dark-theme .mosaic-split:hover {
   background-color: var(--accent-primary) !important;
 }
 
-/* ============================================================
-   Tooltip styling
-   ============================================================ */
-.tooltip {
-  position: absolute;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: var(--text-primary);
-  pointer-events: none;
-  z-index: 1000;
-  white-space: nowrap;
+.mosaic-dark-theme .mosaic-tile {
+  margin: 0;
 }
 
-.tooltip .shortcut {
-  color: var(--text-muted);
-  margin-left: 8px;
-  font-size: 11px;
+.mosaic-dark-theme {
+  background: var(--bg-primary);
 }
 
 /* ============================================================
@@ -262,23 +1006,23 @@ input, textarea, [contenteditable="true"] {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 14px;
-  height: 34px;
-  font-size: 12px;
+  gap: var(--space-6);
+  padding: 0 var(--space-14);
+  height: var(--tab-height);
+  font-size: var(--fs-body);
   cursor: pointer;
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  transition: background-color 0.15s, color 0.15s;
-  border-top: 2px solid transparent;
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+  border-top: var(--accent-edge) solid transparent;
   white-space: nowrap;
   max-width: 260px;
-  border-radius: 6px 6px 0 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
 .tab-button:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--fill-hover);
   color: var(--text-primary);
 }
 
@@ -294,36 +1038,69 @@ input, textarea, [contenteditable="true"] {
   justify-content: center;
   width: 16px;
   height: 16px;
-  border-radius: 3px;
-  font-size: 9px;
+  border-radius: var(--radius-xs);
   opacity: 0;
-  transition: opacity 0.15s, background-color 0.15s;
+  color: var(--text-secondary);
+  transition: opacity var(--dur-fast), background-color var(--dur-fast), color var(--dur-fast);
 }
 
 .tab-button:hover .tab-close,
-.tab-button.active .tab-close {
+.tab-button.active .tab-close,
+.tab-close:focus-visible {
   opacity: 1;
 }
 
 .tab-close:hover {
-  background-color: rgba(255, 70, 70, 0.3);
-  color: #ff6b6b;
+  background-color: var(--danger-hover-bg);
+  color: var(--danger-hover-fg);
 }
 
 /* View-type badge shown inside editor tabs (e.g. "Unified", "Unrolled") */
 .tab-type-badge {
-  font-size: 9px;
+  font-size: var(--fs-badge);
+  line-height: 12px;
   font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(108, 138, 255, 0.12);
+  padding: 1px var(--space-6);
+  border-radius: var(--radius-full);
+  background: var(--accent-tint);
   color: var(--accent-primary);
   flex-shrink: 0;
-  letter-spacing: 0.3px;
 }
 
 /* Inline rename input inside a tab button */
 .tab-button input {
   flex: 1;
   min-width: 0;
+}
+
+/* Pill: a standalone toggle chip */
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 3px var(--space-10);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.ui-pill:hover:not(.is-active) {
+  background: var(--accent-wash);
+  color: var(--accent-primary);
+}
+.ui-pill.is-active {
+  background: var(--accent-primary);
+  color: var(--on-accent);
+}
+
+/* Custom scrubber (transport): show the focus ring on the thumb, since the
+   real range input is invisible on top of it. */
+.ui-scrub:focus-within .ui-scrub__thumb {
+  outline: var(--accent-edge) solid var(--accent-primary);
+  outline-offset: 1px;
 }

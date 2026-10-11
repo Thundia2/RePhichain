@@ -13,7 +13,7 @@
 
 import { create } from "zustand";
 import type { Bookmark } from "../types/bookmark";
-import { BOOKMARK_PRESETS } from "../types/bookmark";
+import { bookmarkColor } from "../canvas/chromeTheme";
 import type { BookmarkPreset } from "../types/bookmark";
 import type { Beat, NoteKind, Note } from "../types/chart";
 import { useChartStore, registerProjectLoadReset } from "./chartStore";
@@ -109,7 +109,7 @@ export const useBookmarkStore = create<BookmarkState>()((set, get) => ({
 
   addBookmark: (beat, x, above, lineIndex, preset) => {
     const id = crypto.randomUUID();
-    const color = preset ? BOOKMARK_PRESETS[preset] : BOOKMARK_PRESETS.tap;
+    const color = bookmarkColor(preset ?? "tap");
     const bookmark: Bookmark = { id, beat, x, above, lineIndex, color, preset: preset ?? "tap" };
     set((s) => ({
       bookmarks: [...s.bookmarks, bookmark],
@@ -158,7 +158,7 @@ export const useBookmarkStore = create<BookmarkState>()((set, get) => ({
   setBookmarkColor: (id, preset) => {
     set((s) => ({
       bookmarks: s.bookmarks.map((b) =>
-        b.id === id ? { ...b, color: BOOKMARK_PRESETS[preset], preset } : b,
+        b.id === id ? { ...b, color: bookmarkColor(preset), preset } : b,
       ),
       ...undoPush(s),
     }));

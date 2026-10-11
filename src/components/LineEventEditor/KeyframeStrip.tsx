@@ -15,6 +15,7 @@ import { beatToFloat } from "../../types/chart";
 import type { LineEventKind } from "../../types/chart";
 import { resolveActiveDisplayEvents } from "../../utils/eventRouting";
 import { EVENT_COLORS, KIND_SHORT } from "../../constants/eventConfig";
+import { chromeTheme, monoFont } from "../../canvas/chromeTheme";
 
 interface KeyframeStripProps {
   lineIndex: number;
@@ -66,14 +67,15 @@ export function KeyframeStrip({ lineIndex }: KeyframeStripProps) {
       }
 
       const { width, height } = canvas;
+      const t = chromeTheme();
 
       // ---- Clear ----
       ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = "#1e1e2e";
+      ctx.fillStyle = t.bgPrimary;
       ctx.fillRect(0, 0, width, height);
 
       // ---- Beat grid lines ----
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.strokeStyle = t.beatLineSecondary;
       ctx.lineWidth = 1;
       const startBeatFloor = Math.floor(viewStart);
       const endBeatCeil = Math.ceil(viewStart + viewRange);
@@ -86,8 +88,8 @@ export function KeyframeStrip({ lineIndex }: KeyframeStripProps) {
         ctx.stroke();
 
         // Beat number label
-        ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
-        ctx.font = "9px monospace";
+        ctx.fillStyle = t.textSecondary;
+        ctx.font = monoFont(10);
         ctx.textAlign = "center";
         ctx.fillText(String(b), px, height - 3);
       }
@@ -118,8 +120,8 @@ export function KeyframeStrip({ lineIndex }: KeyframeStripProps) {
         const cy = 4 + laneHeight * (ki + 0.5);
 
         // Kind label
-        ctx.fillStyle = EVENT_COLORS[kind] || "#888";
-        ctx.font = "bold 8px sans-serif";
+        ctx.fillStyle = EVENT_COLORS[kind] || t.textSecondary;
+        ctx.font = monoFont(10, 600);
         ctx.textAlign = "left";
         ctx.fillText(KIND_SHORT[kind] || kind.charAt(0).toUpperCase(), 3, cy + 3);
 
@@ -136,7 +138,7 @@ export function KeyframeStrip({ lineIndex }: KeyframeStripProps) {
 
           // Draw event span bar
           const isTransition = "transition" in event.value || "color_transition" in event.value;
-          const kindColor = EVENT_COLORS[kind] || "#888";
+          const kindColor = EVENT_COLORS[kind] || t.textSecondary;
           ctx.fillStyle = isTransition
             ? kindColor + "30"
             : kindColor + "18";
@@ -163,7 +165,7 @@ export function KeyframeStrip({ lineIndex }: KeyframeStripProps) {
       const playheadPx = beatToPixel(currentBeat, width);
 
       if (playheadPx >= 0 && playheadPx <= width) {
-        ctx.strokeStyle = "#ff5555";
+        ctx.strokeStyle = t.indicatorColor;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(playheadPx, 0);
@@ -171,7 +173,7 @@ export function KeyframeStrip({ lineIndex }: KeyframeStripProps) {
         ctx.stroke();
 
         // Playhead triangle
-        ctx.fillStyle = "#ff5555";
+        ctx.fillStyle = t.indicatorColor;
         ctx.beginPath();
         ctx.moveTo(playheadPx - 5, 0);
         ctx.lineTo(playheadPx + 5, 0);
@@ -249,7 +251,7 @@ export function KeyframeStrip({ lineIndex }: KeyframeStripProps) {
     <div
       ref={containerRef}
       className="w-full relative"
-      style={{ height: "80px", borderTop: "1px solid var(--border-color)" }}
+      style={{ height: "80px", borderTop: "var(--rule) solid var(--border-color)" }}
     >
       <canvas
         ref={canvasRef}

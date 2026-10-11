@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useEditorStore } from "../../stores/editorStore";
 import { CurveGraph } from "./CurveGraph";
+import { chromeTheme } from "../../canvas/chromeTheme";
 
 export function PopoutCurveEditor() {
   const [mountEl, setMountEl] = useState<HTMLElement | null>(null);
@@ -35,13 +36,13 @@ export function PopoutCurveEditor() {
 
     win.document.head.innerHTML = `<style>${cssVarRules}\n${inlineStyles}</style>`;
 
-    const rootStyles = getComputedStyle(document.documentElement);
-    const bgColor = rootStyles.getPropertyValue("--bg-primary").trim() || "#111118";
-    win.document.body.style.backgroundColor = bgColor;
+    // Token values resolved from the main window (chromeTheme reads :root).
+    const t = chromeTheme();
+    win.document.body.style.backgroundColor = t.bgPrimary;
     win.document.body.style.margin = "0";
     win.document.body.style.overflow = "hidden";
-    win.document.body.style.color =
-      rootStyles.getPropertyValue("--text-primary").trim() || "#e0e0e8";
+    win.document.body.style.color = t.textPrimary;
+    win.document.body.style.fontFamily = t.fontSans;
     win.document.title = "PhiChain — Curve Editor";
 
     const root = win.document.createElement("div");

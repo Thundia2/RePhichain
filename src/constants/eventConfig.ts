@@ -66,8 +66,8 @@ export function defaultEventTransition(kind: LineEventKind): LineEventValue {
 
 /** Display metadata per event kind: color (from EVENT_COLORS) + human-readable label */
 export const EVENT_KIND_META: Record<string, { color: string; label: string }> = {
-  x:        { color: EVENT_COLORS.x,        label: "X Position" },
-  y:        { color: EVENT_COLORS.y,        label: "Y Position" },
+  x:        { color: EVENT_COLORS.x,        label: "X position" },
+  y:        { color: EVENT_COLORS.y,        label: "Y position" },
   rotation: { color: EVENT_COLORS.rotation, label: "Rotation" },
   opacity:  { color: EVENT_COLORS.opacity,  label: "Opacity" },
   speed:    { color: EVENT_COLORS.speed,    label: "Speed" },

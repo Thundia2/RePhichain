@@ -3,13 +3,15 @@
 //
 // When the Preview panel is "double-expanded" (opened as a tab),
 // this wrapper renders the GamePreview canvas constrained to a
-// chosen aspect ratio with quick-select presets.
+// chosen aspect ratio, picked from a segmented control of presets.
 //
 // Presets: 1:1, 16:9, 3:2, 21:9, 20:9, Custom (free-form)
 // ============================================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { GamePreview } from "./GamePreview";
+import { SegmentedControl } from "../common/SegmentedControl";
+import { INPUT_STYLE } from "../common/UIKit";
 
 interface AspectPreset {
   label: string;
@@ -92,84 +94,60 @@ export function GamePreviewTab() {
   }
 
   const inputStyle: React.CSSProperties = {
-    backgroundColor: "var(--bg-active)",
-    color: "var(--text-primary)",
-    border: "1px solid var(--border-color)",
+    ...INPUT_STYLE,
+    width: 36,
+    padding: "0 var(--space-4)",
+    textAlign: "center",
+    fontFamily: "var(--font-mono)",
   };
 
+  const presetOptions = [
+    ...PRESETS.map((p) => ({ value: p.label, label: p.label })),
+    { value: "Custom", label: "Custom" },
+  ];
+
   return (
-    <div className="flex flex-col h-full w-full" style={{ backgroundColor: "#000" }}>
+    <div className="flex flex-col h-full w-full" style={{ backgroundColor: "var(--canvas-bg)" }}>
       {/* Aspect ratio toolbar */}
       <div
-        className="flex items-center gap-1 px-2 py-1 flex-shrink-0"
         style={{
-          backgroundColor: "var(--bg-tertiary)",
-          borderBottom: "1px solid var(--border-color)",
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-8)",
+          padding: "var(--space-4) var(--space-8)",
+          flexShrink: 0,
+          backgroundColor: "var(--bg-secondary)",
+          borderBottom: "var(--rule) solid var(--border-color)",
         }}
       >
-        <span
-          className="text-xs mr-1"
-          style={{ color: "var(--text-muted)", fontSize: "10px" }}
-        >
-          Aspect:
+        <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)" }}>
+          Aspect ratio
         </span>
-        {PRESETS.map((preset) => (
-          <button
-            key={preset.label}
-            className="px-2 py-0.5 rounded text-xs"
-            style={{
-              backgroundColor:
-                activePreset === preset.label
-                  ? "var(--accent-primary)"
-                  : "var(--bg-active)",
-              color:
-                activePreset === preset.label
-                  ? "white"
-                  : "var(--text-secondary)",
-              fontSize: "10px",
-            }}
-            onClick={() => {
-              setActivePreset(preset.label);
-              setShowCustom(false);
-            }}
-          >
-            {preset.label}
-          </button>
-        ))}
-        <button
-          className="px-2 py-0.5 rounded text-xs"
-          style={{
-            backgroundColor:
-              activePreset === "Custom"
-                ? "var(--accent-primary)"
-                : "var(--bg-active)",
-            color:
-              activePreset === "Custom" ? "white" : "var(--text-secondary)",
-            fontSize: "10px",
+        <SegmentedControl
+          label="Aspect ratio"
+          size="sm"
+          tone="accent"
+          options={presetOptions}
+          value={activePreset}
+          onChange={(v) => {
+            setActivePreset(v);
+            setShowCustom(v === "Custom");
           }}
-          onClick={() => {
-            setActivePreset("Custom");
-            setShowCustom(true);
-          }}
-        >
-          Custom
-        </button>
+        />
         {showCustom && activePreset === "Custom" && (
-          <div className="flex items-center gap-1 ml-1">
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
             <input
-              className="w-8 px-1 py-0.5 rounded text-xs text-center"
               style={inputStyle}
               value={customW}
               onChange={(e) => setCustomW(e.target.value)}
-              title="Width ratio"
+              aria-label="Width ratio"
             />
-            <span style={{ color: "var(--text-muted)", fontSize: "10px" }}>:</span>
+            <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)" }}>:</span>
             <input
-              className="w-8 px-1 py-0.5 rounded text-xs text-center"
               style={inputStyle}
               value={customH}
               onChange={(e) => setCustomH(e.target.value)}
-              title="Height ratio"
+              aria-label="Height ratio"
             />
           </div>
         )}
@@ -177,11 +155,15 @@ export function GamePreviewTab() {
         {/* Show computed resolution */}
         {ratio !== null && containerSize.w > 0 && (
           <span
-            className="ml-auto text-xs"
-            style={{ color: "var(--text-muted)", fontSize: "9px" }}
+            style={{
+              marginLeft: "auto",
+              color: "var(--text-secondary)",
+              fontSize: "var(--fs-caption)",
+              fontFamily: "var(--font-mono)",
+            }}
           >
             {Math.round(parseFloat(previewStyle.width as string) || containerSize.w)}
-            {" x "}
+            {" × "}
             {Math.round(parseFloat(previewStyle.height as string) || containerSize.h)}
           </span>
         )}

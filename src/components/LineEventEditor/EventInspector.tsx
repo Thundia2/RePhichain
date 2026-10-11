@@ -15,19 +15,23 @@ import { beatToFloat, floatToBeat } from "../../types/chart";
 import type { LineEvent, LineEventKind, EasingType } from "../../types/chart";
 import { EVENT_COLORS } from "../../constants/eventColors";
 import { defaultEventValue, defaultEventTransition } from "../../constants/eventConfig";
+import { Plus } from "lucide-react";
+import { Button } from "../common/Button";
+import { Tooltip } from "../common/Tooltip";
+import { LANE_LABEL } from "../KeyframeBar/curveEditorUtils";
 
 const KIND_LABELS: Record<LineEventKind, string> = {
-  x: "X Position",
-  y: "Y Position",
+  x: "X position",
+  y: "Y position",
   rotation: "Rotation",
   opacity: "Opacity",
   speed: "Speed",
   scale_x: "Scale X",
   scale_y: "Scale Y",
-  color: "Color",
+  color: "Colour",
   text: "Text",
   incline: "Incline",
-  gif: "GIF Progress",
+  gif: "GIF progress",
 };
 
 interface EventInspectorProps {
@@ -59,7 +63,7 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
   const line = chart.lines[lineIndex];
   if (!line) {
     return (
-      <div className="p-2 text-xs" style={{ color: "var(--text-muted)" }}>
+      <div className="p-2 text-xs" style={{ color: "var(--text-secondary)" }}>
         Line not found
       </div>
     );
@@ -81,44 +85,54 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
   return (
     <div className="flex flex-col h-full overflow-y-auto text-xs">
       {/* Current Beat */}
-      <div className="p-2 border-b" style={{ borderColor: "var(--border-color)" }}>
-        <div className="font-medium mb-1" style={{ color: "var(--text-primary)" }}>
+      <div className="p-2 border-b" style={{ borderColor: "var(--separator)" }}>
+        <div className="font-medium mb-1" style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>
           Beat {currentBeat.toFixed(2)}
         </div>
       </div>
 
       {/* Evaluated Values */}
-      <div className="p-2 border-b" style={{ borderColor: "var(--border-color)" }}>
-        <div className="font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
-          Current Values
+      <div className="p-2 border-b" style={{ borderColor: "var(--separator)" }}>
+        <div
+          className="mb-1.5"
+          style={{ fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--text-secondary)" }}
+        >
+          Current values
         </div>
         {([
-          { kind: "x" as const, label: "X", value: state.x.toFixed(1) },
-          { kind: "y" as const, label: "Y", value: state.y.toFixed(1) },
-          { kind: "rotation" as const, label: "Rot", value: `${rotDeg.toFixed(1)}°` },
-          { kind: "opacity" as const, label: "Opa", value: String(opacityVal) },
-          { kind: "speed" as const, label: "Spd", value: state.speed.toFixed(2) },
-        ]).map(({ kind, label, value }) => (
-          <div
-            key={kind}
-            className="flex items-center gap-2 py-0.5 px-1 rounded cursor-pointer"
-            style={{
-              backgroundColor: activeProperty === kind ? "var(--bg-active)" : "transparent",
-            }}
-            onClick={() => useEditorStore.getState().setEventEditorActiveProperty(kind)}
-          >
-            <span
-              className="w-2 h-2 rounded-full flex-shrink-0"
-              style={{ backgroundColor: EVENT_COLORS[kind] }}
-            />
-            <span className="w-8" style={{ color: "var(--text-muted)" }}>{label}</span>
-            <span style={{ color: "var(--text-primary)" }}>{value}</span>
-          </div>
+          { kind: "x" as const, value: state.x.toFixed(1) },
+          { kind: "y" as const, value: state.y.toFixed(1) },
+          { kind: "rotation" as const, value: `${rotDeg.toFixed(1)}°` },
+          { kind: "opacity" as const, value: String(opacityVal) },
+          { kind: "speed" as const, value: state.speed.toFixed(2) },
+        ]).map(({ kind, value }) => (
+          <Tooltip key={kind} content={KIND_LABELS[kind]}>
+            <button
+              type="button"
+              aria-pressed={activeProperty === kind}
+              className="ui-hover flex items-center gap-2 py-0.5 px-1 w-full text-left"
+              style={{
+                border: "none",
+                borderRadius: "var(--radius-sm)",
+                font: "inherit",
+                cursor: "pointer",
+                background: activeProperty === kind ? "var(--accent-selected)" : undefined,
+              }}
+              onClick={() => useEditorStore.getState().setEventEditorActiveProperty(kind)}
+            >
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: EVENT_COLORS[kind] }}
+              />
+              <span className="w-10" style={{ color: "var(--text-secondary)" }}>{LANE_LABEL[kind]}</span>
+              <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{value}</span>
+            </button>
+          </Tooltip>
         ))}
       </div>
 
       {/* Active Event Details */}
-      <div className="p-2 border-b" style={{ borderColor: "var(--border-color)" }}>
+      <div className="p-2 border-b" style={{ borderColor: "var(--separator)" }}>
         <div className="font-medium mb-1.5" style={{ color: EVENT_COLORS[activeProperty] }}>
           {KIND_LABELS[activeProperty]}
         </div>
@@ -130,7 +144,7 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
             lineIndex={lineIndex}
           />
         ) : (
-          <div className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+          <div className="text-xs mb-2" style={{ color: "var(--text-secondary)" }}>
             No event at this beat
           </div>
         )}
@@ -138,13 +152,9 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
 
       {/* Add Event Buttons */}
       <div className="p-2 flex flex-col gap-1">
-        <button
-          className="w-full px-2 py-1 rounded text-xs"
-          style={{
-            backgroundColor: "var(--bg-active)",
-            color: "var(--text-primary)",
-            border: "1px solid var(--border-color)",
-          }}
+        <Button
+          icon={Plus}
+          block
           onClick={() => {
             const snappedBeat = floatToBeat(currentBeat);
             // Short span, not [1000]: a constant holds via inheritance, so the far-end
@@ -159,15 +169,11 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
             }, activeLayer);
           }}
         >
-          + Add Constant
-        </button>
-        <button
-          className="w-full px-2 py-1 rounded text-xs"
-          style={{
-            backgroundColor: "var(--bg-active)",
-            color: "var(--text-primary)",
-            border: "1px solid var(--border-color)",
-          }}
+          Add constant
+        </Button>
+        <Button
+          icon={Plus}
+          block
           onClick={() => {
             const startBeat = floatToBeat(currentBeat);
             const endBeat = floatToBeat(currentBeat + 4); // 4 beats long
@@ -181,8 +187,8 @@ export function EventInspector({ lineIndex }: EventInspectorProps) {
             }, activeLayer);
           }}
         >
-          + Add Transition
-        </button>
+          Add transition
+        </Button>
       </div>
     </div>
   );

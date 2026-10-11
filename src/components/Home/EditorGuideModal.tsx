@@ -4,20 +4,26 @@
 // A tab-based, animation-rich beginner's guide to the PhiChain
 // editor. Content is split across sibling files:
 //   guideData.ts        — pure data constants + easing math
-//   guideComponents.tsx  — shared UI atoms (Kbd, GCard, STitle)
+//   guideComponents.tsx  — shared UI atoms (GCard, STitle, ColorDot)
 //   guideAnimations.tsx  — interactive SVG animations
 //   guideTabs.tsx        — per-tab content components
 //
-// This file is just the modal shell: sidebar, tab routing,
-// footer navigation, and keyboard/lifecycle management.
+// This file is just the modal shell: the shared Dialog chrome
+// (title, close, Esc), a sentence-case tab list, tab routing and
+// footer navigation.
 // ============================================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { ArrowRight, Check, BookOpen } from "lucide-react";
 import { TABS } from "./guideData";
 import {
   WelcomeTab, CanvasTab, NotesTab, EventsTab, EasingsTab,
   ToolsTab, PanelsTab, ShortcutsTab, AdvancedTab, TipsTab,
 } from "./guideTabs";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
+import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
 
 // ---- Props ----
 
@@ -30,16 +36,7 @@ interface EditorGuideModalProps {
 
 export function EditorGuideModal({ open, onClose }: EditorGuideModalProps) {
   const [activeTab, setActiveTab] = useState("welcome");
-  const backdropRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-
-  // Escape to close
-  useEffect(() => {
-    if (!open) return;
-    const handleEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handleEsc);
-    return () => document.removeEventListener("keydown", handleEsc);
-  }, [open, onClose]);
 
   // Reset scroll on tab change
   useEffect(() => {
@@ -63,112 +60,110 @@ export function EditorGuideModal({ open, onClose }: EditorGuideModalProps) {
   if (!open) return null;
 
   return (
-    <div
-      ref={backdropRef}
-      onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
-      style={{
-        position: "fixed", inset: 0, zIndex: 100,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        backgroundColor: "rgba(0, 0, 0, 0.55)", backdropFilter: "blur(4px)",
+    <Dialog
+      title="Editor guide"
+      icon={BookOpen}
+      onClose={onClose}
+      width={760}
+      height="82vh"
+      headerExtra={
+        <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
+          {tabIndex + 1} of {TABS.length}
+        </span>
+      }
+      bodyStyle={{
+        padding: 0, display: "flex", overflow: "hidden",
+        borderTop: "var(--rule) solid var(--separator)",
       }}
-    >
-      <div style={{
-        width: 760, maxWidth: "92vw", maxHeight: "82vh",
-        backgroundColor: "var(--bg-secondary)",
-        border: "1px solid var(--border-color)",
-        borderRadius: 14,
-        boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5)",
-        display: "flex", flexDirection: "column", overflow: "hidden",
-        animation: "guideScaleIn 0.2s ease-out",
-      }}>
-        {/* Header */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "12px 18px", borderBottom: "1px solid var(--border-color)", flexShrink: 0,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontWeight: 700, fontSize: 14, color: "var(--accent-primary)" }}>Editor Guide</span>
-            <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 500 }}>
-              {TABS[tabIndex]?.label}
-            </span>
-          </div>
-          <button onClick={onClose} style={{
-            cursor: "pointer", color: "var(--text-muted)", fontSize: 16,
-            width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-            borderRadius: 6, backgroundColor: "var(--bg-active)", border: "none",
-          }}>{"\u2715"}</button>
-        </div>
-
-        {/* Body: sidebar + content */}
-        <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-          {/* Sidebar */}
-          <div style={{
-            width: 160, flexShrink: 0,
-            background: "var(--bg-primary)",
-            borderRight: "1px solid var(--border-color)",
-            overflowY: "auto", padding: "6px 0",
-          }}>
-            {TABS.map((tab, i) => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-                display: "flex", alignItems: "center", gap: 8,
-                width: "100%", padding: "7px 14px", border: "none",
-                borderLeft: activeTab === tab.id ? "2px solid var(--accent-primary)" : "2px solid transparent",
-                background: activeTab === tab.id ? "var(--bg-active)" : "transparent",
-                color: activeTab === tab.id ? "var(--text-primary)" : "var(--text-secondary)",
-                cursor: "pointer", fontSize: 11, fontWeight: activeTab === tab.id ? 600 : 400,
-                textAlign: "left", transition: "background 0.1s",
-              }}>
-                <span style={{ fontSize: 13, width: 18, textAlign: "center" }}>{tab.icon}</span>
-                <span>{tab.label}</span>
-                {i <= tabIndex && i !== tabIndex && (
-                  <span style={{ marginLeft: "auto", color: "var(--text-muted)", fontSize: 9 }}>{"\u2713"}</span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Content */}
-          <div ref={contentRef} style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
-            {activeTab === "welcome" && <WelcomeTab />}
-            {activeTab === "canvas" && <CanvasTab active={activeTab === "canvas"} />}
-            {activeTab === "notes" && <NotesTab active={activeTab === "notes"} />}
-            {activeTab === "events" && <EventsTab active={activeTab === "events"} />}
-            {activeTab === "easings" && <EasingsTab active={activeTab === "easings"} />}
-            {activeTab === "tools" && <ToolsTab />}
-            {activeTab === "panels" && <PanelsTab />}
-            {activeTab === "shortcuts" && <ShortcutsTab />}
-            {activeTab === "advanced" && <AdvancedTab />}
-            {activeTab === "tips" && <TipsTab />}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "8px 18px", borderTop: "1px solid var(--border-color)", flexShrink: 0,
-        }}>
+      footer={
+        <>
           {/* Pagination dots */}
-          <div style={{ display: "flex", gap: 5 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", marginRight: "auto" }}>
             {TABS.map((tab, i) => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-                width: 7, height: 7, borderRadius: 7, border: "none", cursor: "pointer", padding: 0,
-                background: i === tabIndex ? "var(--accent-primary)" : i < tabIndex ? "var(--accent-primary)" : "var(--border-color)",
-                opacity: i === tabIndex ? 1 : i < tabIndex ? 0.4 : 0.3,
-                transition: "background 0.2s",
-              }} title={tab.label} />
+              <Tooltip key={tab.id} content={tab.label}>
+                <button
+                  type="button"
+                  aria-label={`Go to ${tab.label}`}
+                  aria-current={i === tabIndex ? "step" : undefined}
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    width: 8, height: 8, borderRadius: "var(--radius-full)", border: "none", cursor: "pointer", padding: 0,
+                    background: i <= tabIndex ? "var(--accent-primary)" : "var(--fill-strong)",
+                    opacity: i < tabIndex ? 0.4 : 1,
+                    transition: "background-color var(--dur-base)",
+                  }}
+                />
+              </Tooltip>
             ))}
           </div>
           {/* Next / Done */}
-          <button onClick={goNext} style={{
-            padding: "5px 16px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-            border: "none", cursor: "pointer",
-            background: "var(--accent-primary)", color: "#fff",
-            transition: "opacity 0.15s",
-          }}>
-            {isLastTab ? "Done" : "Next \u2192"}
-          </button>
-        </div>
+          <Button variant="primary" onClick={goNext}>
+            {isLastTab ? "Done" : <>Next<Icon icon={ArrowRight} size={14} /></>}
+          </Button>
+        </>
+      }
+    >
+      {/* Tab list */}
+      <div
+        role="tablist"
+        aria-orientation="vertical"
+        aria-label="Guide sections"
+        style={{
+          width: 168, flexShrink: 0,
+          borderRight: "var(--rule) solid var(--separator)",
+          overflowY: "auto", padding: "var(--space-8)",
+          display: "flex", flexDirection: "column", gap: "var(--space-2)",
+        }}
+      >
+        {TABS.map((tab, i) => {
+          const selected = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              className={selected ? undefined : "ui-hover"}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                display: "flex", alignItems: "center", gap: "var(--space-8)",
+                width: "100%", minHeight: "var(--control-lg)", padding: "0 var(--space-8)",
+                border: "none", borderRadius: "var(--radius-md)",
+                // Unselected tabs take their hover wash from .ui-hover (no inline background).
+                background: selected ? "var(--accent-selected)" : undefined,
+                color: selected ? "var(--text-primary)" : "var(--text-secondary)",
+                cursor: "pointer", fontSize: "var(--fs-control)", fontWeight: selected ? 500 : 400,
+                fontFamily: "inherit", textAlign: "left",
+              }}
+            >
+              <Icon icon={tab.icon} size={14} style={{ color: selected ? "var(--accent-primary)" : undefined }} />
+              <span style={{ flex: 1, minWidth: 0 }}>{tab.label}</span>
+              {i < tabIndex && (
+                <Icon icon={Check} size={12} style={{ color: "var(--text-muted)" }} />
+              )}
+            </button>
+          );
+        })}
       </div>
-    </div>
+
+      {/* Content */}
+      <div
+        ref={contentRef}
+        role="tabpanel"
+        aria-label={TABS[tabIndex]?.label}
+        style={{ flex: 1, overflowY: "auto", padding: "var(--space-16) var(--space-20) var(--space-20)" }}
+      >
+        {activeTab === "welcome" && <WelcomeTab />}
+        {activeTab === "canvas" && <CanvasTab active={activeTab === "canvas"} />}
+        {activeTab === "notes" && <NotesTab active={activeTab === "notes"} />}
+        {activeTab === "events" && <EventsTab active={activeTab === "events"} />}
+        {activeTab === "easings" && <EasingsTab active={activeTab === "easings"} />}
+        {activeTab === "tools" && <ToolsTab />}
+        {activeTab === "panels" && <PanelsTab />}
+        {activeTab === "shortcuts" && <ShortcutsTab />}
+        {activeTab === "advanced" && <AdvancedTab />}
+        {activeTab === "tips" && <TipsTab />}
+      </div>
+    </Dialog>
   );
 }

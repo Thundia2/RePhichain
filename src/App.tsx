@@ -32,6 +32,7 @@ import { StatusBar } from "./components/StatusBar/StatusBar";
 import { QuickActionBar } from "./components/QuickActionBar/QuickActionBar";
 import { PanelPlaceholder } from "./components/common/PanelPlaceholder";
 import { CustomExpandButton } from "./components/common/CustomExpandButton";
+import { Tooltip } from "./components/common/Tooltip";
 import { GamePreview } from "./components/GamePreview/GamePreview";
 import { GamePreviewTab } from "./components/GamePreview/GamePreviewTab";
 import { Timeline } from "./components/Timeline/Timeline";
@@ -45,6 +46,7 @@ import { NewProjectDialog } from "./components/NewProjectDialog/NewProjectDialog
 import { HomeScreen } from "./components/Home/HomeScreen";
 import { SettingsModal } from "./components/SettingsModal/SettingsModal";
 import { CommandPalette } from "./components/CommandPalette/CommandPalette";
+import { DevToolsPanel } from "./components/DevToolsPanel/DevToolsPanel";
 import { LineEventEditor } from "./components/LineEventEditor/LineEventEditor";
 import { UnifiedEditorTab } from "./components/UnifiedCanvas/UnifiedEditorTab";
 import { UnrolledEditorTab } from "./components/UnrolledCanvas/UnrolledEditorTab";
@@ -77,7 +79,10 @@ import { triggerImportChart } from "./utils/importChart";
 import { commitRecordedKeyframes } from "./utils/recordingCommit";
 import { ToastContainer } from "./components/common/Toast";
 import { ConfirmDialog } from "./components/common/ConfirmDialog";
+import { PromptDialog } from "./components/common/PromptDialog";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
+import { OnboardingOverlay } from "./components/Onboarding/OnboardingOverlay";
+import { useSettingsStore } from "./stores/settingsStore";
 
 // ============================================================
 // CONFIGURABLE: Default panel layout
@@ -116,16 +121,16 @@ const PANEL_TITLES: Record<PanelId, string> = {
   "game-preview": "Preview",
   "timeline": "Timeline",
   "inspector": "Inspector",
-  "line-list": "Line List",
+  "line-list": "Lines",
   "toolbar": "Toolbar",
-  "timeline-settings": "Timeline Settings",
-  "bpm-list": "BPM List",
-  "chart-settings": "Chart Settings",
-  "hotkey-reference": "Hotkey Reference",
+  "timeline-settings": "Timeline settings",
+  "bpm-list": "BPM list",
+  "chart-settings": "Chart settings",
+  "hotkey-reference": "Hotkey reference",
   "validation": "Validation",
   "effects": "Effects",
   "textures": "Textures",
-  "group-manager": "Group Manager",
+  "group-manager": "Groups",
   "presets": "Presets",
 };
 
@@ -167,7 +172,7 @@ function renderPanel(id: PanelId) {
       content = <PresetPanel />;
       break;
     default:
-      return <PanelPlaceholder name={title} description="Coming soon" color="var(--text-muted)" />;
+      return <PanelPlaceholder name={title} description="Coming soon" color="var(--text-secondary)" />;
   }
   return <ErrorBoundary panelName={title}>{content}</ErrorBoundary>;
 }
@@ -232,6 +237,9 @@ export default function App() {
   const showRecordReview = useDialogStore((s) => s.openDialogs.has("record-review"));
   const showSettings = useDialogStore((s) => s.openDialogs.has("settings"));
   const showCommandPalette = useDialogStore((s) => s.openDialogs.has("command-palette"));
+  const showOnboarding = useDialogStore((s) => s.openDialogs.has("onboarding"));
+  const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding);
+  const settingsLoaded = useSettingsStore((s) => s.settingsLoaded);
   const [expandedPanelId, setExpandedPanelId] = useState<PanelId | null>(null);
   const savedLayoutRef = useRef<MosaicNode<PanelId> | null>(null);
   const prevTabIdRef = useRef<string | null>(null);
@@ -315,6 +323,20 @@ export default function App() {
     // above so satellite saves resolved to the OUTGOING chart.
     if (newTab && isChartSessionTabId(newTab.id)) setActiveChartSessionTabId(newTab.id);
   }, [activeTabId, tabs, isLoaded]);
+
+  // First run: open the welcome tour the first time an editor shows a loaded
+  // chart. Closing it records hasSeenOnboarding, so it opens only once. Waits
+  // for the saved settings so a returning user never sees it flash up.
+  const inEditor =
+    activeTab?.type === "unified_editor" || activeTab?.type === "unrolled_editor" || activeTab?.type === "chart";
+  useEffect(() => {
+    if (settingsLoaded && isLoaded && inEditor && !hasSeenOnboarding) openDialog("onboarding");
+  }, [settingsLoaded, isLoaded, inEditor, hasSeenOnboarding, openDialog]);
+
+  const closeOnboarding = useCallback(() => {
+    closeDialog("onboarding");
+    useSettingsStore.getState().updateSettings({ hasSeenOnboarding: true });
+  }, [closeDialog]);
 
   // When chart is closed, unload audio, close chart tabs, and clean up sessions.
   // This prevents stale audio/illustration from leaking into a new chart.
@@ -465,15 +487,17 @@ export default function App() {
                 toolbarControls={[
                   /* Collapse button — only visible when this panel is expanded */
                   expandedPanelId === id && (
-                    <button
-                      key="collapse"
-                      className="mosaic-default-control bp3-button bp3-minimal collapse-button"
-                      title="Collapse"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCollapse();
-                      }}
-                    />
+                    <Tooltip key="collapse" content="Restore layout">
+                      <button
+                        type="button"
+                        className="mosaic-default-control bp3-button bp3-minimal collapse-button"
+                        aria-label="Restore layout"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCollapse();
+                        }}
+                      />
+                    </Tooltip>
                   ),
                   <CustomExpandButton
                     key="expand"
@@ -596,8 +620,11 @@ export default function App() {
         onShowOnsetCalibration={() => openDialog("onset-calibration")}
       />
       <FavoritesWizard />
+      <OnboardingOverlay open={showOnboarding} onClose={closeOnboarding} />
+      <DevToolsPanel />
       <ToastContainer />
       <ConfirmDialog />
+      <PromptDialog />
     </div>
   );
 }

@@ -17,7 +17,8 @@
 // chip row labelled with ddc_onset's DDR difficulty tiers.
 // ============================================================
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AudioWaveform, ChevronRight, Play, Square } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useAudioStore } from "../../stores/audioStore";
 import { useChartStore } from "../../stores/chartStore";
@@ -33,26 +34,35 @@ import { BpmList } from "../../utils/bpmList";
 import { beatToFloat } from "../../types/chart";
 import { snapBeat } from "../../utils/beat";
 import type { OnsetResult } from "../../utils/ipc";
+import { chromeTheme, withAlpha, type ChromeTheme } from "../../canvas/chromeTheme";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
+import { Icon } from "../common/Icon";
+import { Kbd } from "../common/Kbd";
+import { SegmentedControl } from "../common/SegmentedControl";
+import { Tooltip } from "../common/Tooltip";
 
-// ── Design tokens ──────────────────────────────────────────────
-// The dialog leans into the editor's existing "night sky + warm
-// orange" palette with a slightly darker card background and a
-// faint inner glow behind the 4 region panels. Typography uses
-// JetBrains Mono (already in the codebase) for labels / data and
-// inherits the system font for the preset chips so they read as
-// tappable controls rather than monospace data.
+// ── Look ───────────────────────────────────────────────────────
+// Shared <Dialog> chrome; everything inside uses design tokens.
+// Region previews are bg-active cards; the salience envelope and
+// pick markers are drawn in the domain --onset-color, the playhead
+// in --indicator-color (via chromeTheme for the canvases).
 
 const FRAME_RATE = 100; // Matches ONSET_PIPELINE_VERSION = 2 on the Rust side.
 
-/** Per-label accent color. These aren't arbitrary — DENSE is the same hot
- *  orange used for strong onsets elsewhere; QUIET fades to neutral gray so
- *  it doesn't compete for attention. */
-const LABEL_COLORS: Record<RegionLabel, string> = {
-  DENSE: "#ff6b35",
-  MEDIUM: "#ffa832",
-  SPARSE: "#ffd166",
-  QUIET: "#8b8b8b",
+/** Sentence-case display names for the analyzer's region labels. */
+const LABEL_TEXT: Record<RegionLabel, string> = {
+  DENSE: "Dense",
+  MEDIUM: "Medium",
+  SPARSE: "Sparse",
+  QUIET: "Quiet",
 };
+
+/** Envelope colour per region: onset colour, except QUIET which fades to
+ *  neutral so it doesn't compete for attention. */
+function regionTint(label: RegionLabel, t: ChromeTheme): string {
+  return label === "QUIET" ? t.textSecondary : t.onsetColor;
+}
 
 /** Canvas dimensions in CSS pixels (devicePixelRatio scaled at draw time). */
 const CANVAS_W = 304;
@@ -72,86 +82,33 @@ const DENSITY_PRESETS: Array<{ label: string; density: number; tooltip: string }
 
 // ── Styles ────────────────────────────────────────────────────
 
-const OVERLAY_STYLE: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 9999,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  backgroundColor: "rgba(5, 8, 20, 0.55)",
-  backdropFilter: "blur(8px) saturate(1.1)",
-  // Single orchestrated fade-in; no scattered micro-animations.
-  animation: "onsetCalibFade 220ms cubic-bezier(0.2, 0.9, 0.3, 1) both",
-};
-
-const DIALOG_STYLE: React.CSSProperties = {
-  width: 680,
-  maxWidth: "94vw",
-  maxHeight: "92vh",
-  overflow: "auto",
-  backgroundColor: "#0e1226",
-  border: "1px solid rgba(255, 168, 50, 0.18)",
-  borderRadius: 14,
-  padding: "18px 22px 20px",
-  boxShadow:
-    "0 20px 60px rgba(0, 0, 0, 0.65), " +
-    "inset 0 1px 0 rgba(255, 255, 255, 0.04), " +
-    "0 0 140px -40px rgba(255, 168, 50, 0.28)",
-  display: "flex",
-  flexDirection: "column",
-  gap: 14,
-  // Slight scale-up pairs with the overlay fade for a coordinated entry.
-  animation: "onsetCalibScale 240ms cubic-bezier(0.18, 0.9, 0.25, 1.05) both",
-  fontFamily: "inherit",
-  color: "var(--text-primary)",
-  position: "relative",
-};
-
-const MONO_FAMILY = "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace";
-
-const HEADER_TITLE_STYLE: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 700,
-  color: "#ffbf6b",
-  fontFamily: MONO_FAMILY,
-  letterSpacing: 2.4,
-  textTransform: "uppercase",
-};
-
 const STAT_LABEL_STYLE: React.CSSProperties = {
-  fontSize: 8,
-  color: "rgba(255, 255, 255, 0.42)",
-  fontFamily: MONO_FAMILY,
-  letterSpacing: 1.4,
-  textTransform: "uppercase",
-  marginBottom: 2,
+  fontSize: "var(--fs-caption)",
+  color: "var(--text-secondary)",
+  marginBottom: "var(--space-2)",
 };
 
 const STAT_VALUE_STYLE: React.CSSProperties = {
-  fontSize: 13,
+  fontSize: "var(--fs-headline)",
   color: "var(--text-primary)",
-  fontFamily: MONO_FAMILY,
+  fontFamily: "var(--font-mono)",
   fontWeight: 600,
   fontVariantNumeric: "tabular-nums",
 };
 
-// ── Animation keyframes (injected once at mount) ────────────────
+const ROW_LABEL_STYLE: React.CSSProperties = {
+  fontSize: "var(--fs-control)",
+  color: "var(--text-secondary)",
+  flexShrink: 0,
+};
 
-const KEYFRAMES = `
-  @keyframes onsetCalibFade {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-  }
-  @keyframes onsetCalibScale {
-    from { opacity: 0; transform: translateY(6px) scale(0.97); }
-    to   { opacity: 1; transform: translateY(0)   scale(1);    }
-  }
-  @keyframes onsetCalibPulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 168, 50, 0.22); }
-    50%      { box-shadow: 0 0 0 6px rgba(255, 168, 50, 0); }
-  }
-`;
+const VALUE_STYLE: React.CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--fs-control)",
+  color: "var(--text-primary)",
+  textAlign: "right",
+  fontVariantNumeric: "tabular-nums",
+};
 
 // ── Component ─────────────────────────────────────────────────
 
@@ -200,14 +157,12 @@ export function OnsetCalibrationDialog({ open, onClose }: OnsetCalibrationDialog
     // overhead of a separate Zustand store. See getCachedOnsetResults() docs.
   }, [open, markersEpoch]);
 
-  // ── Keyboard shortcuts: Esc closes, Enter applies (same as old dialog) ──
+  // ── Keyboard shortcut: Enter applies (same as old dialog). Esc is
+  //     handled by <Dialog>, which calls handleClose. ──
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        handleClose();
-      } else if (e.key === "Enter") {
+      if (e.key === "Enter") {
         e.preventDefault();
         handleApply();
       }
@@ -306,235 +261,164 @@ export function OnsetCalibrationDialog({ open, onClose }: OnsetCalibrationDialog
 
   if (!open) return null;
 
+  const activePreset =
+    DENSITY_PRESETS.find((preset) => Math.abs(effectiveDensity - preset.density) < 0.06)?.label ?? null;
+
   return (
-    <div
-      style={OVERLAY_STYLE}
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
-    >
-      {/* Injected keyframes for the entrance animation. Using a style tag
-          rather than a CSS file keeps this dialog self-contained. */}
-      <style>{KEYFRAMES}</style>
-      <div style={DIALOG_STYLE} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Onset calibration">
-        {/* Decorative inner glow — low-contrast warm radial behind the
-            region grid. Kept at 3-5% alpha so it suggests depth without
-            interfering with the panel borders. */}
-        <div
-          aria-hidden
-          style={{
-            position: "absolute",
-            inset: 0,
-            pointerEvents: "none",
-            borderRadius: 14,
-            background:
-              "radial-gradient(80% 60% at 50% 30%, rgba(255, 168, 50, 0.06) 0%, transparent 70%)",
-          }}
-        />
-
-        {/* ── Header strip: title, stats, close button ── */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, position: "relative" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={HEADER_TITLE_STYLE}>
-              <span style={{ color: "#ffa832" }}>◢</span> Onset Calibration
-            </div>
-            <div style={{ display: "flex", gap: 20, alignItems: "flex-end" }}>
-              <div>
-                <div style={STAT_LABEL_STYLE}>Markers</div>
-                <div style={STAT_VALUE_STYLE}>
-                  {onsetAnalyzing
-                    ? "\u2026"
-                    : regions === null
-                    ? "\u2013"
-                    : songTotalPicks.toLocaleString()}
-                </div>
-              </div>
-              <div>
-                <div style={STAT_LABEL_STYLE}>Density</div>
-                <div style={STAT_VALUE_STYLE}>
-                  {effectiveDensity.toFixed(2)}
-                  <span style={{ fontSize: 9, fontWeight: 400, color: "rgba(255,255,255,0.5)", marginLeft: 4 }}>/s</span>
-                </div>
-              </div>
-              <div>
-                <div style={STAT_LABEL_STYLE}>Duration</div>
-                <div style={STAT_VALUE_STYLE}>
-                  {duration > 0 ? `${Math.floor(duration / 60)}:${Math.floor(duration % 60).toString().padStart(2, "0")}` : "\u2013"}
-                </div>
-              </div>
-              <div>
-                <div style={STAT_LABEL_STYLE}>Source</div>
-                <div style={{ ...STAT_VALUE_STYLE, fontSize: 10, color: chartOnsetTargetDensity !== undefined ? "#ffa832" : "rgba(255,255,255,0.6)" }}>
-                  {chartOnsetTargetDensity !== undefined ? "PER-CHART" : "GLOBAL"}
-                </div>
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={handleClose}
-            aria-label="Close"
+    <Dialog
+      title="Onset calibration"
+      icon={AudioWaveform}
+      onClose={handleClose}
+      width={680}
+      bodyStyle={{ display: "flex", flexDirection: "column", gap: "var(--space-14)" }}
+      footer={
+        <>
+          <span
             style={{
-              background: "transparent",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              color: "rgba(255, 255, 255, 0.5)",
-              fontSize: 14,
-              lineHeight: 1,
-              padding: "4px 9px",
-              borderRadius: 5,
-              cursor: "pointer",
-              fontFamily: MONO_FAMILY,
-              transition: "color 120ms, border-color 120ms",
+              marginRight: "auto",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "var(--space-4)",
+              fontSize: "var(--fs-caption)",
+              color: "var(--text-secondary)",
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "#ffffff";
-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.08)";
-            }}
-          >✕</button>
-        </div>
-
-        {/* ── Density preset chip row ─────────────────────────────
-             The main tuning action: click a preset to set density to a
-             named difficulty tier. The active chip glows to confirm. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative" }}>
-          <span style={{ ...STAT_LABEL_STYLE, marginBottom: 0, minWidth: 46 }}>Preset</span>
-          {DENSITY_PRESETS.map((preset) => {
-            const active = Math.abs(effectiveDensity - preset.density) < 0.06;
-            return (
-              <button
-                key={preset.label}
-                onClick={() => applyDensityPreset(preset.density)}
-                title={preset.tooltip}
-                style={{
-                  flex: 1,
-                  padding: "6px 0",
-                  borderRadius: 6,
-                  border: `1px solid ${active ? "rgba(255, 168, 50, 0.5)" : "rgba(255, 255, 255, 0.06)"}`,
-                  background: active ? "rgba(255, 168, 50, 0.14)" : "rgba(255, 255, 255, 0.03)",
-                  color: active ? "#ffc678" : "rgba(255, 255, 255, 0.55)",
-                  fontSize: 10,
-                  fontFamily: "inherit",
-                  fontWeight: active ? 700 : 500,
-                  letterSpacing: 0.4,
-                  cursor: "pointer",
-                  transition: "background 140ms, color 140ms, border-color 140ms",
-                  animation: active ? "onsetCalibPulse 1.8s ease-in-out infinite" : undefined,
-                }}
-                onMouseEnter={(e) => {
-                  if (!active) e.currentTarget.style.color = "rgba(255, 255, 255, 0.85)";
-                }}
-                onMouseLeave={(e) => {
-                  if (!active) e.currentTarget.style.color = "rgba(255, 255, 255, 0.55)";
-                }}
-              >
-                <div>{preset.label}</div>
-                <div style={{ fontFamily: MONO_FAMILY, fontSize: 8, opacity: 0.75, marginTop: 1 }}>
-                  {preset.density.toFixed(1)}/s
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ── Target density slider (the fine-grained knob) ────── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
-          <span style={{ ...STAT_LABEL_STYLE, marginBottom: 0, minWidth: 46 }}>Density</span>
-          <input
-            type="range" min={0.5} max={8.0} step={0.1}
-            value={effectiveDensity}
-            onChange={(e) => useChartStore.getState().setOnsetTargetDensity(parseFloat(e.target.value))}
-            style={{ flex: 1, height: 6, accentColor: "#ffa832" }}
-            aria-label="Target onset density in onsets per second"
-          />
-          <span style={{ fontFamily: MONO_FAMILY, fontSize: 11, fontWeight: 700, color: "#ffa832", minWidth: 52, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-            {effectiveDensity.toFixed(1)} /s
+          >
+            <Kbd>Esc</Kbd> close · <Kbd>Enter</Kbd> apply
           </span>
+          <Button onClick={handleClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleApply}>Apply</Button>
+        </>
+      }
+    >
+      {/* ── Stats strip ── */}
+      <div style={{ display: "flex", gap: "var(--space-20)", alignItems: "flex-end" }}>
+        <div>
+          <div style={STAT_LABEL_STYLE}>Markers</div>
+          <div style={STAT_VALUE_STYLE}>
+            {onsetAnalyzing
+              ? "…"
+              : regions === null
+              ? "–"
+              : songTotalPicks.toLocaleString()}
+          </div>
         </div>
-
-        {/* ── Region grid (2x2) ──────────────────────────────────
-             Renders 4 canvases showing CNN salience + pick markers for
-             each representative region of the song. Selecting a region
-             starts audition playback; the canvas overlays a cyan
-             playhead during playback. */}
-        <div style={{ position: "relative", minHeight: 196 }}>
-          {!onsetEnabled ? (
-            <EmptyState message="Onset detection is off" sub="Turn it on in the sidebar to analyze this song, then re-open Calibration." />
-          ) : onsetAnalyzing || (rawResults === null) ? (
-            <EmptyState
-              message={onsetAnalyzing ? "Analyzing audio\u2026" : "No cached results"}
-              sub={onsetAnalyzing ? "One-time ~2 s CNN pass over the song." : "Load a song with onset detection enabled first."}
-              pulse={onsetAnalyzing}
-            />
-          ) : regions && regions.length > 0 ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {regions.map((region) => (
-                <RegionPanel
-                  key={region.label}
-                  region={region}
-                  rawResults={rawResults}
-                  effectiveDensity={effectiveDensity}
-                  absFloor={absFloor}
-                  adaptiveDelta={adaptiveDelta}
-                  minDisplayStrength={minDisplayStrength}
-                  snapToGrid={snapToGrid}
-                  isPlaying={playingRegion === region.label}
-                  onPlay={() => handlePlayRegion(region)}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState message="Song too short" sub="Calibration needs at least ~12 seconds of non-silent audio." />
-          )}
+        <div>
+          <div style={STAT_LABEL_STYLE}>Density</div>
+          <div style={STAT_VALUE_STYLE}>
+            {effectiveDensity.toFixed(2)}
+            <span style={{ fontSize: "var(--fs-caption)", fontWeight: 400, color: "var(--text-secondary)", marginLeft: "var(--space-4)" }}>/s</span>
+          </div>
         </div>
-
-        {/* ── Advanced sliders (collapsible) ─────────────────── */}
-        <AdvancedSliders
-          absFloor={absFloor}
-          adaptiveDelta={adaptiveDelta}
-          minDisplayStrength={minDisplayStrength}
-          snapToGrid={snapToGrid}
-        />
-
-        {/* ── Footer ─────────────────────────────────────────── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, position: "relative" }}>
-          <span style={{ fontFamily: MONO_FAMILY, fontSize: 8, color: "rgba(255, 255, 255, 0.35)", letterSpacing: 1 }}>
-            Esc close {"\u2022"} Enter apply
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={handleClose}
-              style={{
-                padding: "7px 18px",
-                borderRadius: 6,
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                background: "transparent",
-                color: "rgba(255, 255, 255, 0.65)",
-                fontSize: 11,
-                fontFamily: "inherit",
-                cursor: "pointer",
-              }}
-            >Cancel</button>
-            <button
-              onClick={handleApply}
-              style={{
-                padding: "7px 22px",
-                borderRadius: 6,
-                border: "1px solid rgba(255, 168, 50, 0.45)",
-                background: "linear-gradient(180deg, rgba(255, 168, 50, 0.22), rgba(255, 168, 50, 0.12))",
-                color: "#ffcd7a",
-                fontSize: 11,
-                fontWeight: 700,
-                fontFamily: "inherit",
-                cursor: "pointer",
-                letterSpacing: 0.3,
-                boxShadow: "0 0 0 1px rgba(255, 168, 50, 0.08) inset, 0 6px 18px -6px rgba(255, 168, 50, 0.35)",
-              }}
-            >Apply</button>
+        <div>
+          <div style={STAT_LABEL_STYLE}>Duration</div>
+          <div style={STAT_VALUE_STYLE}>
+            {duration > 0 ? `${Math.floor(duration / 60)}:${Math.floor(duration % 60).toString().padStart(2, "0")}` : "–"}
+          </div>
+        </div>
+        <div>
+          <div style={STAT_LABEL_STYLE}>Source</div>
+          <div
+            style={{
+              ...STAT_VALUE_STYLE,
+              fontFamily: "inherit",
+              fontSize: "var(--fs-body)",
+              color: chartOnsetTargetDensity !== undefined ? "var(--accent-primary)" : "var(--text-secondary)",
+            }}
+          >
+            {chartOnsetTargetDensity !== undefined ? "Per-chart" : "Global"}
           </div>
         </div>
       </div>
-    </div>
+
+      {/* ── Density preset row ─────────────────────────────────
+           The main tuning action: click a preset to set density to a
+           named difficulty tier. The matching preset shows selected. */}
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+        <span style={{ ...ROW_LABEL_STYLE, minWidth: 56 }}>Preset</span>
+        <SegmentedControl
+          tone="accent"
+          block
+          label="Density preset"
+          value={activePreset}
+          onChange={(label) => {
+            const preset = DENSITY_PRESETS.find((p) => p.label === label);
+            if (preset) applyDensityPreset(preset.density);
+          }}
+          options={DENSITY_PRESETS.map((preset) => ({
+            value: preset.label,
+            title: preset.tooltip,
+            label: (
+              <>
+                {preset.label}
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--fs-caption)", opacity: 0.75 }}>
+                  {preset.density.toFixed(1)}
+                </span>
+              </>
+            ),
+          }))}
+          style={{ flex: 1 }}
+        />
+      </div>
+
+      {/* ── Target density slider (the fine-grained knob) ────── */}
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+        <span style={{ ...ROW_LABEL_STYLE, minWidth: 56 }}>Density</span>
+        <input
+          type="range" min={0.5} max={8.0} step={0.1}
+          value={effectiveDensity}
+          onChange={(e) => useChartStore.getState().setOnsetTargetDensity(parseFloat(e.target.value))}
+          style={{ flex: 1 }}
+          aria-label="Target onset density in onsets per second"
+        />
+        <span style={{ ...VALUE_STYLE, minWidth: 52 }}>
+          {effectiveDensity.toFixed(1)} /s
+        </span>
+      </div>
+
+      {/* ── Region grid (2x2) ──────────────────────────────────
+           Renders 4 canvases showing CNN salience + pick markers for
+           each representative region of the song. Selecting a region
+           starts audition playback; the canvas overlays the playhead
+           during playback. */}
+      <div style={{ minHeight: 196 }}>
+        {!onsetEnabled ? (
+          <EmptyState message="Onset detection is off" sub="Turn it on in the sidebar to analyze this song, then re-open calibration." />
+        ) : onsetAnalyzing || (rawResults === null) ? (
+          <EmptyState
+            message={onsetAnalyzing ? "Analyzing audio…" : "No cached results"}
+            sub={onsetAnalyzing ? "One-time ~2 s CNN pass over the song." : "Load a song with onset detection enabled first."}
+            pulse={onsetAnalyzing}
+          />
+        ) : regions && regions.length > 0 ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-10)" }}>
+            {regions.map((region) => (
+              <RegionPanel
+                key={region.label}
+                region={region}
+                rawResults={rawResults}
+                effectiveDensity={effectiveDensity}
+                absFloor={absFloor}
+                adaptiveDelta={adaptiveDelta}
+                minDisplayStrength={minDisplayStrength}
+                snapToGrid={snapToGrid}
+                isPlaying={playingRegion === region.label}
+                onPlay={() => handlePlayRegion(region)}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState message="Song too short" sub="Calibration needs at least ~12 seconds of non-silent audio." />
+        )}
+      </div>
+
+      {/* ── Advanced sliders (collapsible) ─────────────────── */}
+      <AdvancedSliders
+        absFloor={absFloor}
+        adaptiveDelta={adaptiveDelta}
+        minDisplayStrength={minDisplayStrength}
+        snapToGrid={snapToGrid}
+      />
+    </Dialog>
   );
 }
 
@@ -543,22 +427,21 @@ export function OnsetCalibrationDialog({ open, onClose }: OnsetCalibrationDialog
 function EmptyState({ message, sub, pulse }: { message: string; sub: string; pulse?: boolean }) {
   return (
     <div
+      className={pulse ? "ui-pulse" : undefined}
+      aria-busy={pulse || undefined}
       style={{
         height: 196,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 4,
-        color: "rgba(255, 255, 255, 0.55)",
-        fontFamily: "inherit",
-        border: "1px dashed rgba(255, 255, 255, 0.08)",
-        borderRadius: 10,
-        animation: pulse ? "onsetCalibPulse 1.6s ease-in-out infinite" : undefined,
+        gap: "var(--space-4)",
+        backgroundColor: "var(--bg-active)",
+        borderRadius: "var(--radius-xl)",
       }}
     >
-      <div style={{ fontSize: 12, fontWeight: 600 }}>{message}</div>
-      <div style={{ fontSize: 10, color: "rgba(255, 255, 255, 0.35)", maxWidth: 360, textAlign: "center" }}>
+      <div style={{ fontSize: "var(--fs-body)", fontWeight: 600, color: "var(--text-primary)" }}>{message}</div>
+      <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", maxWidth: 360, textAlign: "center" }}>
         {sub}
       </div>
     </div>
@@ -580,30 +463,23 @@ function AdvancedSliders({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ position: "relative", borderTop: "1px solid rgba(255, 255, 255, 0.04)", paddingTop: 10 }}>
+    <div style={{ borderTop: "var(--rule) solid var(--separator)", paddingTop: "var(--space-10)" }}>
       <button
+        type="button"
+        className="ui-btn ui-btn--ghost ui-btn--sm"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        style={{
-          background: "transparent",
-          border: "none",
-          color: "rgba(255, 255, 255, 0.45)",
-          fontFamily: MONO_FAMILY,
-          fontSize: 9,
-          letterSpacing: 1.4,
-          textTransform: "uppercase",
-          padding: 0,
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          marginBottom: open ? 10 : 0,
-        }}
+        style={{ marginLeft: "calc(-1 * var(--space-6))", marginBottom: open ? "var(--space-10)" : 0 }}
       >
-        <span style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 160ms" }}>▸</span>
+        <Icon
+          icon={ChevronRight}
+          size={12}
+          style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform var(--dur-base)" }}
+        />
         Advanced
       </button>
       {open && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
           <AdvancedRow
             label="Min str"
             hint="Hide markers below this salience (visual only)."
@@ -628,17 +504,16 @@ function AdvancedSliders({
             onChange={(v) => useSettingsStore.getState().updateSettings({ onsetAdaptiveDelta: v })}
             format={(v) => v.toFixed(3)}
           />
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 10, color: "rgba(255, 255, 255, 0.65)" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", cursor: "pointer" }}>
             <input
               type="checkbox"
               checked={snapToGrid}
               onChange={(e) => useSettingsStore.getState().updateSettings({ onsetSnapToGrid: e.target.checked })}
-              style={{ accentColor: "#ffa832" }}
             />
-            <span style={{ fontFamily: MONO_FAMILY, fontSize: 9, letterSpacing: 1, textTransform: "uppercase" }}>
+            <span style={{ fontSize: "var(--fs-control)", color: "var(--text-primary)" }}>
               Snap to beat grid
             </span>
-            <span style={{ fontSize: 9, color: "rgba(255, 255, 255, 0.35)" }}>
+            <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>
               (collapses pick candidates onto the current grid density)
             </span>
           </label>
@@ -668,18 +543,21 @@ function AdvancedRow({
   format: (v: number) => string;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }} title={hint}>
-      <span style={{ ...STAT_LABEL_STYLE, marginBottom: 0, minWidth: 60 }}>{label}</span>
-      <input
-        type="range" min={min} max={max} step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        style={{ flex: 1, height: 4, accentColor: "#ffa832" }}
-      />
-      <span style={{ fontFamily: MONO_FAMILY, fontSize: 10, color: "rgba(255, 255, 255, 0.7)", minWidth: 48, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-        {format(value)}
-      </span>
-    </div>
+    <Tooltip content={hint}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+        <span style={{ ...ROW_LABEL_STYLE, minWidth: 64 }}>{label}</span>
+        <input
+          type="range" min={min} max={max} step={step}
+          value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value))}
+          style={{ flex: 1 }}
+          aria-label={label}
+        />
+        <span style={{ ...VALUE_STYLE, color: "var(--text-secondary)", minWidth: 48 }}>
+          {format(value)}
+        </span>
+      </div>
+    </Tooltip>
   );
 }
 
@@ -754,18 +632,20 @@ function RegionPanel({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const theme = chromeTheme();
+
     function draw() {
       if (!ctx) return;
       ctx.save();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Background (explicit hex so the canvas doesn't depend on CSS vars).
-      ctx.fillStyle = "#0a0d1c";
+      // Background: same fill as the surrounding card (tokens via chromeTheme).
+      ctx.fillStyle = theme.bgActive;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
       const regionDuration = region.endTime - region.startTime;
       const frameCount = region.frameEndIdx - region.frameStartIdx;
-      const labelColor = LABEL_COLORS[region.label];
+      const labelColor = regionTint(region.label, theme);
 
       // ── Layer 1: CNN salience envelope (faint bars at each frame) ──
       // We draw every frame at its column, scaled to local max so the
@@ -792,7 +672,7 @@ function RegionPanel({
       }
 
       // ── Layer 2: baseline line ──
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+      ctx.strokeStyle = theme.borderColor;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, CANVAS_H - 1.5);
@@ -806,7 +686,7 @@ function RegionPanel({
         const alpha = 0.30 + strength * 0.65;
         const h = 14 + strength * (CANVAS_H - 22);
 
-        ctx.strokeStyle = `rgba(255, 175, 70, ${alpha})`;
+        ctx.strokeStyle = withAlpha(theme.onsetColor, alpha);
         ctx.lineWidth = Math.max(0.9, strength * 2);
         ctx.beginPath();
         ctx.moveTo(x, CANVAS_H - h);
@@ -816,7 +696,7 @@ function RegionPanel({
         // Strong picks get a tiny cap triangle — mirrors the old dialog's
         // "bold onsets stand out" affordance.
         if (strength > 0.4) {
-          ctx.fillStyle = `rgba(255, 180, 80, ${alpha * 0.8})`;
+          ctx.fillStyle = withAlpha(theme.onsetColor, alpha * 0.8);
           ctx.beginPath();
           ctx.moveTo(x - 2.6, CANVAS_H - h);
           ctx.lineTo(x, CANVAS_H - h - 4.2);
@@ -825,18 +705,14 @@ function RegionPanel({
         }
       }
 
-      // ── Layer 4: playback indicator (cyan line + glow) ──
+      // ── Layer 4: playback indicator (playhead line + soft band) ──
       if (isPlaying) {
         const currentTime = useAudioStore.getState().currentTime;
         if (currentTime >= region.startTime && currentTime <= region.endTime) {
           const px = ((currentTime - region.startTime) / regionDuration) * CANVAS_W;
-          const grad = ctx.createLinearGradient(px - 6, 0, px + 6, 0);
-          grad.addColorStop(0.0, "rgba(0, 229, 255, 0)");
-          grad.addColorStop(0.5, "rgba(0, 229, 255, 0.22)");
-          grad.addColorStop(1.0, "rgba(0, 229, 255, 0)");
-          ctx.fillStyle = grad;
-          ctx.fillRect(px - 6, 0, 12, CANVAS_H);
-          ctx.strokeStyle = "#7bf0ff";
+          ctx.fillStyle = withAlpha(theme.indicatorColor, 0.15);
+          ctx.fillRect(px - 4, 0, 8, CANVAS_H);
+          ctx.strokeStyle = theme.indicatorColor;
           ctx.lineWidth = 1.4;
           ctx.beginPath();
           ctx.moveTo(px, 0);
@@ -865,78 +741,52 @@ function RegionPanel({
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  const labelColor = LABEL_COLORS[region.label];
-  const borderColor = isPlaying
-    ? `${labelColor}70`
-    : "rgba(255, 255, 255, 0.06)";
+  const chipStyle: React.CSSProperties = {
+    fontSize: "var(--fs-caption)",
+    lineHeight: "14px",
+    padding: "1px var(--space-6)",
+    borderRadius: "var(--radius-xs)",
+    background: "color-mix(in srgb, var(--bg-active) 80%, transparent)",
+  };
 
   return (
     <div
       style={{
         position: "relative",
-        background: "linear-gradient(180deg, #0f1328 0%, #0a0d1c 100%)",
-        border: `1px solid ${borderColor}`,
-        borderRadius: 10,
+        backgroundColor: "var(--bg-active)",
+        borderRadius: "var(--radius-xl)",
         overflow: "hidden",
-        boxShadow: isPlaying ? `0 0 24px -6px ${labelColor}55` : "0 1px 0 rgba(255, 255, 255, 0.02) inset",
-        transition: "border-color 180ms, box-shadow 180ms",
       }}
     >
-      {/* Colored rim on the left — subtle identifier for the category */}
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 2,
-          background: labelColor,
-          opacity: 0.8,
-        }}
-      />
-      <canvas ref={canvasRef} style={{ display: "block", width: CANVAS_W, height: CANVAS_H }} />
+      <canvas ref={canvasRef} style={{ display: "block", width: CANVAS_W, height: CANVAS_H, maxWidth: "100%" }} />
 
       {/* Overlay strip: label + pick count */}
       <div
         style={{
           position: "absolute",
-          top: 6,
-          left: 8,
-          right: 8,
+          top: "var(--space-6)",
+          left: "var(--space-8)",
+          right: "var(--space-8)",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           pointerEvents: "none",
         }}
       >
-        <span
-          style={{
-            fontFamily: MONO_FAMILY,
-            fontSize: 9,
-            fontWeight: 800,
-            letterSpacing: 1.8,
-            color: labelColor,
-            background: "rgba(10, 13, 28, 0.72)",
-            padding: "2px 7px",
-            borderRadius: 3,
-          }}
-        >
-          {region.label}
+        <span style={{ ...chipStyle, fontWeight: 600, color: "var(--text-primary)" }}>
+          {LABEL_TEXT[region.label]}
         </span>
         <span
           style={{
-            fontFamily: MONO_FAMILY,
-            fontSize: 10,
-            fontWeight: 700,
-            color: "#ffc678",
-            background: "rgba(10, 13, 28, 0.72)",
-            padding: "1px 7px",
-            borderRadius: 3,
+            ...chipStyle,
+            fontFamily: "var(--font-mono)",
+            fontWeight: 600,
+            color: "var(--text-primary)",
             fontVariantNumeric: "tabular-nums",
           }}
         >
           {regionPicks.length}
-          <span style={{ fontSize: 7, marginLeft: 2, color: "rgba(255, 198, 120, 0.6)" }}>onsets</span>
+          <span style={{ fontFamily: "var(--font-sans)", fontWeight: 400, marginLeft: "var(--space-4)", color: "var(--text-secondary)" }}>onsets</span>
         </span>
       </div>
 
@@ -946,38 +796,30 @@ function RegionPanel({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          padding: "3px 8px",
-          background: "rgba(0, 0, 0, 0.4)",
-          borderTop: "1px solid rgba(255, 255, 255, 0.04)",
+          padding: "var(--space-4) var(--space-8)",
+          borderTop: "var(--rule) solid var(--separator)",
         }}
       >
         <span
           style={{
-            fontFamily: MONO_FAMILY,
-            fontSize: 9,
-            color: "rgba(255, 255, 255, 0.42)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--fs-caption)",
+            color: "var(--text-secondary)",
             fontVariantNumeric: "tabular-nums",
           }}
         >
           {fmtTime(region.startTime)} – {fmtTime(region.endTime)}
         </span>
-        <button
+        <Button
+          size="sm"
+          variant={isPlaying ? "secondary" : "ghost"}
+          icon={isPlaying ? Square : Play}
+          aria-pressed={isPlaying}
           onClick={onPlay}
-          style={{
-            background: isPlaying ? "rgba(255, 168, 50, 0.18)" : "rgba(255, 255, 255, 0.04)",
-            border: "none",
-            borderRadius: 4,
-            padding: "2px 10px",
-            cursor: "pointer",
-            fontSize: 9,
-            color: isPlaying ? "#ffc678" : "rgba(255, 255, 255, 0.55)",
-            fontFamily: "inherit",
-            fontWeight: isPlaying ? 700 : 500,
-            letterSpacing: 0.4,
-          }}
+          style={isPlaying ? { color: "var(--accent-primary)", backgroundColor: "var(--accent-selected)" } : undefined}
         >
-          {isPlaying ? "◼ Stop" : "▶ Play"}
-        </button>
+          {isPlaying ? "Stop" : "Play"}
+        </Button>
       </div>
     </div>
   );

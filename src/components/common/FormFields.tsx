@@ -8,6 +8,10 @@
 import type React from "react";
 import { useState, useEffect, useRef } from "react";
 import type { Beat } from "../../types/chart";
+import { INPUT_STYLE, SELECT_STYLE } from "./UIKit";
+import { Tooltip } from "./Tooltip";
+
+const NUMERIC_STYLE: React.CSSProperties = { ...INPUT_STYLE, fontFamily: "var(--font-mono)" };
 
 /**
  * Safely parse a numeric input value.
@@ -49,19 +53,12 @@ export function Field({
 
   return (
     <label className="flex items-center gap-2 text-xs">
-      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-secondary)" }}>
         {label}
       </span>
       <input
-        className="flex-1 px-1 py-0.5 text-xs"
-        style={{
-          backgroundColor: "var(--bg-tertiary)",
-          color: "var(--text-primary)",
-          border: "0.5px solid var(--border-color)",
-          borderRadius: 6,
-          height: 24,
-          fontSize: 11,
-        }}
+        className="flex-1 w-0 min-w-0 px-1 py-0.5 text-xs"
+        style={type === "number" ? NUMERIC_STYLE : INPUT_STYLE}
         type={type}
         step={step}
         value={localValue}
@@ -173,6 +170,7 @@ export function NumericInput({
   placeholder,
   disabled,
   title,
+  "aria-label": ariaLabel,
   onFocus,
   onBlur,
 }: {
@@ -192,6 +190,7 @@ export function NumericInput({
   placeholder?: string;
   disabled?: boolean;
   title?: string;
+  "aria-label"?: string;
   onFocus?: (e: React.FocusEvent<HTMLInputElement>) => void;
   onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
 }) {
@@ -199,10 +198,13 @@ export function NumericInput({
   // Set on Escape so the blur it triggers reverts instead of committing.
   const skipCommitRef = useRef(false);
 
-  // Sync external value → local when the prop changes from outside.
-  useEffect(() => {
+  // Sync external value → local when the prop changes from outside
+  // (adjusted during render, so there is no stale frame).
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (!Object.is(value, syncedValue)) {
+    setSyncedValue(value);
     setLocalValue(value == null ? "" : String(value));
-  }, [value]);
+  }
 
   const commit = () => {
     const result = resolveNumericCommit(localValue, { min, max, integer, fallback, optional });
@@ -217,7 +219,7 @@ export function NumericInput({
     }
   };
 
-  return (
+  const input = (
     <input
       type="number"
       step={step}
@@ -225,7 +227,7 @@ export function NumericInput({
       max={max}
       placeholder={placeholder}
       disabled={disabled}
-      title={title}
+      aria-label={ariaLabel ?? title}
       value={localValue}
       style={style}
       className={className}
@@ -259,7 +261,11 @@ export function NumericInput({
       }}
     />
   );
+  // `title` names the field and shows as the shared tooltip.
+  return title ? <Tooltip content={title}>{input}</Tooltip> : input;
 }
+/** Lets a CardRow pass its label down as this field's accessible name. */
+NumericInput.labelable = true;
 
 /** Select dropdown field */
 export function SelectField({
@@ -275,20 +281,12 @@ export function SelectField({
 }) {
   return (
     <label className="flex items-center gap-2 text-xs">
-      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-secondary)" }}>
         {label}
       </span>
       <select
-        className="flex-1 px-1 py-0.5 text-xs"
-        style={{
-          backgroundColor: "var(--bg-tertiary)",
-          color: "var(--text-primary)",
-          border: "0.5px solid var(--border-color)",
-          borderRadius: 6,
-          height: 24,
-          fontSize: 11,
-          cursor: "pointer",
-        }}
+        className="flex-1 w-0 min-w-0 px-1 py-0.5 text-xs"
+        style={SELECT_STYLE}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
@@ -325,58 +323,43 @@ export function BeatField({
 
   return (
     <label className="flex items-center gap-2 text-xs">
-      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-secondary)" }}>
         {label}
       </span>
       <div className="flex gap-1 flex-1">
-        <input
-          className="w-10 px-1 py-0.5 text-xs text-center"
-          style={{
-            backgroundColor: "var(--bg-tertiary)",
-            color: "var(--text-primary)",
-            border: "0.5px solid var(--border-color)",
-            borderRadius: 6,
-            height: 24,
-            fontSize: 11,
-          }}
-          type="number"
-          value={localWhole}
-          onChange={(e) => { setLocalWhole(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([Math.trunc(n), beat[1], beat[2]]); }}
-          title="Whole beats"
-        />
-        <input
-          className="w-10 px-1 py-0.5 text-xs text-center"
-          style={{
-            backgroundColor: "var(--bg-tertiary)",
-            color: "var(--text-primary)",
-            border: "0.5px solid var(--border-color)",
-            borderRadius: 6,
-            height: 24,
-            fontSize: 11,
-          }}
-          type="number"
-          min={0}
-          value={localNum}
-          onChange={(e) => { setLocalNum(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([beat[0], Math.trunc(n), beat[2]]); }}
-          title="Numerator"
-        />
+        <Tooltip content="Whole beats">
+          <input
+            className="w-10 px-1 py-0.5 text-xs text-center"
+            style={NUMERIC_STYLE}
+            type="number"
+            value={localWhole}
+            onChange={(e) => { setLocalWhole(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([Math.trunc(n), beat[1], beat[2]]); }}
+            aria-label={`${label}: whole beats`}
+          />
+        </Tooltip>
+        <Tooltip content="Numerator">
+          <input
+            className="w-10 px-1 py-0.5 text-xs text-center"
+            style={NUMERIC_STYLE}
+            type="number"
+            min={0}
+            value={localNum}
+            onChange={(e) => { setLocalNum(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([beat[0], Math.trunc(n), beat[2]]); }}
+            aria-label={`${label}: numerator`}
+          />
+        </Tooltip>
         <span style={{ color: "var(--text-muted)" }}>/</span>
-        <input
-          className="w-10 px-1 py-0.5 text-xs text-center"
-          style={{
-            backgroundColor: "var(--bg-tertiary)",
-            color: "var(--text-primary)",
-            border: "0.5px solid var(--border-color)",
-            borderRadius: 6,
-            height: 24,
-            fontSize: 11,
-          }}
-          type="number"
-          min={1}
-          value={localDen}
-          onChange={(e) => { setLocalDen(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([beat[0], beat[1], Math.max(1, Math.trunc(n))]); }}
-          title="Denominator"
-        />
+        <Tooltip content="Denominator">
+          <input
+            className="w-10 px-1 py-0.5 text-xs text-center"
+            style={NUMERIC_STYLE}
+            type="number"
+            min={1}
+            value={localDen}
+            onChange={(e) => { setLocalDen(e.target.value); const n = safeParseNumber(e.target.value); if (n !== null) onChange([beat[0], beat[1], Math.max(1, Math.trunc(n))]); }}
+            aria-label={`${label}: denominator`}
+          />
+        </Tooltip>
       </div>
     </label>
   );

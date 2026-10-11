@@ -45,22 +45,28 @@ export interface PopoutWindowResult {
 
 // ---- Floating overlay styles (used as Tauri fallback) ----
 
+/** The overlay element carries its drag cleanup and close button. */
+type FloatingOverlay = HTMLDivElement & {
+  __cleanupDrag?: () => void;
+  __closeBtn?: HTMLButtonElement;
+};
+
 function createFloatingOverlay(title: string, width: number, height: number): {
-  overlay: HTMLDivElement;
+  overlay: FloatingOverlay;
   container: HTMLDivElement;
 } {
-  const overlay = document.createElement("div");
+  const overlay: FloatingOverlay = document.createElement("div");
   overlay.style.cssText = `
     position: fixed;
     top: 50px; left: 50%;
     transform: translateX(-50%);
     width: ${width}px; height: ${height}px;
     min-width: 200px; min-height: 150px;
-    background: var(--bg-primary, #111118);
-    border: 1px solid var(--border-color, #2a2a35);
-    border-radius: 10px;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
-    z-index: 9000;
+    background: var(--bg-secondary);
+    border: var(--rule) solid var(--border-color);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-modal);
+    z-index: var(--z-overlay);
     display: flex; flex-direction: column;
     overflow: hidden;
     resize: both;
@@ -70,33 +76,32 @@ function createFloatingOverlay(title: string, width: number, height: number): {
   const titleBar = document.createElement("div");
   titleBar.style.cssText = `
     display: flex; align-items: center; justify-content: space-between;
-    padding: 6px 10px;
-    background: var(--bg-secondary, #1a1a24);
-    border-bottom: 1px solid var(--border-color, #2a2a35);
+    height: var(--panel-header-height);
+    padding: 0 var(--space-6) 0 var(--space-12);
+    background: var(--bg-secondary);
+    border-bottom: var(--rule) solid var(--border-color);
     cursor: grab; user-select: none; flex-shrink: 0;
-    font-size: 11px; font-family: inherit;
-    color: var(--text-secondary, #aaa);
+    font-size: var(--fs-headline); font-weight: 600; font-family: inherit;
+    color: var(--text-primary);
   `;
   titleBar.textContent = title;
 
   // Close button
   const closeBtn = document.createElement("button");
-  closeBtn.textContent = "\u2715";
-  closeBtn.style.cssText = `
-    background: none; border: none; color: var(--text-muted, #666);
-    font-size: 13px; cursor: pointer; padding: 2px 6px; border-radius: 4px;
-    line-height: 1;
-  `;
-  closeBtn.onmouseenter = () => { closeBtn.style.background = "rgba(255,255,255,0.08)"; closeBtn.style.color = "#fff"; };
-  closeBtn.onmouseleave = () => { closeBtn.style.background = "none"; closeBtn.style.color = "var(--text-muted, #666)"; };
+  closeBtn.type = "button";
+  closeBtn.className = "ui-icon-btn ui-icon-btn--md";
+  closeBtn.setAttribute("aria-label", "Close");
+  closeBtn.title = "Close";
+  // Lucide "x" at the design system's 1.5px stroke (static markup, no user input).
+  closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
   titleBar.appendChild(closeBtn);
 
   // ---- Content container (for React portal) ----
   const container = document.createElement("div");
   container.style.cssText = `
     flex: 1; overflow: auto;
-    color: var(--text-primary, #e0e0e8);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
   `;
 
   overlay.appendChild(titleBar);
@@ -136,11 +141,11 @@ function createFloatingOverlay(title: string, width: number, height: number): {
   document.addEventListener("mouseup", onMouseUp);
 
   // Store cleanup for later
-  (overlay as any).__cleanupDrag = () => {
+  overlay.__cleanupDrag = () => {
     document.removeEventListener("mousemove", onMouseMove);
     document.removeEventListener("mouseup", onMouseUp);
   };
-  (overlay as any).__closeBtn = closeBtn;
+  overlay.__closeBtn = closeBtn;
 
   return { overlay, container };
 }
@@ -158,7 +163,7 @@ export function usePopoutWindow(
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const windowRef = useRef<Window | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const overlayRef = useRef<FloatingOverlay | null>(null);
 
   const openPopout = useCallback(() => {
     // ---- Tauri mode: floating overlay (window.open is blocked by WebView2) ----
@@ -170,9 +175,9 @@ export function usePopoutWindow(
       overlayRef.current = overlay;
 
       // Wire close button
-      const closeBtn = (overlay as any).__closeBtn as HTMLButtonElement;
+      const closeBtn = overlay.__closeBtn as HTMLButtonElement;
       closeBtn.onclick = () => {
-        (overlay as any).__cleanupDrag?.();
+        overlay.__cleanupDrag?.();
         overlay.remove();
         overlayRef.current = null;
         setPopoutWindow(null);
@@ -201,10 +206,9 @@ export function usePopoutWindow(
     // Match app theme
     w.document.body.style.margin = "0";
     w.document.body.style.padding = "0";
-    w.document.body.style.backgroundColor = "var(--bg-primary, #111118)";
-    w.document.body.style.color = "var(--text-primary, #e0e0e8)";
-    w.document.body.style.fontFamily =
-      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif";
+    w.document.body.style.backgroundColor = "var(--bg-secondary)";
+    w.document.body.style.color = "var(--text-primary)";
+    w.document.body.style.fontFamily = "var(--font-sans)";
     w.document.body.style.overflow = "hidden";
     w.document.body.style.height = "100vh";
 
@@ -239,7 +243,7 @@ export function usePopoutWindow(
   const closePopout = useCallback(() => {
     // ---- Tauri mode: remove floating overlay ----
     if (overlayRef.current) {
-      (overlayRef.current as any).__cleanupDrag?.();
+      overlayRef.current.__cleanupDrag?.();
       overlayRef.current.remove();
       overlayRef.current = null;
       setPopoutWindow(null);
@@ -265,7 +269,7 @@ export function usePopoutWindow(
     return () => {
       // Tauri overlay cleanup
       if (overlayRef.current) {
-        (overlayRef.current as any).__cleanupDrag?.();
+        overlayRef.current.__cleanupDrag?.();
         overlayRef.current.remove();
         overlayRef.current = null;
       }

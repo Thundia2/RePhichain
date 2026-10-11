@@ -2,23 +2,46 @@
 // ContextPanelSidebar — Wrapper with collapsed / popped-out states
 //
 // Three visual states:
-// 1. Collapsed  — 36px vertical strip with icon + rotated label
-// 2. Popped out — 36px indicator strip; panel renders via portal
+// 1. Collapsed  — rail-width strip with one "open panel" button
+// 2. Popped out — rail-width strip with one "bring back" button;
+//                 the panel renders via portal
 // 3. Normal     — 290px inline panel
 //
 // Pop-out uses usePopoutWindow to open a separate browser window
 // and createPortal to render ContextPanel inside it.
 // ============================================================
 
+import type React from "react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect } from "react";
 import { useContextPanelStore } from "../../stores/contextPanelStore";
 import { usePopoutWindow } from "../../hooks/usePopoutWindow";
+import { PanelRightOpen, PanelRightDashed } from "lucide-react";
 import { ContextPanel } from "./ContextPanel";
 import type { ContextPanelProps } from "./ContextPanel";
+import { IconButton } from "../common/IconButton";
 
-const PANEL_WIDTH = 290;
-const COLLAPSED_WIDTH = 36;
+const PANEL_WIDTH = "var(--panel-width)";
+
+/** Collapsed / popped-out strip: one IconButton at the top of a rail-width column. */
+function RailStrip({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        width: "var(--rail-width)",
+        flexShrink: 0,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        paddingTop: "var(--space-8)",
+        background: "var(--bg-secondary)",
+        borderLeft: "var(--rule) solid var(--border-color)",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 export function ContextPanelSidebar(props: ContextPanelProps) {
   const collapsed = useContextPanelStore((s) => s.collapsed);
@@ -96,55 +119,9 @@ export function ContextPanelSidebar(props: ContextPanelProps) {
   if (poppedOut) {
     return (
       <>
-        {/* Inline indicator strip */}
-        <div
-          onClick={handleBringBack}
-          title="Popped out -- click to bring back"
-          style={{
-            width: COLLAPSED_WIDTH,
-            flexShrink: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            background: "var(--bg-secondary)",
-            borderLeft: "1px solid var(--border-color)",
-            cursor: "pointer",
-            transition: "background 0.15s",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background =
-              "var(--bg-tertiary)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.background =
-              "var(--bg-secondary)";
-          }}
-        >
-          <span
-            style={{
-              fontSize: 16,
-              color: "var(--accent-primary)",
-              lineHeight: 1,
-            }}
-          >
-            {"\u2197"}
-          </span>
-          <span
-            style={{
-              writingMode: "vertical-rl",
-              textOrientation: "mixed",
-              fontSize: 9,
-              fontWeight: 600,
-              letterSpacing: "1.2px",
-              textTransform: "uppercase",
-              color: "var(--text-muted)",
-            }}
-          >
-            POPPED
-          </span>
-        </div>
+        <RailStrip>
+          <IconButton icon={PanelRightDashed} label="Panel is in its own window. Bring it back" tooltipPosition="left" active onClick={handleBringBack} />
+        </RailStrip>
 
         {/* Render into popout window via portal */}
         {containerEl && createPortal(panelElement, containerEl)}
@@ -156,57 +133,9 @@ export function ContextPanelSidebar(props: ContextPanelProps) {
 
   if (collapsed) {
     return (
-      <div
-        onClick={handleExpand}
-        title="Expand context panel"
-        style={{
-          width: COLLAPSED_WIDTH,
-          flexShrink: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 10,
-          background: "var(--bg-secondary)",
-          borderLeft: "1px solid var(--border-color)",
-          cursor: "pointer",
-          transition: "background 0.15s",
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.background =
-            "var(--bg-tertiary)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.background =
-            "var(--bg-secondary)";
-        }}
-      >
-        {/* Icon */}
-        <span
-          style={{
-            fontSize: 16,
-            color: "var(--accent-primary)",
-            lineHeight: 1,
-          }}
-        >
-          {"\u25CE"}
-        </span>
-
-        {/* Rotated label */}
-        <span
-          style={{
-            writingMode: "vertical-rl",
-            textOrientation: "mixed",
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: "1.5px",
-            textTransform: "uppercase",
-            color: "var(--text-muted)",
-          }}
-        >
-          CONTEXT
-        </span>
-      </div>
+      <RailStrip>
+        <IconButton icon={PanelRightOpen} label="Open context panel" tooltipPosition="left" onClick={handleExpand} />
+      </RailStrip>
     );
   }
 
@@ -217,12 +146,11 @@ export function ContextPanelSidebar(props: ContextPanelProps) {
       style={{
         width: PANEL_WIDTH,
         flexShrink: 0,
-        borderLeft: "1px solid var(--border-color)",
+        borderLeft: "var(--rule) solid var(--border-color)",
         display: "flex",
         flexDirection: "column",
         height: "100%",
         overflow: "hidden",
-        transition: "width 0.2s ease",
       }}
     >
       {panelElement}

@@ -5,12 +5,34 @@
 // Shows status, step size presets, note kind selector, and exit.
 // Renders above the mode content in all ContextPanel modes.
 //
-// Recent change: Initial creation for Section D (ContextPanel).
+// Filled bg-active banner using the single accent; note kinds show
+// their NoteGlyph. Initial creation for Section D (ContextPanel).
 // ============================================================
 
+import type React from "react";
+import { Minus, Plus, X } from "lucide-react";
 import { useEditorStore } from "../../stores/editorStore";
+import type { NoteKind } from "../../types/chart";
+import { IconButton } from "../common/IconButton";
+import { NoteGlyph } from "../common/NoteGlyph";
+import { SegmentedControl } from "../common/SegmentedControl";
+import { Button } from "../common/Button";
+import { ActionKbd, Kbd } from "../common/Kbd";
+import { Pill } from "../common/UIKit";
 import { STEP_PRESETS, formatStepSize } from "../../utils/stepPresets";
 import { snapBeat, formatBeat } from "../../utils/beat";
+
+const NOTE_KINDS: Array<{ value: NoteKind; label: string }> = [
+  { value: "tap", label: "Tap" },
+  { value: "drag", label: "Drag" },
+  { value: "flick", label: "Flick" },
+  { value: "hold", label: "Hold" },
+];
+
+const HINT_ROW: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: "var(--space-6)",
+  fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginBottom: "var(--space-4)",
+};
 
 export function StepRecordBanner() {
   const active = useEditorStore((s) => s.stepRecordActive);
@@ -32,135 +54,94 @@ export function StepRecordBanner() {
 
   return (
     <div style={{
-      margin: "0 0 6px 0",
-      padding: "8px",
-      background: "rgba(34, 211, 238, 0.06)",
-      border: "1px solid rgba(34, 211, 238, 0.2)",
-      borderRadius: 6,
+      margin: "0 0 var(--space-6) 0",
+      padding: "var(--space-8) var(--space-10)",
+      background: "var(--bg-active)",
+      borderRadius: "var(--radius-lg)",
+      display: "flex", flexDirection: "column", gap: "var(--space-8)",
     }}>
       {/* Scoped pulse animation */}
       <style>{`@keyframes stepPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }`}</style>
 
       {/* ---- Status line ---- */}
       <div style={{
-        display: "flex", alignItems: "center", gap: 6,
-        marginBottom: 6, fontSize: 10,
+        display: "flex", alignItems: "center", gap: "var(--space-6)",
+        fontSize: "var(--fs-caption)",
       }}>
         {/* Pulsing dot */}
         <span style={{
-          width: 6, height: 6, borderRadius: "50%",
-          background: "#22d3ee",
-          boxShadow: "0 0 4px #22d3ee",
+          width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+          background: "var(--accent-primary)",
           animation: "stepPulse 1.2s ease-in-out infinite",
         }} />
-        <span style={{ color: "#22d3ee", fontWeight: 700 }}>STEP</span>
-        <span style={{ color: "var(--text-secondary)" }}>
-          {noteKind.toUpperCase()} · {stepLabel} · Beat {beatLabel}
+        <span style={{ color: "var(--accent-primary)", fontWeight: 600, fontSize: "var(--fs-control)" }}>Step record</span>
+        <NoteGlyph kind={noteKind} size={12} />
+        <span style={{ color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
+          {stepLabel} · Beat {beatLabel}
         </span>
-        <span style={{ marginLeft: "auto", color: "var(--text-muted)", fontSize: 9 }}>
+        <span style={{ marginLeft: "auto", color: "var(--text-secondary)" }}>
           {notesPlaced} placed
         </span>
       </div>
 
       {/* ---- Step size presets ---- */}
-      <div style={{ marginBottom: 4 }}>
-        <div style={{
-          fontSize: 9, color: "var(--text-muted)", marginBottom: 2,
-        }}>
-          Step Size <span style={{ opacity: 0.5 }}>(Shift+Up/Down)</span>
+      <div>
+        <div style={HINT_ROW}>
+          Step size <Kbd>Shift+Up/Down</Kbd>
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 2, alignItems: "center" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", alignItems: "center" }}>
           {/* Halve step size button */}
-          <button
+          <IconButton
+            icon={Minus}
+            label="Halve step size"
+            shortcut="Shift+Down"
+            size="sm"
             onClick={halveStepSize}
             disabled={stepSize <= 1 / 32}
-            title="Halve step size (Shift+\u2193)"
-            style={{
-              fontSize: 11, padding: "2px 5px", borderRadius: 3,
-              border: "none", cursor: stepSize <= 1 / 32 ? "not-allowed" : "pointer", fontFamily: "inherit",
-              background: "var(--bg-active)", color: "var(--text-muted)",
-              opacity: stepSize <= 1 / 32 ? 0.3 : 1,
-              fontWeight: 700, transition: "all 0.1s",
-            }}
-          >
-            −
-          </button>
+          />
           {STEP_PRESETS.map((p) => {
             const isActive = Math.abs(stepSize - p.value) < 0.0001;
             return (
-              <button key={p.label} onClick={() => setStepSize(p.value)} style={{
-                fontSize: 9, padding: "2px 6px", borderRadius: 3,
-                border: "none", cursor: "pointer", fontFamily: "inherit",
-                background: isActive ? "#22d3ee" : "var(--bg-active)",
-                color: isActive ? "#000" : "var(--text-muted)",
-                fontWeight: isActive ? 700 : 400,
-                transition: "all 0.1s",
-              }}>
-                {p.label}
-              </button>
+              <Pill key={p.label} active={isActive} onClick={() => setStepSize(p.value)}>
+                <span style={{ fontFamily: "var(--font-mono)" }}>{p.label}</span>
+              </Pill>
             );
           })}
           {/* Double step size button */}
-          <button
+          <IconButton
+            icon={Plus}
+            label="Double step size"
+            shortcut="Shift+Up"
+            size="sm"
             onClick={doubleStepSize}
             disabled={stepSize >= 4}
-            title="Double step size (Shift+\u2191)"
-            style={{
-              fontSize: 11, padding: "2px 5px", borderRadius: 3,
-              border: "none", cursor: stepSize >= 4 ? "not-allowed" : "pointer", fontFamily: "inherit",
-              background: "var(--bg-active)", color: "var(--text-muted)",
-              opacity: stepSize >= 4 ? 0.3 : 1,
-              fontWeight: 700, transition: "all 0.1s",
-            }}
-          >
-            +
-          </button>
+          />
         </div>
       </div>
 
       {/* ---- Note kind selector ---- */}
-      <div style={{ marginBottom: 6 }}>
-        <div style={{
-          fontSize: 9, color: "var(--text-muted)", marginBottom: 2,
-        }}>
-          Note Kind <span style={{ opacity: 0.5 }}>(Q/W/E/R)</span>
+      <div>
+        <div style={HINT_ROW}>
+          Note kind <ActionKbd action="place_tap" /> <ActionKbd action="place_drag" />{" "}
+          <ActionKbd action="place_flick" /> <ActionKbd action="place_hold" />
         </div>
-        <div style={{ display: "flex", gap: 2 }}>
-          {(["tap", "drag", "flick", "hold"] as const).map((kind) => (
-            <button key={kind} onClick={() => setNoteKind(kind)} style={{
-              flex: 1, fontSize: 9, padding: "4px 0", borderRadius: 3,
-              border: "none", cursor: "pointer", fontFamily: "inherit",
-              background: noteKind === kind ? "#22d3ee" : "var(--bg-active)",
-              color: noteKind === kind ? "#000" : "var(--text-muted)",
-              fontWeight: noteKind === kind ? 700 : 400,
-              textTransform: "capitalize",
-              transition: "all 0.1s",
-            }}>
-              {kind}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Step record note kind"
+          size="sm"
+          block
+          options={NOTE_KINDS.map((k) => ({
+            value: k.value,
+            label: <><NoteGlyph kind={k.value} size={12} />{k.label}</>,
+          }))}
+          value={noteKind}
+          onChange={(k) => setNoteKind(k)}
+        />
       </div>
 
       {/* ---- Exit button ---- */}
-      <button onClick={exitStepRecord} style={{
-        width: "100%", fontSize: 9, padding: "3px 0", borderRadius: 3,
-        border: "1px solid rgba(34, 211, 238, 0.2)",
-        background: "transparent", color: "var(--text-muted)",
-        cursor: "pointer", fontFamily: "inherit",
-        transition: "all 0.1s",
-      }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = "rgba(34, 211, 238, 0.1)";
-          e.currentTarget.style.color = "#22d3ee";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "transparent";
-          e.currentTarget.style.color = "var(--text-muted)";
-        }}
-      >
-        Exit Step Record (S / Esc)
-      </button>
+      <Button size="sm" icon={X} block onClick={exitStepRecord}>
+        Exit step record (S / Esc)
+      </Button>
     </div>
   );
 }

@@ -6,7 +6,19 @@
 // ============================================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { ChevronDown } from "lucide-react";
 import { useFavoritesStore } from "../../stores/favoritesStore";
+import { chromeTheme } from "../../canvas/chromeTheme";
+import { Icon } from "./Icon";
+import { Tooltip } from "./Tooltip";
+
+/** Sentence-case group label inside the popover. */
+const GROUP_LABEL_STYLE: React.CSSProperties = {
+  fontSize: "var(--fs-caption)",
+  fontWeight: 600,
+  color: "var(--text-secondary)",
+  margin: "0 var(--space-2) var(--space-4)",
+};
 
 const EASING_FAMILIES = [
   { name: "Linear", easings: ["linear"] },
@@ -34,17 +46,17 @@ function EasingThumb({ easing, size = 24 }: { easing: string; size?: number }) {
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
 
-    ctx.strokeStyle = "#666";
+    const t = chromeTheme();
+    ctx.strokeStyle = t.textMuted;
     ctx.lineWidth = 1;
     ctx.setLineDash([1, 2]);
     ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(W, 0); ctx.stroke();
     ctx.setLineDash([]);
 
     // Draw easing curve. E8: a canvas ctx can't resolve a CSS var() string — it silently
-    // ignores the assignment (the curve then drew in the dashed guide's grey). Resolve
-    // the variable to a concrete color first.
-    const accent = getComputedStyle(canvas).getPropertyValue("--accent-primary").trim() || "#6366f1";
-    ctx.strokeStyle = accent;
+    // ignores the assignment (the curve then drew in the dashed guide's grey). chromeTheme()
+    // resolves the token to a concrete color first.
+    ctx.strokeStyle = t.accentPrimary;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let i = 0; i <= W; i++) {
@@ -134,47 +146,49 @@ export function EasingPicker({
 
   return (
     <div style={{ position: "relative" }}>
-      <label className="flex items-center gap-2 text-xs">
-        <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+      <label style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", fontSize: "var(--fs-control)" }}>
+        <span style={{ width: 64, textAlign: "right", flexShrink: 0, color: "var(--text-secondary)" }}>
           {label}
         </span>
         <button
           ref={triggerRef}
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={open}
           onClick={() => setOpen(!open)}
           style={{
-            display: "flex", alignItems: "center", gap: 4,
-            padding: "2px 6px", borderRadius: 4,
-            border: "1px solid var(--border-color)",
-            background: "var(--bg-primary)", color: "var(--text-primary)",
-            cursor: "pointer", fontSize: 11, fontFamily: "inherit",
-            flex: 1, textAlign: "left",
+            display: "flex", alignItems: "center", gap: "var(--space-4)",
+            height: "var(--control-md)", padding: "0 var(--space-6)", borderRadius: "var(--radius-md)",
+            border: "var(--hairline) solid var(--border-color)",
+            background: "var(--bg-tertiary)", color: "var(--text-primary)",
+            cursor: "pointer", fontSize: "var(--fs-control)", fontFamily: "inherit",
+            flex: 1, minWidth: 0, textAlign: "left",
           }}
         >
           <EasingThumb easing={value} size={16} />
           <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {displayName}
           </span>
-          <span style={{ color: "var(--text-muted)", fontSize: 9 }}>▾</span>
+          <Icon icon={ChevronDown} size={12} style={{ color: "var(--text-secondary)" }} />
         </button>
       </label>
 
       {open && (
         <div
           ref={panelRef}
+          role="dialog"
+          aria-label={`${label} curves`}
+          className="ui-popover"
           style={{
-            position: "absolute", top: "100%", left: 0, zIndex: 10001,
-            background: "var(--bg-secondary)", border: "1px solid var(--border-color)",
-            borderRadius: 8, padding: 8, marginTop: 4,
+            position: "absolute", top: "100%", left: 0, zIndex: "var(--z-tooltip)",
+            padding: "var(--space-8)", marginTop: "var(--space-4)",
             width: 260, maxHeight: 350, overflowY: "auto",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
           }}
         >
           {/* Favorites */}
           {favoriteEasings.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 4, textTransform: "uppercase" }}>
-                Favorites
-              </div>
+            <div style={{ marginBottom: "var(--space-8)" }}>
+              <div style={GROUP_LABEL_STYLE}>Favorites</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
                 {favoriteEasings.map((e) => (
                   <EasingCell key={e} easing={e} selected={e === value}
@@ -186,10 +200,8 @@ export function EasingPicker({
 
           {/* Recents */}
           {recentEasings.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 4, textTransform: "uppercase" }}>
-                Recent
-              </div>
+            <div style={{ marginBottom: "var(--space-8)" }}>
+              <div style={GROUP_LABEL_STYLE}>Recent</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
                 {recentEasings.slice(0, 5).map((e) => (
                   <EasingCell key={e} easing={e} selected={e === value}
@@ -202,10 +214,8 @@ export function EasingPicker({
 
           {/* All by family */}
           {EASING_FAMILIES.map((family) => (
-            <div key={family.name} style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 2 }}>
-                {family.name}
-              </div>
+            <div key={family.name} style={{ marginBottom: "var(--space-6)" }}>
+              <div style={GROUP_LABEL_STYLE}>{family.name}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
                 {family.easings.map((e) => (
                   <EasingCell key={e} easing={e} selected={e === value}
@@ -230,24 +240,36 @@ function EasingCell({
   isFav: boolean;
 }) {
   const shortName = easing.replace("ease_", "").replace(/_/g, " ");
+  const hint = (
+    <>
+      {easing.replace(/_/g, " ")}{isFav ? " (favorite)" : ""}
+      <br />
+      Right-click to {isFav ? "remove from" : "add to"} favorites
+    </>
+  );
   return (
-    <button
-      onClick={() => onSelect(easing)}
-      onContextMenu={(e) => { e.preventDefault(); onToggleFav(easing); }}
-      title={`${easing.replace(/_/g, " ")}${isFav ? " ★" : ""}\nRight-click to ${isFav ? "remove from" : "add to"} favorites`}
-      style={{
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
-        padding: 3, borderRadius: 4,
-        border: selected ? "1px solid var(--accent-primary)" : "1px solid transparent",
-        background: selected ? "var(--accent-primary)20" : "transparent",
-        cursor: "pointer", width: 56, fontSize: 8,
-        color: "var(--text-muted)", fontFamily: "inherit",
-      }}
-    >
-      <EasingThumb easing={easing} size={28} />
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 52 }}>
-        {shortName}
-      </span>
-    </button>
+    <Tooltip content={hint}>
+      <button
+        type="button"
+        className={selected ? undefined : "ui-hover"}
+        aria-pressed={selected}
+        onClick={() => onSelect(easing)}
+        onContextMenu={(e) => { e.preventDefault(); onToggleFav(easing); }}
+        aria-label={`${easing.replace(/_/g, " ")}${isFav ? ", favorite" : ""}`}
+        style={{
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
+          padding: "var(--space-2)", borderRadius: "var(--radius-md)", border: "none",
+          // Unselected cells take their hover wash from .ui-hover (no inline background).
+          background: selected ? "var(--accent-selected)" : undefined,
+          cursor: "pointer", width: 56, fontSize: "var(--fs-caption)",
+          color: selected ? "var(--accent-primary)" : "var(--text-secondary)", fontFamily: "inherit",
+        }}
+      >
+        <EasingThumb easing={easing} size={28} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 52 }}>
+          {shortName}
+        </span>
+      </button>
+    </Tooltip>
   );
 }

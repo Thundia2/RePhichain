@@ -3,10 +3,11 @@
 //
 // Ctrl+Alt+V opens this modal. Allows pasting clipboard contents
 // with transformations: mirror X, flip above/below, beat scaling,
-// X offset, and beat offset.
+// X offset, and beat offset. Rendered in the shared Dialog chrome.
 // ============================================================
 
 import { useState } from "react";
+import { ClipboardPaste } from "lucide-react";
 import { getSelectedLineIndex } from "../../stores/selection";
 import { useChartStore } from "../../stores/chartStore";
 import { getPlayheadBeat } from "../../utils/playhead";
@@ -14,6 +15,10 @@ import { getClipboard } from "../../hooks/useClipboard";
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import type { Note, LineEvent } from "../../types/chart";
 import { NumericInput } from "../common/FormFields";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
+import { ActionKbd } from "../common/Kbd";
+import { INPUT_STYLE } from "../common/UIKit";
 
 interface Props {
   open: boolean;
@@ -104,191 +109,117 @@ export function PasteSpecialDialog({ open, onClose }: Props) {
   };
 
   const inputStyle: React.CSSProperties = {
-    backgroundColor: "var(--bg-active)",
-    color: "var(--text-primary)",
-    border: "1px solid var(--border-color)",
-    outline: "none",
+    ...INPUT_STYLE,
+    width: "100%",
+    marginTop: "var(--space-6)",
+    fontFamily: "var(--font-mono)",
+  };
+
+  const fieldLabelStyle: React.CSSProperties = {
+    display: "block",
+    fontSize: "var(--fs-control)",
+    color: "var(--text-secondary)",
   };
 
   const checkboxRowStyle: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
-    gap: "8px",
+    gap: "var(--space-8)",
     color: "var(--text-primary)",
-    fontSize: "12px",
+    fontSize: "var(--fs-body)",
     cursor: "pointer",
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        style={{
-          width: "320px",
-          backgroundColor: "var(--bg-secondary)",
-          border: "1px solid var(--border-color)",
-          borderRadius: "8px",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 16px",
-            borderBottom: "1px solid var(--border-color)",
-          }}
-        >
-          <span style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: 600 }}>
-            Paste Special
-          </span>
-          <button
-            onClick={onClose}
-            style={{
-              color: "var(--text-muted)",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "14px",
-              padding: "0 4px",
-              borderRadius: "4px",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
-          >
-            X
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-          {!hasData && (
-            <div style={{ color: "var(--text-muted)", fontSize: "12px", textAlign: "center", padding: "8px 0" }}>
-              Nothing in clipboard. Copy notes/events first (Ctrl+C).
-            </div>
-          )}
-
-          {hasData && (
-            <>
-              <div style={{ color: "var(--text-secondary)", fontSize: "11px" }}>
-                Clipboard: {clipboard!.notes.length} note(s), {clipboard!.events.length} event(s)
-              </div>
-
-              {/* Checkboxes */}
-              <label style={checkboxRowStyle}>
-                <input
-                  type="checkbox"
-                  checked={mirrorX}
-                  onChange={(e) => setMirrorX(e.target.checked)}
-                  style={{ accentColor: "var(--accent-primary)" }}
-                />
-                Mirror X (negate horizontal position)
-              </label>
-
-              <label style={checkboxRowStyle}>
-                <input
-                  type="checkbox"
-                  checked={flipAboveBelow}
-                  onChange={(e) => setFlipAboveBelow(e.target.checked)}
-                  style={{ accentColor: "var(--accent-primary)" }}
-                />
-                Flip above/below
-              </label>
-
-              {/* Number inputs */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <label style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  Beat scale factor
-                  <NumericInput
-                    commitMode="blur"
-                    step="0.1"
-                    min={0.1}
-                    fallback={1}
-                    value={beatScale}
-                    onChange={setBeatScale}
-                    className="w-full mt-1 px-2 py-1 rounded text-xs"
-                    style={inputStyle}
-                  />
-                </label>
-
-                <label style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  X offset
-                  <NumericInput
-                    commitMode="blur"
-                    step="10"
-                    fallback={0}
-                    value={xOffset}
-                    onChange={setXOffset}
-                    className="w-full mt-1 px-2 py-1 rounded text-xs"
-                    style={inputStyle}
-                  />
-                </label>
-
-                <label style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  Beat offset
-                  <NumericInput
-                    commitMode="blur"
-                    step="0.25"
-                    fallback={0}
-                    value={beatOffset}
-                    onChange={setBeatOffset}
-                    className="w-full mt-1 px-2 py-1 rounded text-xs"
-                    style={inputStyle}
-                  />
-                </label>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "8px",
-            padding: "12px 16px",
-            borderTop: "1px solid var(--border-color)",
-          }}
-        >
-          <button
-            onClick={onClose}
-            style={{
-              padding: "6px 16px",
-              borderRadius: "4px",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "12px",
-              color: "var(--text-secondary)",
-              background: "transparent",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleApply}
-            disabled={!hasData}
-            style={{
-              padding: "6px 16px",
-              borderRadius: "4px",
-              border: "none",
-              cursor: hasData ? "pointer" : "not-allowed",
-              fontSize: "12px",
-              color: hasData ? "white" : "var(--text-muted)",
-              backgroundColor: hasData ? "var(--accent-primary)" : "var(--bg-active)",
-            }}
-          >
+    <Dialog
+      title="Paste special"
+      icon={ClipboardPaste}
+      onClose={onClose}
+      width={320}
+      headerExtra={<ActionKbd action="paste_special" />}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleApply} disabled={!hasData}>
             Apply
-          </button>
-        </div>
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-12)" }}>
+        {!hasData && (
+          <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-body)", textAlign: "center", padding: "var(--space-8) 0" }}>
+            Nothing in clipboard. Copy notes/events first (Ctrl+C).
+          </div>
+        )}
+
+        {hasData && (
+          <>
+            <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-control)" }}>
+              Clipboard: {clipboard!.notes.length} note(s), {clipboard!.events.length} event(s)
+            </div>
+
+            {/* Checkboxes */}
+            <label style={checkboxRowStyle}>
+              <input
+                type="checkbox"
+                checked={mirrorX}
+                onChange={(e) => setMirrorX(e.target.checked)}
+              />
+              Mirror X (negate horizontal position)
+            </label>
+
+            <label style={checkboxRowStyle}>
+              <input
+                type="checkbox"
+                checked={flipAboveBelow}
+                onChange={(e) => setFlipAboveBelow(e.target.checked)}
+              />
+              Flip above/below
+            </label>
+
+            {/* Number inputs */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+              <label style={fieldLabelStyle}>
+                Beat scale factor
+                <NumericInput
+                  commitMode="blur"
+                  step="0.1"
+                  min={0.1}
+                  fallback={1}
+                  value={beatScale}
+                  onChange={setBeatScale}
+                  style={inputStyle}
+                />
+              </label>
+
+              <label style={fieldLabelStyle}>
+                X offset
+                <NumericInput
+                  commitMode="blur"
+                  step="10"
+                  fallback={0}
+                  value={xOffset}
+                  onChange={setXOffset}
+                  style={inputStyle}
+                />
+              </label>
+
+              <label style={fieldLabelStyle}>
+                Beat offset
+                <NumericInput
+                  commitMode="blur"
+                  step="0.25"
+                  fallback={0}
+                  value={beatOffset}
+                  onChange={setBeatOffset}
+                  style={inputStyle}
+                />
+              </label>
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </Dialog>
   );
 }

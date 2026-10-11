@@ -1,4 +1,7 @@
 import { Component, type ReactNode } from "react";
+import { TriangleAlert, RotateCcw } from "lucide-react";
+import { Icon } from "./Icon";
+import { Button } from "./Button";
 
 interface Props {
   children: ReactNode;
@@ -27,38 +30,34 @@ export class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback;
 
       return (
-        <div style={{
-          padding: 16,
-          color: "var(--text-muted)",
-          fontSize: 12,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          gap: 8,
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
+        <div
+          role="alert"
+          style={{
+            padding: "var(--space-16)",
+            color: "var(--text-secondary)",
+            fontSize: "var(--fs-body)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "100%",
+            gap: "var(--space-8)",
+          }}
+        >
+          <Icon icon={TriangleAlert} size={20} style={{ color: "var(--error)" }} />
+          <div style={{ fontSize: "var(--fs-headline)", lineHeight: "18px", fontWeight: 600, color: "var(--text-primary)" }}>
             {this.props.panelName ?? "Panel"} crashed
           </div>
           <div style={{ maxWidth: 300, textAlign: "center", wordBreak: "break-word" }}>
             {this.state.error?.message ?? "Unknown error"}
           </div>
-          <button
+          <Button
+            icon={RotateCcw}
+            style={{ marginTop: "var(--space-4)" }}
             onClick={() => this.setState({ hasError: false, error: null })}
-            style={{
-              marginTop: 4,
-              padding: "4px 12px",
-              borderRadius: 4,
-              border: "1px solid var(--border-color)",
-              background: "var(--bg-secondary)",
-              color: "var(--text-primary)",
-              cursor: "pointer",
-              fontSize: 11,
-            }}
           >
             Retry
-          </button>
+          </Button>
         </div>
       );
     }

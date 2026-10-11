@@ -6,13 +6,19 @@
 // LineMode.tsx for size management.
 // ============================================================
 
+import type React from "react";
 import { useState } from "react";
+import { Check, ChevronDown, ChevronRight, Plus, X } from "lucide-react";
 import { useEditorStore } from "../../../stores/editorStore";
 import { useSelectedLineIndex } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import type { NoteControlEntry, EasingType } from "../../../types/chart";
 import { EASING_OPTIONS, NumericInput } from "../../common/FormFields";
 import { SectionHeader } from "../shared/SectionHeader";
+import { Icon } from "../../common/Icon";
+import { IconButton } from "../../common/IconButton";
+import { Button } from "../../common/Button";
+import { Toggle, INPUT_STYLE, SELECT_STYLE } from "../../common/UIKit";
 
 // ---- Control kind definitions ----
 
@@ -20,11 +26,17 @@ const CONTROL_KINDS = [
   { field: "pos_control" as const, label: "Position (X)", hint: "Multiplier for note X offset based on distance from line", defaultValue: 1.0 },
   { field: "alpha_control" as const, label: "Alpha", hint: "Note opacity (0-1) by distance from line", defaultValue: 1.0 },
   { field: "size_control" as const, label: "Size", hint: "Note size multiplier by distance from line", defaultValue: 1.0 },
-  { field: "y_control" as const, label: "Y Offset", hint: "Note vertical offset by distance from line", defaultValue: 0 },
+  { field: "y_control" as const, label: "Y offset", hint: "Note vertical offset by distance from line", defaultValue: 0 },
   { field: "skew_control" as const, label: "Skew", hint: "Note skew/shear by distance from line", defaultValue: 0 },
 ] as const;
 
 type ControlField = typeof CONTROL_KINDS[number]["field"];
+
+const GRID_COLUMNS = "56px 64px 1fr 20px";
+
+const CELL_INPUT: React.CSSProperties = {
+  ...INPUT_STYLE, width: "100%", minWidth: 0, padding: "0 var(--space-4)", fontFamily: "var(--font-mono)",
+};
 
 // ---- Controls Tab ----
 
@@ -70,8 +82,8 @@ export function ControlsTab() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 0" }}>
-      <div style={{ fontSize: 9, color: "var(--text-muted)", padding: "0 6px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", padding: "var(--space-4) 0" }}>
+      <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", padding: "0 var(--space-6)" }}>
         RPE note controls — define how note appearance changes based on distance from the judgment line.
       </div>
       {CONTROL_KINDS.map((kind) => {
@@ -79,59 +91,56 @@ export function ControlsTab() {
         const isExpanded = expandedKind === kind.field;
         return (
           <div key={kind.field} style={{
-            background: "var(--bg-primary)", borderRadius: 6,
-            border: "1px solid var(--border-color)", overflow: "hidden",
+            background: "var(--bg-active)", borderRadius: "var(--radius-xl)", overflow: "hidden",
           }}>
             {/* Header */}
             <button
+              type="button"
+              className="ui-hover"
+              aria-expanded={isExpanded}
               onClick={() => setExpandedKind(isExpanded ? null : kind.field)}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                width: "100%", padding: "5px 8px", background: "transparent",
+                width: "100%", minHeight: "var(--control-lg)", padding: "var(--space-4) var(--space-10)",
                 border: "none", cursor: "pointer", fontFamily: "inherit",
                 color: "var(--text-primary)",
               }}
             >
-              <span style={{ fontSize: 10, fontWeight: 600 }}>
+              <span style={{ fontSize: "var(--fs-control)", fontWeight: 600 }}>
                 {kind.label}
-                <span style={{ fontWeight: 400, color: "var(--text-muted)", marginLeft: 6, fontSize: 9 }}>
-                  {entries.length > 0 ? `${entries.length} pts` : "off"}
+                <span style={{ fontWeight: 400, color: "var(--text-secondary)", marginLeft: "var(--space-6)", fontSize: "var(--fs-caption)" }}>
+                  {entries.length > 0 ? `${entries.length} pts` : "Off"}
                 </span>
               </span>
-              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                {isExpanded ? "\u25BE" : "\u25B8"}
-              </span>
+              <Icon icon={isExpanded ? ChevronDown : ChevronRight} size={12} style={{ color: "var(--text-secondary)" }} />
             </button>
 
             {/* Expanded: entries table + add button */}
             {isExpanded && (
-              <div style={{ padding: "2px 6px 6px", borderTop: "1px solid var(--border-color)" }}>
-                <div style={{ fontSize: 8, color: "var(--text-muted)", marginBottom: 4 }}>{kind.hint}</div>
+              <div style={{ padding: "var(--space-4) var(--space-8) var(--space-8)", borderTop: "var(--rule) solid var(--separator)" }}>
+                <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginBottom: "var(--space-4)" }}>{kind.hint}</div>
 
                 {entries.length === 0 ? (
-                  <div style={{ fontSize: 9, color: "var(--text-muted)", padding: "6px 0", textAlign: "center" }}>
+                  <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", padding: "var(--space-6) 0", textAlign: "center" }}>
                     No control points. Add one to enable this control.
                   </div>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "50px 70px 1fr 20px", gap: 3, fontSize: 8, color: "var(--text-muted)", padding: "0 2px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS, gap: "var(--space-4)", fontSize: "var(--fs-caption)", color: "var(--text-secondary)", padding: "0 var(--space-2)" }}>
                       <span>Dist</span>
                       <span>Value</span>
                       <span>Easing</span>
                       <span></span>
                     </div>
                     {entries.map((entry, i) => (
-                      <div key={i} style={{ display: "grid", gridTemplateColumns: "50px 70px 1fr 20px", gap: 3, alignItems: "center" }}>
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS, gap: "var(--space-4)", alignItems: "center" }}>
                         <NumericInput
                           commitMode="blur"
                           fallback={0}
                           value={entry.x}
                           onChange={(v) => updateEntry(kind.field, i, { x: v })}
-                          style={{
-                            width: "100%", fontSize: 10, padding: "2px 4px", borderRadius: 3,
-                            border: "1px solid var(--border-color)", background: "var(--bg-tertiary)",
-                            color: "var(--text-primary)", fontFamily: "inherit",
-                          }}
+                          title="Distance from line"
+                          style={CELL_INPUT}
                           step={10}
                         />
                         <NumericInput
@@ -139,61 +148,48 @@ export function ControlsTab() {
                           fallback={0}
                           value={entry.value}
                           onChange={(v) => updateEntry(kind.field, i, { value: v })}
-                          style={{
-                            width: "100%", fontSize: 10, padding: "2px 4px", borderRadius: 3,
-                            border: "1px solid var(--border-color)", background: "var(--bg-tertiary)",
-                            color: "var(--text-primary)", fontFamily: "inherit",
-                          }}
+                          title="Value"
+                          style={CELL_INPUT}
                           step={0.1}
                         />
                         <select
+                          aria-label="Easing"
                           value={String(entry.easing)}
                           onChange={(e) => updateEntry(kind.field, i, { easing: e.target.value as EasingType })}
-                          style={{
-                            width: "100%", fontSize: 9, padding: "2px 3px", borderRadius: 3,
-                            border: "1px solid var(--border-color)", background: "var(--bg-tertiary)",
-                            color: "var(--text-primary)", fontFamily: "inherit", cursor: "pointer",
-                          }}
+                          style={{ ...SELECT_STYLE, width: "100%", minWidth: 0, padding: "0 var(--space-4)" }}
                         >
                           {EASING_OPTIONS.map((opt) => (
                             <option key={String(opt.value)} value={String(opt.value)}>{opt.label}</option>
                           ))}
                         </select>
-                        <button
+                        <IconButton
+                          icon={X}
+                          label="Remove control point"
+                          size="sm"
+                          danger
                           onClick={() => removeEntry(kind.field, i)}
-                          style={{
-                            width: 18, height: 18, fontSize: 10, padding: 0, borderRadius: 3,
-                            border: "none", background: "transparent", color: "#ff6b6b",
-                            cursor: "pointer", fontFamily: "inherit", display: "flex",
-                            alignItems: "center", justifyContent: "center",
-                          }}
-                          title="Remove control point"
-                        >
-                          {"\u00D7"}
-                        </button>
+                        />
                       </div>
                     ))}
                   </div>
                 )}
 
-                <button
+                <Button
+                  size="sm"
+                  icon={Plus}
+                  block
+                  style={{ marginTop: "var(--space-6)" }}
                   onClick={() => addEntry(kind.field, kind.defaultValue)}
-                  style={{
-                    marginTop: 4, width: "100%", padding: "3px 0", fontSize: 9,
-                    border: "1px dashed var(--border-color)", borderRadius: 4,
-                    background: "transparent", color: "var(--text-muted)",
-                    cursor: "pointer", fontFamily: "inherit",
-                  }}
                 >
-                  + Add Control Point
-                </button>
+                  Add control point
+                </Button>
               </div>
             )}
           </div>
         );
       })}
 
-      {/* Timeline Overlay */}
+      {/* Timeline overlay */}
       <TimelineOverlaySection />
     </div>
   );
@@ -212,43 +208,37 @@ function TimelineOverlaySection() {
   const setOverlayOpacity = useEditorStore((s) => s.setTimelineOverlayOpacity);
 
   return (
-    <div style={{ marginTop: 8 }}>
-      <SectionHeader label="TIMELINE OVERLAY" />
-      <div style={{ padding: "4px 6px", display: "flex", flexDirection: "column", gap: 6 }}>
-        <button
-          onClick={toggleOverlay}
-          style={{
-            width: "100%", padding: "5px 0", borderRadius: 4,
-            border: "none", cursor: "pointer", fontFamily: "inherit",
-            fontSize: 9, fontWeight: overlayEnabled ? 600 : 400,
-            background: overlayEnabled ? "rgba(108,138,255,0.12)" : "var(--bg-active)",
-            color: overlayEnabled ? "var(--accent-primary)" : "var(--text-muted)",
-            transition: "all 0.12s",
-          }}
-        >
-          {overlayEnabled ? "Overlay ON \u2014 showing ghost curves" : "Enable Overlay"}
-        </button>
+    <div style={{ marginTop: "var(--space-8)" }}>
+      <SectionHeader label="Timeline overlay" />
+      <div style={{ padding: "var(--space-4) var(--space-6)", display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+          <span style={{ flex: 1, fontSize: "var(--fs-control)", color: "var(--text-primary)" }}>
+            Show ghost curves of other lines
+          </span>
+          <Toggle checked={overlayEnabled} onChange={() => toggleOverlay()} label="Timeline overlay" />
+        </div>
 
         {overlayEnabled && (
           <>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 9, color: "var(--text-muted)", minWidth: 42 }}>Opacity</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+              <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", minWidth: 42 }}>Opacity</span>
               <input
                 type="range"
+                aria-label="Overlay opacity"
                 min={0} max={1} step={0.05}
                 value={overlayOpacity}
                 onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))}
-                style={{ flex: 1, height: 4, cursor: "pointer" }}
+                style={{ flex: 1, cursor: "pointer", accentColor: "var(--accent-primary)" }}
               />
-              <span style={{ fontSize: 9, color: "var(--text-muted)", minWidth: 24, textAlign: "right" }}>
+              <span style={{ fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", color: "var(--text-secondary)", minWidth: 28, textAlign: "right" }}>
                 {Math.round(overlayOpacity * 100)}%
               </span>
             </div>
 
             <div style={{
               maxHeight: 120, overflowY: "auto",
-              border: "1px solid var(--border-color)", borderRadius: 4,
-              background: "var(--bg-primary)",
+              borderRadius: "var(--radius-lg)",
+              background: "var(--bg-active)",
             }}>
               {lines.map((line, idx) => {
                 if (idx === selectedLineIndex) return null;
@@ -256,31 +246,35 @@ function TimelineOverlaySection() {
                 return (
                   <button
                     key={idx}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={isChecked}
+                    className="ui-hover"
                     onClick={() => toggleOverlayLine(idx)}
                     style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      width: "100%", padding: "3px 6px",
-                      background: isChecked ? "rgba(108,138,255,0.06)" : "transparent",
-                      border: "none", borderBottom: "1px solid var(--border-color)",
+                      display: "flex", alignItems: "center", gap: "var(--space-6)",
+                      width: "100%", padding: "var(--space-4) var(--space-8)",
+                      background: isChecked ? "var(--accent-wash)" : undefined,
+                      border: "none", borderBottom: "var(--rule) solid var(--separator)",
                       cursor: "pointer", fontFamily: "inherit",
-                      fontSize: 9, color: isChecked ? "var(--accent-primary)" : "var(--text-muted)",
-                      textAlign: "left", transition: "all 0.1s",
+                      fontSize: "var(--fs-caption)", color: isChecked ? "var(--accent-primary)" : "var(--text-secondary)",
+                      textAlign: "left",
                     }}
                   >
                     <span style={{
-                      width: 10, height: 10, borderRadius: 2,
-                      border: isChecked ? "none" : "1px solid var(--border-color)",
+                      width: 12, height: 12, borderRadius: "var(--radius-xs)", flexShrink: 0,
+                      border: isChecked ? "none" : "var(--rule) solid var(--border-color)",
                       background: isChecked ? "var(--accent-primary)" : "transparent",
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 8, color: "#fff", lineHeight: 1,
+                      color: "var(--on-accent)",
                     }}>
-                      {isChecked && "\u2713"}
+                      {isChecked && <Icon icon={Check} size={12} />}
                     </span>
                     <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {line.name || `Line ${idx}`}
                     </span>
-                    <span style={{ fontSize: 8, color: "var(--text-muted)", opacity: 0.5 }}>
-                      {line.notes.length}N
+                    <span style={{ fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
+                      {line.notes.length} notes
                     </span>
                   </button>
                 );

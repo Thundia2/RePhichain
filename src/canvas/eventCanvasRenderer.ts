@@ -7,6 +7,7 @@
 // dragging and rotating.
 // ============================================================
 
+import { chromeTheme, monoFont, withAlpha } from "./chromeTheme";
 import type { Line } from "../types/chart";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../types/chart";
 import { evaluateLineEventsWithLayers } from "./events";
@@ -20,9 +21,8 @@ const LINE_HALF_LENGTH = 200; // pixels at scale 1
 const HANDLE_RADIUS = 8;
 const ROTATION_HANDLE_RADIUS = 6;
 // const ROTATION_HANDLE_DISTANCE = 80; // pixels from center
-const GRID_COLOR = "rgba(255, 255, 255, 0.06)";
-const AXIS_COLOR = "rgba(255, 255, 255, 0.15)";
-const LINE_COLOR = "#ffffff";
+const gridColor = () => withAlpha(chromeTheme().textPrimary, 0.06);
+const axisColor = () => withAlpha(chromeTheme().textPrimary, 0.15);
 
 // ============================================================
 // Types
@@ -96,7 +96,7 @@ export class EventCanvasRenderer {
 
     // ---- Clear ----
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-    ctx.fillStyle = "#1a1a2e";
+    ctx.fillStyle = chromeTheme().bgPrimary;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
     // ---- Grid ----
@@ -125,11 +125,11 @@ export class EventCanvasRenderer {
       const ghostX = this.canvasToScreenX(dragPreview.x, canvasWidth);
       const ghostY = this.canvasToScreenY(dragPreview.y, canvasHeight);
       const ghostRot = (dragPreview.rotation * Math.PI) / 180;
-      this.drawJudgmentLine(ctx, ghostX, ghostY, ghostRot, 0.3, halfLen, "rgba(100, 200, 255, 0.4)");
+      this.drawJudgmentLine(ctx, ghostX, ghostY, ghostRot, 0.3, halfLen, withAlpha(chromeTheme().info, 0.4));
     }
 
     // Draw the actual line
-    this.drawJudgmentLine(ctx, screenX, screenY, rotation, opacity, halfLen, LINE_COLOR);
+    this.drawJudgmentLine(ctx, screenX, screenY, rotation, opacity, halfLen, chromeTheme().judgmentLine);
 
     // ---- Draw handles ----
     this.drawTranslateHandle(ctx, screenX, screenY, opacity);
@@ -149,7 +149,7 @@ export class EventCanvasRenderer {
     const gridStep = 100;
 
     // Vertical lines
-    ctx.strokeStyle = GRID_COLOR;
+    ctx.strokeStyle = gridColor();
     ctx.lineWidth = 1;
     for (let x = -600; x <= 600; x += gridStep) {
       const sx = this.canvasToScreenX(x, canvasWidth);
@@ -169,7 +169,7 @@ export class EventCanvasRenderer {
     }
 
     // Axes (brighter)
-    ctx.strokeStyle = AXIS_COLOR;
+    ctx.strokeStyle = axisColor();
     ctx.lineWidth = 1.5;
 
     // X axis (y=0)
@@ -187,8 +187,8 @@ export class EventCanvasRenderer {
     ctx.stroke();
 
     // Grid labels at the edges
-    ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-    ctx.font = "9px monospace";
+    ctx.fillStyle = chromeTheme().textMuted;
+    ctx.font = monoFont(10);
     ctx.textAlign = "center";
     for (let x = -600; x <= 600; x += 200) {
       if (x === 0) continue;
@@ -247,8 +247,8 @@ export class EventCanvasRenderer {
     ctx.globalAlpha = Math.max(0.4, opacity);
 
     // Filled circle
-    ctx.fillStyle = "rgba(50, 150, 255, 0.6)";
-    ctx.strokeStyle = "#3296ff";
+    ctx.fillStyle = withAlpha(chromeTheme().accentPrimary, 0.6);
+    ctx.strokeStyle = chromeTheme().accentPrimary;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(x, y, HANDLE_RADIUS, 0, Math.PI * 2);
@@ -256,7 +256,7 @@ export class EventCanvasRenderer {
     ctx.stroke();
 
     // Crosshair inside
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.strokeStyle = withAlpha(chromeTheme().onAccent, 0.7);
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(x - 4, y);
@@ -284,8 +284,8 @@ export class EventCanvasRenderer {
     const handleX = x + Math.cos(-rotation) * (halfLen + 15);
     const handleY = y + Math.sin(-rotation) * (halfLen + 15);
 
-    ctx.fillStyle = "rgba(255, 180, 50, 0.6)";
-    ctx.strokeStyle = "#ffb432";
+    ctx.fillStyle = withAlpha(chromeTheme().onsetColor, 0.6);
+    ctx.strokeStyle = chromeTheme().onsetColor;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(handleX, handleY, ROTATION_HANDLE_RADIUS, 0, Math.PI * 2);
@@ -293,7 +293,7 @@ export class EventCanvasRenderer {
     ctx.stroke();
 
     // Rotation arrow indicator (centered on the handle direction, -rotation)
-    ctx.strokeStyle = "rgba(255, 180, 50, 0.4)";
+    ctx.strokeStyle = withAlpha(chromeTheme().onsetColor, 0.4);
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(x, y, halfLen + 15, -rotation - 0.3, -rotation + 0.3);
@@ -315,7 +315,7 @@ export class EventCanvasRenderer {
     const count = Math.floor(360 / snapDegrees);
 
     ctx.save();
-    ctx.strokeStyle = "rgba(255, 180, 50, 0.12)";
+    ctx.strokeStyle = withAlpha(chromeTheme().onsetColor, 0.12);
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 6]);
 
@@ -345,11 +345,11 @@ export class EventCanvasRenderer {
     state: { x: number; y: number; rotation: number; opacity: number; speed: number },
     currentBeat: number,
   ): void {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.fillStyle = withAlpha(chromeTheme().bgTertiary, 0.9);
     ctx.fillRect(canvasWidth - 170, 6, 164, 90);
 
-    ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-    ctx.font = "10px monospace";
+    ctx.fillStyle = chromeTheme().textPrimary;
+    ctx.font = monoFont(10);
     ctx.textAlign = "left";
 
     const rotDeg = (state.rotation * 180) / Math.PI;

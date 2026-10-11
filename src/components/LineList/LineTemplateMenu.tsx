@@ -2,12 +2,21 @@
 // Line Template Menu
 //
 // Dropdown menu with pre-configured line templates for common
-// line types. Supports single and batch (e.g., "All UI Lines")
-// creation.
+// line types. Supports single and batch (e.g., "All UI lines")
+// creation. A ui-popover of ui-menu-items with Lucide icons.
 // ============================================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import {
+  Gamepad2, Captions, Hash, Percent, Tag, Music, SignalHigh, RectangleHorizontal,
+  Pause, Layers, EyeOff, ImageIcon, LayoutTemplate,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
+import { Icon } from "../common/Icon";
+import { IconButton } from "../common/IconButton";
+import { useMenuKeyboard } from "../../hooks/useMenuKeyboard";
+import { Tooltip } from "../common/Tooltip";
 import type { Line, LineEvent, Beat } from "../../types/chart";
 
 // A baseline-free line defaults to VISIBLE (DEFAULT_LINE_STATE.opacity=1), so a
@@ -23,7 +32,7 @@ function invisibleLineEvents(): LineEvent[] {
 interface LineTemplate {
   id: string;
   label: string;
-  icon: string;
+  icon: LucideIcon;
   description?: string;
   create?: () => Partial<Line>;
   isBatch?: boolean;
@@ -32,12 +41,12 @@ interface LineTemplate {
 
 const LINE_TEMPLATES: LineTemplate[] = [
   {
-    id: "gameplay", label: "Gameplay Line", icon: "N",
+    id: "gameplay", label: "Gameplay line", icon: Gamepad2,
     description: "Standard line with notes",
     create: () => ({ _category: "gameplay" }),
   },
   {
-    id: "text", label: "Text / Lyrics Line", icon: "T",
+    id: "text", label: "Text / lyrics line", icon: Captions,
     description: "Invisible line for text events",
     create: () => ({
       _category: "text", name: "Lyrics",
@@ -45,41 +54,41 @@ const LINE_TEMPLATES: LineTemplate[] = [
     }),
   },
   {
-    id: "ui-combo", label: "UI: Combo Counter", icon: "#",
+    id: "ui-combo", label: "UI: combo counter", icon: Hash,
     create: () => ({ _category: "visual", name: "UI Combo", attach_ui: "combonumber" }),
   },
   {
-    id: "ui-score", label: "UI: Score", icon: "%",
+    id: "ui-score", label: "UI: score", icon: Percent,
     create: () => ({ _category: "visual", name: "UI Score", attach_ui: "score" }),
   },
   {
-    id: "ui-combo-label", label: "UI: Combo Label", icon: "C",
+    id: "ui-combo-label", label: "UI: combo label", icon: Tag,
     create: () => ({ _category: "visual", name: "UI Combo Label", attach_ui: "combo" }),
   },
   {
-    id: "ui-name", label: "UI: Song Name", icon: "N",
+    id: "ui-name", label: "UI: song name", icon: Music,
     create: () => ({ _category: "visual", name: "UI Name", attach_ui: "name" }),
   },
   {
-    id: "ui-level", label: "UI: Level Label", icon: "L",
+    id: "ui-level", label: "UI: level label", icon: SignalHigh,
     create: () => ({ _category: "visual", name: "UI Level", attach_ui: "level" }),
   },
   {
-    id: "ui-bar", label: "UI: Progress Bar", icon: "=",
+    id: "ui-bar", label: "UI: progress bar", icon: RectangleHorizontal,
     create: () => ({ _category: "visual", name: "UI Bar", attach_ui: "bar" }),
   },
   {
-    id: "ui-pause", label: "UI: Pause Button", icon: "P",
+    id: "ui-pause", label: "UI: pause button", icon: Pause,
     create: () => ({ _category: "visual", name: "UI Pause", attach_ui: "pause" }),
   },
   {
-    id: "ui-all", label: "All UI Lines (7)", icon: "A",
+    id: "ui-all", label: "All UI lines (7)", icon: Layers,
     description: "Creates all 7 standard UI lines at once",
     isBatch: true,
     batchTemplates: ["ui-combo", "ui-combo-label", "ui-score", "ui-name", "ui-level", "ui-bar", "ui-pause"],
   },
   {
-    id: "visual-helper", label: "Visual Helper Line", icon: "H",
+    id: "visual-helper", label: "Visual helper line", icon: EyeOff,
     description: "Invisible line for visual effects",
     create: () => ({
       _category: "helper", name: "Helper",
@@ -87,7 +96,7 @@ const LINE_TEMPLATES: LineTemplate[] = [
     }),
   },
   {
-    id: "texture", label: "Texture / Image Line", icon: "I",
+    id: "texture", label: "Texture / image line", icon: ImageIcon,
     description: "Line for displaying a custom image",
     create: () => ({ _category: "visual", name: "Image" }),
   },
@@ -100,6 +109,9 @@ export function LineTemplateMenu() {
   const addLine = useChartStore((s) => s.addLine);
   const batchAddLines = useChartStore((s) => s.batchAddLines);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useMenuKeyboard(open, close, menuRef);
 
   useEffect(() => {
     if (!open) return;
@@ -126,52 +138,40 @@ export function LineTemplateMenu() {
 
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
-      <button
+      <IconButton
+        icon={LayoutTemplate}
+        label="Add line from template"
+        size="md"
+        className={open ? "is-active" : undefined}
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={() => setOpen(!open)}
-        style={{
-          padding: "3px 6px", borderRadius: 4,
-          border: "1px dashed #444", background: "transparent",
-          color: "#555", cursor: "pointer", fontSize: 11,
-          fontFamily: "inherit",
-        }}
-        title="Add from template"
-      >
-        +T
-      </button>
+      />
 
       {open && (
-        <div style={{
-          position: "absolute", top: "100%", left: 0, zIndex: 10001,
-          background: "var(--bg-secondary)", border: "1px solid var(--border-color)",
-          borderRadius: 8, padding: 4, marginTop: 4, width: 220,
-          maxHeight: 300, overflowY: "auto",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-        }}>
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-label="Line templates"
+          className="ui-popover"
+          style={{
+            position: "absolute", top: "100%", left: 0, zIndex: "var(--z-dropdown)",
+            marginTop: "var(--space-4)", width: 220,
+            maxHeight: 300, overflowY: "auto",
+          }}
+        >
           {LINE_TEMPLATES.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => handleCreate(t)}
-              style={{
-                display: "flex", alignItems: "center", gap: 8,
-                width: "100%", padding: "5px 8px", borderRadius: 4,
-                border: "none", background: "transparent",
-                color: "var(--text-primary)", cursor: "pointer",
-                fontSize: 11, textAlign: "left", fontFamily: "inherit",
-              }}
-              title={t.description}
-              onMouseOver={(e) => (e.currentTarget.style.background = "var(--bg-active)")}
-              onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}
-            >
-              <span style={{
-                width: 20, height: 20, borderRadius: 4,
-                background: "var(--bg-primary)", display: "flex",
-                alignItems: "center", justifyContent: "center",
-                fontSize: 10, flexShrink: 0,
-              }}>
-                {t.icon}
-              </span>
-              <span>{t.label}</span>
-            </button>
+            <Tooltip key={t.id} content={t.description} position="right">
+              <button
+                type="button"
+                role="menuitem"
+                className="ui-menu-item"
+                onClick={() => handleCreate(t)}
+              >
+                <Icon icon={t.icon} size={14} style={{ color: "var(--text-secondary)" }} />
+                <span>{t.label}</span>
+              </button>
+            </Tooltip>
           ))}
         </div>
       )}

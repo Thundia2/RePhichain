@@ -2,6 +2,9 @@
 // Shader Step — Step 3 of Favorites Wizard (Placeholder)
 // ============================================================
 
+import { Sparkles } from "lucide-react";
+import { Icon } from "../../common/Icon";
+
 export function ShaderStepPlaceholder() {
   return (
     <div
@@ -10,7 +13,7 @@ export function ShaderStepPlaceholder() {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: "40px 20px",
+        padding: "40px var(--space-20)",
         textAlign: "center",
       }}
     >
@@ -19,34 +22,33 @@ export function ShaderStepPlaceholder() {
         style={{
           width: 64,
           height: 64,
-          borderRadius: 16,
-          background: "rgba(108,138,255,0.08)",
-          border: "1px solid rgba(108,138,255,0.15)",
+          borderRadius: "var(--radius-2xl)",
+          background: "var(--accent-tint)",
+          color: "var(--accent-primary)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 28,
-          marginBottom: 16,
+          marginBottom: "var(--space-16)",
         }}
       >
-        ✦
+        <Icon icon={Sparkles} size={20} />
       </div>
 
       <div
         style={{
-          fontSize: 13,
+          fontSize: "var(--fs-headline)",
           fontWeight: 600,
           color: "var(--text-primary)",
-          marginBottom: 6,
+          marginBottom: "var(--space-6)",
         }}
       >
-        Shader Favorites
+        Shader favorites
       </div>
 
       <div
         style={{
-          fontSize: 11,
-          color: "var(--text-muted)",
+          fontSize: "var(--fs-control)",
+          color: "var(--text-secondary)",
           maxWidth: 280,
           lineHeight: 1.5,
         }}
@@ -57,12 +59,12 @@ export function ShaderStepPlaceholder() {
 
       <div
         style={{
-          marginTop: 16,
-          padding: "4px 12px",
-          borderRadius: 12,
+          marginTop: "var(--space-16)",
+          padding: "var(--space-4) var(--space-12)",
+          borderRadius: "var(--radius-full)",
           background: "var(--bg-active)",
-          fontSize: 10,
-          color: "var(--text-muted)",
+          fontSize: "var(--fs-caption)",
+          color: "var(--text-secondary)",
         }}
       >
         Coming soon

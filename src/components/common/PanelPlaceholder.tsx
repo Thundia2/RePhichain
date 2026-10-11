@@ -1,27 +1,39 @@
+import { PanelTop } from "lucide-react";
+import { Icon } from "./Icon";
+
 interface PanelPlaceholderProps {
   name: string;
   description: string;
+  /** Icon colour (a token, e.g. "var(--text-muted)"). */
   color: string;
 }
 
 /**
  * A placeholder that's shown inside panels that haven't been
- * built yet. Displays the panel name, a colored accent bar,
- * and a description of what will go here.
+ * built yet. Displays a panel icon, the panel name and a short
+ * description of what will go here.
  *
  * These will be replaced with real components in Phases 4-6.
  */
 export function PanelPlaceholder({ name, description, color }: PanelPlaceholderProps) {
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 opacity-60">
-      <div
-        className="w-10 h-1 rounded-full"
-        style={{ backgroundColor: color }}
-      />
-      <div className="text-sm font-semibold" style={{ color }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100%",
+        gap: "var(--space-8)",
+        padding: "var(--space-16)",
+        textAlign: "center",
+      }}
+    >
+      <Icon icon={PanelTop} size={20} style={{ color }} />
+      <div style={{ fontSize: "var(--fs-headline)", lineHeight: "18px", fontWeight: 600, color: "var(--text-primary)" }}>
         {name}
       </div>
-      <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+      <div style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>
         {description}
       </div>
     </div>

@@ -21,11 +21,11 @@ import type {
 import {
   DEFAULT_VISIBLE_EVENT_KINDS,
   DEFAULT_GROUP_EDIT_SETTINGS,
-  GROUP_COLORS,
   computeMemberDelay,
   migrateGroup,
 } from "../types/group";
 import { useChartStore, registerProjectLoadReset } from "./chartStore";
+import { groupColor } from "../canvas/chromeTheme";
 import { buildNoteUidMap } from "../utils/noteUid";
 
 // ============================================================
@@ -206,7 +206,7 @@ function canAddNoteToGroup(
 
 /** Pick a color for a new group based on existing group count */
 function pickGroupColor(existingCount: number): string {
-  return GROUP_COLORS[existingCount % GROUP_COLORS.length];
+  return groupColor(existingCount);
 }
 
 // ============================================================

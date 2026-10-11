@@ -3,16 +3,23 @@
 // Categorized list of presets with checkboxes
 // ============================================================
 
+import { Check } from "lucide-react";
 import { useFavoritesStore } from "../../../stores/favoritesStore";
+import { Icon } from "../../common/Icon";
+import { Badge } from "../../common/UIKit";
 import { BUILTIN_PRESETS } from "../../../presets/builtinPresets";
 
+// Category dots reuse the event-kind tokens closest to each category.
 const CATEGORY_COLORS: Record<string, string> = {
-  movement: "#4dabf7",
-  visibility: "#cc5de8",
-  rotation: "#ffd43b",
-  speed: "#51cf66",
-  compound: "#ff922b",
+  movement: "var(--event-speed)",
+  visibility: "var(--event-opacity)",
+  rotation: "var(--event-rotation)",
+  speed: "var(--event-y)",
+  compound: "var(--event-scale-x)",
 };
+
+/** "movement" → "Movement" (sentence case for stored lowercase ids). */
+const sentenceCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const CATEGORY_ORDER = ["movement", "visibility", "rotation", "speed", "compound"];
 
@@ -27,19 +34,19 @@ export function PresetStepList() {
 
   return (
     <div>
-      <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 10 }}>
+      <div style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)", marginBottom: "var(--space-10)" }}>
         Select your favorite presets. They'll appear at the top of preset lists for quick application.
       </div>
 
       {grouped.map(({ category, presets }) => (
-        <div key={category} style={{ marginBottom: 12 }}>
+        <div key={category} style={{ marginBottom: "var(--space-12)" }}>
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 6,
-              padding: "4px 0",
-              marginBottom: 4,
+              gap: "var(--space-6)",
+              padding: "var(--space-4) 0",
+              marginBottom: "var(--space-4)",
             }}
           >
             <span
@@ -53,100 +60,85 @@ export function PresetStepList() {
             />
             <span
               style={{
-                fontSize: 10,
+                fontSize: "var(--fs-control)",
                 fontWeight: 600,
                 color: "var(--text-secondary)",
-                textTransform: "uppercase",
-                letterSpacing: "0.5px",
               }}
             >
-              {category}
+              {sentenceCase(category)}
             </span>
           </div>
 
-          {presets.map((preset) => {
-            const selected = favoritePresets.includes(preset.id);
-            return (
-              <button
-                key={preset.id}
-                onClick={() => toggleFavorite(preset.id)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  width: "100%",
-                  padding: "8px 10px",
-                  marginBottom: 3,
-                  borderRadius: 6,
-                  border: selected
-                    ? "1px solid var(--accent-primary)"
-                    : "1px solid var(--border-color)",
-                  background: selected
-                    ? "rgba(108,138,255,0.06)"
-                    : "var(--bg-primary)",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  textAlign: "left",
-                  transition: "all 0.12s",
-                }}
-              >
-                {/* Checkbox */}
-                <div
+          <div style={{ background: "var(--bg-active)", borderRadius: "var(--radius-xl)", overflow: "hidden" }}>
+            {presets.map((preset, i) => {
+              const selected = favoritePresets.includes(preset.id);
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={selected}
+                  className="ui-hover"
+                  onClick={() => toggleFavorite(preset.id)}
                   style={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 4,
-                    border: selected
-                      ? "1.5px solid var(--accent-primary)"
-                      : "1.5px solid var(--border-color)",
-                    background: selected ? "var(--accent-primary)" : "transparent",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                    fontSize: 10,
-                    color: "#fff",
+                    gap: "var(--space-8)",
+                    width: "100%",
+                    padding: "var(--space-8) var(--space-10)",
+                    border: "none",
+                    borderBottom: i < presets.length - 1 ? "var(--rule) solid var(--separator)" : "none",
+                    background: selected ? "var(--accent-wash)" : undefined,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    textAlign: "left",
                   }}
                 >
-                  {selected && "✓"}
-                </div>
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, color: "var(--text-primary)", marginBottom: 1 }}>
-                    {preset.name}
-                  </div>
+                  {/* Checkbox */}
                   <div
                     style={{
-                      fontSize: 9,
-                      color: "var(--text-muted)",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
+                      width: 16,
+                      height: 16,
+                      borderRadius: "var(--radius-xs)",
+                      border: selected
+                        ? "none"
+                        : "var(--rule) solid var(--text-muted)",
+                      background: selected ? "var(--accent-primary)" : "transparent",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      color: "var(--on-accent)",
                     }}
                   >
-                    {preset.description}
+                    {selected && <Icon icon={Check} size={12} />}
                   </div>
-                </div>
 
-                {/* Category badge */}
-                <span
-                  style={{
-                    fontSize: 8,
-                    padding: "1px 5px",
-                    borderRadius: 8,
-                    background: `${CATEGORY_COLORS[category]}15`,
-                    color: CATEGORY_COLORS[category],
-                    flexShrink: 0,
-                    textTransform: "uppercase",
-                    fontWeight: 600,
-                    letterSpacing: "0.3px",
-                  }}
-                >
-                  {category}
-                </span>
-              </button>
-            );
-          })}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "var(--fs-control)", color: "var(--text-primary)", marginBottom: 1 }}>
+                      {preset.name}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "var(--fs-caption)",
+                        color: "var(--text-secondary)",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {preset.description}
+                    </div>
+                  </div>
+
+                  {/* Category badge */}
+                  <Badge color={CATEGORY_COLORS[category] ?? "var(--text-secondary)"}>
+                    {sentenceCase(category)}
+                  </Badge>
+                </button>
+              );
+            })}
+          </div>
         </div>
       ))}
     </div>

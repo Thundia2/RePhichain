@@ -30,56 +30,62 @@ export const NOTE_KINDS: { value: NoteKind; label: string }[] = [
 // ---- Shared Styles ----
 
 export const SECTION_STYLE: React.CSSProperties = {
-  fontSize: 11,
-  textTransform: "uppercase",
-  letterSpacing: "0.5px",
-  color: "var(--text-muted)",
-  marginBottom: 6,
-  marginTop: 12,
+  fontSize: "var(--fs-control)",
+  fontWeight: 600,
+  color: "var(--text-secondary)",
+  marginBottom: "var(--space-6)",
+  marginTop: "var(--space-12)",
 };
 
 export const CARD_STYLE: React.CSSProperties = {
   backgroundColor: "var(--bg-active)",
-  borderRadius: 8,
+  borderRadius: "var(--radius-xl)",
   overflow: "hidden",
-  marginBottom: 8,
+  marginBottom: "var(--space-8)",
 };
 
 export const ROW_STYLE: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  padding: "6px 10px",
-  borderBottom: "1px solid rgba(42, 42, 53, 0.55)",
-  fontSize: 11,
+  gap: "var(--space-8)",
+  padding: "var(--space-6) var(--space-10)",
+  borderBottom: "var(--rule) solid var(--separator)",
+  fontSize: "var(--fs-control)",
 };
 
 export const INPUT_STYLE = UIK_INPUT_STYLE;
 export const SELECT_STYLE = UIK_SELECT_STYLE;
 
-export const BTN_ACCENT_STYLE: React.CSSProperties = {
-  padding: "5px 10px",
-  fontSize: 10,
+const BTN_BASE: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "var(--space-6)",
+  height: "var(--control-md)",
+  padding: "0 var(--space-10)",
+  fontSize: "var(--fs-control)",
   fontWeight: 500,
-  background: "var(--accent-primary)",
-  color: "#fff",
   border: "none",
-  borderRadius: 6,
+  borderRadius: "var(--radius-md)",
   cursor: "pointer",
+};
+
+export const BTN_ACCENT_STYLE: React.CSSProperties = {
+  ...BTN_BASE,
+  fontWeight: 600,
+  background: "var(--accent-primary)",
+  color: "var(--on-accent)",
 };
 
 export const BTN_MUTED_STYLE: React.CSSProperties = {
-  padding: "5px 10px",
-  fontSize: 10,
-  background: "transparent",
-  color: "var(--text-secondary)",
-  border: "1px solid var(--border-color)",
-  borderRadius: 6,
-  cursor: "pointer",
+  ...BTN_BASE,
+  background: "var(--bg-active)",
+  color: "var(--text-primary)",
 };
 
 export const BTN_DANGER_STYLE: React.CSSProperties = {
-  ...BTN_MUTED_STYLE,
-  color: "#ff4060",
-  borderColor: "rgba(255, 64, 96, 0.3)",
+  ...BTN_BASE,
+  background: "var(--bg-active)",
+  color: "var(--error)",
 };

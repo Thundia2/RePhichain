@@ -15,6 +15,21 @@ export interface CurveViewport {
   valueMax: number;
 }
 
+/** Short sentence-case lane names for chips and legends (curve header, keyframe bar). */
+export const LANE_LABEL: Record<LineEventKind, string> = {
+  x: "X",
+  y: "Y",
+  rotation: "Rot",
+  opacity: "Alpha",
+  speed: "Speed",
+  scale_x: "Scale X",
+  scale_y: "Scale Y",
+  color: "Colour",
+  text: "Text",
+  incline: "Incline",
+  gif: "GIF",
+};
+
 const LEFT_MARGIN = 50;
 const RIGHT_MARGIN = 10;
 const TOP_MARGIN = 10;

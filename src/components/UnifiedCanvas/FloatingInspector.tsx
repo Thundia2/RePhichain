@@ -6,9 +6,12 @@
 // without opening the full sidebar inspector.
 //
 // Dismissal: Escape, click outside, tool change, playback start.
+// Styled as a ui-popover; note type and side use SegmentedControls.
 // ============================================================
 
+import type React from "react";
 import { useEffect, useRef } from "react";
+import { ArrowUpDown } from "lucide-react";
 import { useEditorStore } from "../../stores/editorStore";
 import {
   useSelectedLineIndex,
@@ -17,15 +20,46 @@ import {
 } from "../../stores/selection";
 import { useChartStore } from "../../stores/chartStore";
 import { useAudioStore } from "../../stores/audioStore";
-import { Field, SelectField, safeParseNumber } from "../common/FormFields";
+import { Field, safeParseNumber } from "../common/FormFields";
+import { NoteGlyph } from "../common/NoteGlyph";
+import { SegmentedControl, type SegmentOption } from "../common/SegmentedControl";
+import { Button } from "../common/Button";
 import type { NoteKind, Line } from "../../types/chart";
 
-const NOTE_KIND_OPTIONS = [
-  { value: "tap", label: "Tap" },
-  { value: "drag", label: "Drag" },
-  { value: "flick", label: "Flick" },
-  { value: "hold", label: "Hold" },
+const NOTE_KIND_LABELS: Record<NoteKind, string> = { tap: "Tap", drag: "Drag", flick: "Flick", hold: "Hold" };
+
+const NOTE_KIND_SEGMENTS: SegmentOption<NoteKind>[] = (["tap", "drag", "flick", "hold"] as const).map((k) => ({
+  value: k,
+  title: NOTE_KIND_LABELS[k],
+  label: <><NoteGlyph kind={k} size={14} /><span className="sr-only">{NOTE_KIND_LABELS[k]}</span></>,
+}));
+
+const SIDE_SEGMENTS: SegmentOption<"above" | "below">[] = [
+  { value: "above", label: "Above" },
+  { value: "below", label: "Below" },
 ];
+
+const TITLE_STYLE: React.CSSProperties = {
+  fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--text-primary)", marginBottom: "var(--space-2)",
+};
+
+/** "scale_x" → "Scale X", "x" → "X" (sentence case, axis letters upper-case). */
+function eventKindLabel(kind: string): string {
+  return kind
+    .split("_")
+    .map((w, i) => (w.length === 1 ? w.toUpperCase() : i === 0 ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+/** Label + control row laid out like the shared Field / SelectField. */
+function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-secondary)" }}>{label}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    </div>
+  );
+}
 
 export function FloatingInspector() {
   const inspector = useEditorStore((s) => s.floatingInspector);
@@ -85,17 +119,14 @@ export function FloatingInspector() {
   return (
     <div
       ref={ref}
+      className="ui-popover"
       style={{
         position: "fixed",
         left: x,
         top: y,
-        zIndex: 10000,
-        background: "var(--bg-secondary)",
-        border: "1px solid var(--border-color)",
-        borderRadius: 8,
-        padding: 10,
+        zIndex: "var(--z-toast)",
+        padding: "var(--space-10)",
         minWidth: 200,
-        boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
       }}
       onMouseDown={(e) => e.stopPropagation()}
     >
@@ -125,7 +156,7 @@ export function FloatingInspector() {
         />
       )}
       {inspector.targetType === "multi_event" && (
-        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+        <div style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>
           {selectedEventIndices.length} events selected
         </div>
       )}
@@ -148,22 +179,26 @@ function SingleNoteInspector({
   if (!note) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ fontSize: 11, fontWeight: "bold", color: "var(--text-primary)", marginBottom: 2 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+      <div style={TITLE_STYLE}>
         Note #{noteIndex}
       </div>
-      <SelectField
-        label="Kind"
-        value={note.kind}
-        options={NOTE_KIND_OPTIONS}
-        onChange={(v) => {
-          const changes: Record<string, unknown> = { kind: v as NoteKind };
-          if (v === "hold" && !note.hold_beat) {
-            changes.hold_beat = [1, 0, 1];
-          }
-          editNote(lineIndex, noteIndex, changes);
-        }}
-      />
+      <FieldRow label="Kind">
+        <SegmentedControl
+          options={NOTE_KIND_SEGMENTS}
+          value={note.kind}
+          size="sm"
+          block
+          label="Note type"
+          onChange={(v) => {
+            const changes: Record<string, unknown> = { kind: v };
+            if (v === "hold" && !note.hold_beat) {
+              changes.hold_beat = [1, 0, 1];
+            }
+            editNote(lineIndex, noteIndex, changes);
+          }}
+        />
+      </FieldRow>
       <Field
         label="X"
         value={note.x}
@@ -172,20 +207,16 @@ function SingleNoteInspector({
           if (n !== null) editNote(lineIndex, noteIndex, { x: Math.round(n) });
         }}
       />
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <span style={{ fontSize: 10, color: "var(--text-muted)", width: 40 }}>Side</span>
-        <button
-          onClick={() => editNote(lineIndex, noteIndex, { above: !note.above })}
-          style={{
-            fontSize: 10, padding: "2px 8px", borderRadius: 3, border: "none",
-            background: note.above ? "#22c55e30" : "#ef444430",
-            color: note.above ? "#4ade80" : "#f87171",
-            cursor: "pointer", fontFamily: "inherit",
-          }}
-        >
-          {note.above ? "Above" : "Below"}
-        </button>
-      </div>
+      <FieldRow label="Side">
+        <SegmentedControl
+          options={SIDE_SEGMENTS}
+          value={note.above ? "above" : "below"}
+          size="sm"
+          block
+          label="Side"
+          onChange={(v) => editNote(lineIndex, noteIndex, { above: v === "above" })}
+        />
+      </FieldRow>
     </div>
   );
 }
@@ -204,31 +235,31 @@ function MultiNoteInspector({
   line: Line;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ fontSize: 11, fontWeight: "bold", color: "var(--text-primary)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+      <div style={TITLE_STYLE}>
         {noteCount} notes selected
       </div>
-      <SelectField
-        label="Set Kind"
-        value=""
-        options={[{ value: "", label: "— Set all —" }, ...NOTE_KIND_OPTIONS]}
-        onChange={(v) => {
-          if (v) editNotes(lineIndex, noteIndices, { kind: v as NoteKind });
-        }}
-      />
-      <button
+      {/* Mixed selection: no segment is pre-selected; picking one sets all */}
+      <FieldRow label="Set kind">
+        <SegmentedControl
+          options={NOTE_KIND_SEGMENTS}
+          value={null}
+          size="sm"
+          block
+          label="Set note type for all"
+          onChange={(v) => editNotes(lineIndex, noteIndices, { kind: v })}
+        />
+      </FieldRow>
+      <Button
+        size="sm"
+        icon={ArrowUpDown}
         onClick={() => {
           const allAbove = noteIndices.every((i) => line.notes[i]?.above);
           editNotes(lineIndex, noteIndices, { above: !allAbove });
         }}
-        style={{
-          fontSize: 10, padding: "4px 8px", borderRadius: 3, border: "none",
-          background: "var(--bg-active)", color: "var(--text-primary)",
-          cursor: "pointer", fontFamily: "inherit",
-        }}
       >
-        Flip All Above/Below
-      </button>
+        Flip all above/below
+      </Button>
     </div>
   );
 }
@@ -252,9 +283,9 @@ function SingleEventInspector({
   const constValue = event.value && "constant" in event.value ? event.value.constant : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ fontSize: 11, fontWeight: "bold", color: "var(--text-primary)", marginBottom: 2 }}>
-        {event.kind} event
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+      <div style={TITLE_STYLE}>
+        {eventKindLabel(event.kind)} event
       </div>
       {transValue ? (
         <>

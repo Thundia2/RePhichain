@@ -15,6 +15,7 @@ import { UnifiedCanvas } from "./UnifiedCanvas";
 import { UnifiedInspector } from "./UnifiedInspector";
 import { TransportBar } from "../TransportBar/TransportBar";
 import { KeyframeBar } from "../KeyframeBar/KeyframeBar";
+import { useKeyframeDockHeight } from "../KeyframeBar/useKeyframeDockHeight";
 import { LineStrip } from "../LineStrip/LineStrip";
 import { LineDrawer } from "../LineDrawer/LineDrawer";
 import { StatusBar } from "../StatusBar/StatusBar";
@@ -32,6 +33,7 @@ export function UnifiedEditorTab() {
   const keyframeBarOpen = useEditorStore((s) => s.keyframeBarOpen);
   const keyframeBarHeight = useEditorStore((s) => s.keyframeBarHeight);
   const setKeyframeBarHeight = useEditorStore((s) => s.setKeyframeBarHeight);
+  const keyframeDockHeight = useKeyframeDockHeight();
 
   // ---- Resize handle for the bottom panel drawer ----
   const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
@@ -121,11 +123,15 @@ export function UnifiedEditorTab() {
             <>
               {/* Resize handle */}
               <div
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="Resize panel"
+                className="ui-hover"
                 onMouseDown={handleResizeStart}
                 style={{
                   height: 4,
                   cursor: "ns-resize",
-                  background: "var(--border-color)",
+                  borderTop: "var(--rule) solid var(--border-color)",
                   flexShrink: 0,
                 }}
               />
@@ -141,20 +147,24 @@ export function UnifiedEditorTab() {
           {/* Keyframe bar with resize handle */}
           {keyframeBarOpen && (
             <div
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize keyframe bar"
+              className="ui-hover"
               onMouseDown={handleKbResizeStart}
               style={{
                 height: 4,
                 cursor: "ns-resize",
-                background: "var(--border-color)",
+                borderTop: "var(--rule) solid var(--border-color)",
                 flexShrink: 0,
               }}
             />
           )}
           <div
             style={{
-              height: keyframeBarOpen ? keyframeBarHeight : 0,
+              height: keyframeDockHeight,
               overflow: "hidden",
-              transition: "height 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+              transition: "height var(--dur-base) var(--ease-out)",
               flexShrink: 0,
             }}
           >

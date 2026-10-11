@@ -18,6 +18,11 @@ import {
 import { floatToBeat, beatToFloat } from "../../types/chart";
 import type { LineEventKind, NoteKind } from "../../types/chart";
 import { safeParseNumber } from "../common/FormFields";
+import { Plus, X } from "lucide-react";
+import { Button } from "../common/Button";
+import { IconButton } from "../common/IconButton";
+import { Kbd } from "../common/Kbd";
+import { Toggle } from "../common/UIKit";
 
 // ---- Extracted sub-components ----
 import { LineBatchOps } from "./LineBatchOps";
@@ -25,9 +30,24 @@ import { NoteBatchOps } from "./NoteBatchOps";
 import { GroupRow } from "./GroupRow";
 import {
   SECTION_STYLE, CARD_STYLE, ROW_STYLE, INPUT_STYLE,
-  BTN_ACCENT_STYLE, BTN_MUTED_STYLE,
 } from "./groupManagerStyles";
 import type { LineGroup, NoteGroup, GroupLineRef, GroupNoteRef } from "../../types/group";
+
+const LABEL_STYLE: React.CSSProperties = {
+  fontSize: "var(--fs-caption)",
+  color: "var(--text-secondary)",
+  display: "block",
+  marginBottom: "var(--space-2)",
+};
+
+const NUM_INPUT_STYLE: React.CSSProperties = { ...INPUT_STYLE, fontFamily: "var(--font-mono)" };
+
+const EMPTY_STYLE: React.CSSProperties = {
+  padding: "var(--space-6) var(--space-10)",
+  color: "var(--text-secondary)",
+  fontSize: "var(--fs-caption)",
+  textAlign: "center",
+};
 
 // ============================================================
 // Main Component
@@ -140,61 +160,67 @@ export function GroupManager() {
   };
 
   return (
-    <div className="h-full overflow-y-auto" style={{ padding: 10, fontSize: 12 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>Groups</span>
-        <div style={{ display: "flex", gap: 4 }}>
-          <button
+    <div className="h-full overflow-y-auto" style={{ padding: "var(--space-10)", fontSize: "var(--fs-body)" }}>
+      {/* Create actions. No title: every host (drawer, context panel) already says "Groups". */}
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "var(--space-8)", marginBottom: "var(--space-8)" }}>
+        <div style={{ display: "flex", gap: "var(--space-4)" }}>
+          <Button
+            variant={showCreate === "line" ? "primary" : "secondary"}
+            size="sm"
+            icon={Plus}
+            aria-pressed={showCreate === "line"}
             onClick={() => setShowCreate(showCreate === "line" ? null : "line")}
-            style={BTN_ACCENT_STYLE}
           >
-            + Line Group
-          </button>
-          <button
+            Line group
+          </Button>
+          <Button
+            variant={showCreate === "note" ? "primary" : "secondary"}
+            size="sm"
+            icon={Plus}
+            aria-pressed={showCreate === "note"}
             onClick={() => setShowCreate(showCreate === "note" ? null : "note")}
-            style={{ ...BTN_ACCENT_STYLE, background: "#38d9a9" }}
           >
-            + Note Group
-          </button>
+            Note group
+          </Button>
         </div>
       </div>
 
       {/* Create form */}
       {showCreate && (
-        <div style={{ ...CARD_STYLE, padding: 10, marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 6 }}>
-            New {showCreate === "line" ? "Line" : "Note"} Group
+        <div style={{ ...CARD_STYLE, padding: "var(--space-10)", marginBottom: "var(--space-10)" }}>
+          <div style={{ fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "var(--space-6)" }}>
+            New {showCreate === "line" ? "line" : "note"} group
           </div>
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Group name..."
-            style={{ ...INPUT_STYLE, width: "100%", marginBottom: 6 }}
+            placeholder="Group name…"
+            aria-label="Group name"
+            style={{ ...INPUT_STYLE, width: "100%", marginBottom: "var(--space-6)" }}
             autoFocus
             onKeyDown={(e) => e.key === "Enter" && handleCreate()}
           />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 6 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-6)", marginBottom: "var(--space-8)" }}>
             <div>
-              <label style={{ fontSize: 9, color: "var(--text-muted)", display: "block", marginBottom: 2 }}>Start Beat</label>
-              <input type="number" step="1" value={newStartBeat} onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setNewStartBeat(n); }} style={{ ...INPUT_STYLE, width: "100%" }} />
+              <label style={LABEL_STYLE}>Start beat</label>
+              <input type="number" step="1" value={newStartBeat} onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setNewStartBeat(n); }} style={{ ...NUM_INPUT_STYLE, width: "100%" }} />
             </div>
             <div>
-              <label style={{ fontSize: 9, color: "var(--text-muted)", display: "block", marginBottom: 2 }}>End Beat</label>
-              <input type="number" step="1" value={newEndBeat} onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setNewEndBeat(n); }} style={{ ...INPUT_STYLE, width: "100%" }} />
+              <label style={LABEL_STYLE}>End beat</label>
+              <input type="number" step="1" value={newEndBeat} onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setNewEndBeat(n); }} style={{ ...NUM_INPUT_STYLE, width: "100%" }} />
             </div>
           </div>
-          <div style={{ display: "flex", gap: 4 }}>
-            <button onClick={handleCreate} style={BTN_ACCENT_STYLE}>Create</button>
-            <button onClick={() => setShowCreate(null)} style={BTN_MUTED_STYLE}>Cancel</button>
+          <div style={{ display: "flex", gap: "var(--space-4)" }}>
+            <Button variant="primary" onClick={handleCreate}>Create</Button>
+            <Button onClick={() => setShowCreate(null)}>Cancel</Button>
           </div>
         </div>
       )}
 
       {/* Group list */}
       {groups.length === 0 && !showCreate && (
-        <div style={{ color: "var(--text-muted)", fontSize: 11, padding: "12px 0", textAlign: "center" }}>
-          No groups yet. Create one or press Ctrl+Shift+G.
+        <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-control)", padding: "var(--space-12) 0", textAlign: "center" }}>
+          No groups yet. Create one or press <Kbd>Ctrl+Shift+G</Kbd>
         </div>
       )}
 
@@ -223,7 +249,7 @@ export function GroupManager() {
 
       {/* Selected group detail panel */}
       {selectedGroup && (
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: "var(--space-8)" }}>
 
           {/* Delay Section */}
           <div style={SECTION_STYLE}>Delay</div>
@@ -235,28 +261,20 @@ export function GroupManager() {
                 step="0.25"
                 value={selectedGroup.delay}
                 onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setGroupDelay(selectedGroup.id, n); }}
-                style={{ ...INPUT_STYLE, width: 70, textAlign: "center" }}
+                aria-label="Delay (beats)"
+                style={{ ...NUM_INPUT_STYLE, width: 70, textAlign: "center" }}
               />
             </div>
             <div style={{ ...ROW_STYLE, borderBottom: selectedGroup.advancedDelay ? undefined : "none" }}>
               <span style={{ color: "var(--text-primary)" }}>Advanced (per-member)</span>
-              <button
-                onClick={() => toggleAdvancedDelay(selectedGroup.id)}
-                style={{
-                  padding: "2px 8px",
-                  fontSize: 10,
-                  borderRadius: 4,
-                  border: "1px solid var(--border-color)",
-                  background: selectedGroup.advancedDelay ? "var(--accent-primary)" : "transparent",
-                  color: selectedGroup.advancedDelay ? "#fff" : "var(--text-secondary)",
-                  cursor: "pointer",
-                }}
-              >
-                {selectedGroup.advancedDelay ? "ON" : "OFF"}
-              </button>
+              <Toggle
+                checked={!!selectedGroup.advancedDelay}
+                onChange={() => toggleAdvancedDelay(selectedGroup.id)}
+                label="Advanced per-member delay"
+              />
             </div>
             {selectedGroup.advancedDelay && (
-              <div style={{ padding: "4px 10px 6px", fontSize: 10, color: "var(--text-muted)" }}>
+              <div style={{ padding: "var(--space-4) var(--space-10) var(--space-6)", fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>
                 Override delay per member below.
               </div>
             )}
@@ -265,27 +283,27 @@ export function GroupManager() {
           {/* Members Section */}
           <div style={SECTION_STYLE}>Members</div>
           <div style={CARD_STYLE}>
-            <div style={{ padding: "6px 10px", display: "flex", gap: 4 }}>
+            <div style={{ padding: "var(--space-6) var(--space-10)", display: "flex", gap: "var(--space-4)" }}>
               {selectedGroup.type === "line" ? (
-                <button onClick={handleAddSelected} style={{ ...BTN_ACCENT_STYLE, flex: 1, fontSize: 10 }}>
-                  + Add Selected Lines
-                </button>
+                <Button variant="primary" size="sm" block icon={Plus} onClick={handleAddSelected}>
+                  Add selected lines
+                </Button>
               ) : (
-                <button onClick={handleAddSelectedNotes} style={{ ...BTN_ACCENT_STYLE, flex: 1, fontSize: 10, background: "#38d9a9" }}>
-                  + Add Selected Notes
-                </button>
+                <Button variant="primary" size="sm" block icon={Plus} onClick={handleAddSelectedNotes}>
+                  Add selected notes
+                </Button>
               )}
             </div>
 
             {selectedGroup.type === "line" && (selectedGroup as LineGroup).lines.length === 0 && (
-              <div style={{ padding: "6px 10px", color: "var(--text-muted)", fontSize: 10, textAlign: "center" }}>
-                No lines. Select lines and click "Add Selected".
+              <div style={EMPTY_STYLE}>
+                No lines. Select lines and click "Add selected lines".
               </div>
             )}
 
             {selectedGroup.type === "note" && (selectedGroup as NoteGroup).notes.length === 0 && (
-              <div style={{ padding: "6px 10px", color: "var(--text-muted)", fontSize: 10, textAlign: "center" }}>
-                No notes. Select notes and click "Add Selected".
+              <div style={EMPTY_STYLE}>
+                No notes. Select notes and click "Add selected notes".
               </div>
             )}
 
@@ -307,15 +325,17 @@ export function GroupManager() {
                       const n = safeParseNumber(v);
                       if (n !== null) setMemberDelayOverride(selectedGroup.id, "line", ref.lineIndex, n);
                     }}
-                    style={{ ...INPUT_STYLE, width: 55, textAlign: "center", marginRight: 4 }}
+                    aria-label="Delay override (beats)"
+                    style={{ ...NUM_INPUT_STYLE, width: 55, textAlign: "center", marginRight: "var(--space-4)" }}
                   />
                 )}
-                <button
+                <IconButton
+                  icon={X}
+                  label="Remove from group"
+                  size="sm"
+                  danger
                   onClick={() => removeLineFromGroup(selectedGroup.id, ref.lineIndex)}
-                  style={{ background: "none", border: "none", color: "#ff4060", cursor: "pointer", fontSize: 12, padding: "0 2px" }}
-                >
-                  x
-                </button>
+                />
               </div>
             ))}
 
@@ -329,7 +349,7 @@ export function GroupManager() {
 
               return (
                 <div key={ref.noteUid} style={{ ...ROW_STYLE, borderBottom: i === (selectedGroup as NoteGroup).notes.length - 1 ? "none" : undefined }}>
-                  <span style={{ color: "var(--text-primary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ color: "var(--text-primary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)" }}>
                     {uidShort} · {kindLabel} @ {beatLabel}
                   </span>
                   {selectedGroup.advancedDelay && (
@@ -344,22 +364,24 @@ export function GroupManager() {
                         const n = safeParseNumber(v);
                         if (n !== null) setMemberDelayOverride(selectedGroup.id, "note", ref.noteUid, n);
                       }}
-                      style={{ ...INPUT_STYLE, width: 55, textAlign: "center", marginRight: 4 }}
+                      aria-label="Delay override (beats)"
+                      style={{ ...NUM_INPUT_STYLE, width: 55, textAlign: "center", marginRight: "var(--space-4)" }}
                     />
                   )}
-                  <button
+                  <IconButton
+                    icon={X}
+                    label="Remove from group"
+                    size="sm"
+                    danger
                     onClick={() => removeNoteFromGroup(selectedGroup.id, ref.noteUid)}
-                    style={{ background: "none", border: "none", color: "#ff4060", cursor: "pointer", fontSize: 12, padding: "0 2px" }}
-                  >
-                    x
-                  </button>
+                  />
                 </div>
               );
             })}
           </div>
 
-          {/* Batch Operations */}
-          <div style={SECTION_STYLE}>Batch Operations</div>
+          {/* Batch operations */}
+          <div style={SECTION_STYLE}>Batch operations</div>
 
           {selectedGroup.type === "line" && (
             <LineBatchOps

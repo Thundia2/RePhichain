@@ -11,7 +11,12 @@ import { useState, useRef, useEffect } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import type { PanelId } from "../../types/editor";
 import { useMenus } from "../../hooks/useMenus";
+import { focusMenuItem, useMenuKeyboard } from "../../hooks/useMenuKeyboard";
 import type { Menu } from "../../hooks/useMenus";
+import { Command, Hexagon, Settings } from "lucide-react";
+import { Icon } from "../common/Icon";
+import { IconButton } from "../common/IconButton";
+import { Kbd } from "../common/Kbd";
 
 export function MenuBar({
   onTogglePanel,
@@ -74,34 +79,35 @@ export function MenuBar({
       ref={menuRef}
       className="flex items-center flex-shrink-0"
       style={{
-        height: 42,
-        padding: "0 12px",
+        height: "var(--topbar-height)",
+        gap: "var(--space-12)",
+        padding: "0 var(--space-12)",
         backgroundColor: "var(--bg-primary)",
-        borderBottom: "1px solid var(--border-color)",
+        borderBottom: "var(--rule) solid var(--border-color)",
       }}
     >
       {/* ── Left: Breadcrumb ── */}
-      <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
-        <span style={{ color: "var(--accent-primary)", fontSize: 16, fontWeight: 600, lineHeight: 1 }}>
-          ⬡
-        </span>
-        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>PhiChain</span>
+      <div className="flex items-center" style={{ minWidth: 0, gap: "var(--space-6)" }}>
+        <Icon icon={Hexagon} size={16} style={{ color: "var(--accent-primary)" }} />
+        <span style={{ fontSize: "var(--fs-body)", fontWeight: 600, color: isLoaded ? "var(--text-secondary)" : "var(--text-primary)" }}>PhiChain</span>
         {isLoaded && (
           <>
-            <span style={{ color: "var(--text-muted)", fontSize: 11 }}>›</span>
+            <span aria-hidden="true" style={{ color: "var(--text-muted)" }}>/</span>
             <span
               className="truncate"
-              style={{ fontSize: 12, color: "var(--text-primary)", maxWidth: 180 }}
+              style={{ fontSize: "var(--fs-body)", color: "var(--text-primary)", maxWidth: 180 }}
             >
               {chartName || "Untitled"}
             </span>
             <span
               style={{
-                fontSize: 9,
-                padding: "1px 6px",
-                borderRadius: 8,
-                backgroundColor: isDirty ? "rgba(255, 180, 60, 0.15)" : "var(--bg-active)",
-                color: isDirty ? "#ffb43c" : "var(--text-muted)",
+                fontSize: "var(--fs-badge)",
+                lineHeight: "12px",
+                fontWeight: 600,
+                padding: "1px var(--space-6)",
+                borderRadius: "var(--radius-full)",
+                backgroundColor: isDirty ? "var(--unsaved-bg)" : "var(--bg-active)",
+                color: isDirty ? "var(--unsaved)" : "var(--text-secondary)",
                 whiteSpace: "nowrap",
               }}
             >
@@ -112,7 +118,7 @@ export function MenuBar({
       </div>
 
       {/* ── Center: Menus ── */}
-      <div className="flex-1 flex items-center justify-center gap-0.5">
+      <div role="menubar" aria-label="Main menu" className="flex-1 flex items-center justify-center" style={{ gap: "var(--space-2)" }}>
         {MENUS.map((menu, menuIndex) => (
           <MenuDropdown
             key={menu.label}
@@ -128,64 +134,33 @@ export function MenuBar({
       </div>
 
       {/* ── Right: Command Palette + Settings ── */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center" style={{ gap: "var(--space-6)" }}>
         <button
-          className="flex items-center gap-1.5 transition-colors"
+          type="button"
+          className="flex items-center ui-hover ui-filled"
           style={{
-            padding: "5px 14px",
+            gap: "var(--space-6)",
+            height: "var(--control-md)",
+            padding: "0 var(--space-6) 0 var(--space-8)",
             backgroundColor: "var(--bg-active)",
-            borderRadius: 8,
-            border: "0.5px solid var(--border-color)",
+            borderRadius: "var(--radius-lg)",
+            border: "var(--hairline) solid var(--border-color)",
             cursor: "pointer",
-            color: "var(--text-muted)",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.borderColor = "var(--text-muted)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.borderColor = "var(--border-color)";
+            color: "var(--text-secondary)",
+            fontSize: "var(--fs-control)",
           }}
           onClick={() => { setOpenMenu(null); onOpenCommandPalette?.(); }}
         >
-          <span style={{ fontSize: 12 }}>⌘</span>
-          <span style={{ fontSize: 11 }}>Command palette</span>
-          <span
-            style={{
-              fontSize: 10,
-              fontFamily: "'SF Mono', 'Cascadia Code', 'Fira Code', monospace",
-              backgroundColor: "var(--bg-secondary)",
-              padding: "1px 5px",
-              borderRadius: 3,
-            }}
-          >
-            Ctrl+K
-          </span>
+          <Icon icon={Command} size={12} />
+          <span>Command palette</span>
+          <Kbd>Ctrl+K</Kbd>
         </button>
-        <button
-          className="flex items-center justify-center transition-colors"
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 6,
-            color: "var(--text-secondary)",
-            fontSize: 15,
-            cursor: "pointer",
-            backgroundColor: "transparent",
-            border: "none",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-active)";
-            (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-            (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
-          }}
+        <IconButton
+          icon={Settings}
+          label="Settings"
+          tooltipPosition="bottom"
           onClick={() => { setOpenMenu(null); onOpenSettings?.(); }}
-          title="Settings"
-        >
-          ⚙
-        </button>
+        />
       </div>
     </div>
   );
@@ -205,100 +180,87 @@ function MenuDropdown({
   onHoverEnter: () => void;
   onClose: () => void;
 }) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useMenuKeyboard(isOpen, onClose, listRef, { returnFocusTo: triggerRef });
+
+  const onTriggerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isOpen) onToggle();
+    const to = e.key === "ArrowDown" ? "first" : "last";
+    requestAnimationFrame(() => focusMenuItem(listRef.current, to));
+  };
+
   return (
     <div className="relative">
       <button
-        className="transition-colors"
+        ref={triggerRef}
+        type="button"
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        className="ui-hover"
         style={{
-          padding: "4px 10px",
-          borderRadius: 5,
-          fontSize: 11,
+          padding: "var(--space-4) var(--space-10)",
+          borderRadius: "var(--radius-sm)",
+          fontSize: "var(--fs-body)",
           color: isOpen ? "var(--text-primary)" : "var(--text-secondary)",
           backgroundColor: isOpen ? "var(--bg-active)" : "transparent",
           cursor: "pointer",
           border: "none",
           whiteSpace: "nowrap",
         }}
-        onMouseEnter={(e) => {
-          onHoverEnter();
-          if (!isOpen) {
-            (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-active)";
-            (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isOpen) {
-            (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-            (e.currentTarget as HTMLElement).style.color = "var(--text-secondary)";
-          }
-        }}
+        onMouseEnter={onHoverEnter}
         onClick={onToggle}
+        onKeyDown={onTriggerKeyDown}
       >
         {menu.label}
       </button>
 
       {isOpen && (
         <div
-          className="absolute top-full left-0 z-50"
+          ref={listRef}
+          role="menu"
+          aria-label={menu.label}
+          className="absolute top-full left-0 ui-popover"
           style={{
-            marginTop: 2,
-            padding: 4,
+            zIndex: "var(--z-dropdown)",
+            marginTop: "var(--space-2)",
             minWidth: 220,
-            backgroundColor: "var(--bg-tertiary)",
-            border: "1px solid var(--border-color)",
-            borderRadius: 10,
-            boxShadow: "0 8px 30px rgba(0,0,0,0.4)",
+            // Size to the longest label + shortcut; the trigger it is
+            // positioned in is narrower than the menu.
+            width: "max-content",
           }}
         >
           {menu.items.map((item, i) =>
             item.separator ? (
-              <div
-                key={i}
-                style={{
-                  height: 1,
-                  margin: "4px 8px",
-                  backgroundColor: "var(--border-color)",
-                  opacity: 0.5,
-                }}
-              />
+              <div key={i} role="separator" className="ui-menu-separator" />
             ) : (
               <button
                 key={item.label}
-                className="w-full flex items-center justify-between transition-colors"
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: 6,
-                  fontSize: 12,
-                  color: item.disabled ? "var(--text-muted)" : "var(--text-primary)",
-                  cursor: item.disabled ? "default" : "pointer",
-                  opacity: item.disabled ? 0.4 : 1,
-                  backgroundColor: "transparent",
-                  border: "none",
-                  textAlign: "left",
-                }}
+                type="button"
+                role="menuitem"
+                className="ui-menu-item"
+                style={{ justifyContent: "space-between" }}
                 disabled={item.disabled}
-                onMouseEnter={(e) => {
-                  if (!item.disabled) {
-                    (e.currentTarget as HTMLElement).style.backgroundColor = "var(--bg-active)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                }}
                 onClick={() => {
                   item.action?.();
                   onClose();
                 }}
               >
-                <span>{item.label}</span>
+                <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>
                 {item.shortcut && (
                   <span
                     style={{
                       marginLeft: "auto",
-                      paddingLeft: 16,
-                      opacity: 0.4,
-                      fontSize: 11,
-                      fontFamily: "'SF Mono', 'Cascadia Code', 'Fira Code', monospace",
+                      paddingLeft: "var(--space-16)",
+                      color: "var(--text-secondary)",
+                      fontSize: "var(--fs-caption)",
+                      fontFamily: "var(--font-mono)",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {item.shortcut}

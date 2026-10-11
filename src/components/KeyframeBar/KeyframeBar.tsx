@@ -2,7 +2,7 @@
 // Keyframe Bar — Bottom bar for the Unified Editor
 //
 // 2-row layout:
-//   Row 1 (28px): KEYFRAMES label + Layer pills + Lane badges + Zoom
+//   Row 1 (32px): "Keyframes" label + layer switch + lane legend + zoom
 //   Row 2: Multi-property keyframe diamond strip
 //
 // Diamond interactions:
@@ -16,6 +16,7 @@
 // ============================================================
 
 import { useRef, useEffect, useCallback, useState } from "react";
+import { ChevronDown, ChevronRight, Minus, Plus, X } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
 import {
@@ -38,6 +39,15 @@ import { evaluateEasing } from "../../canvas/easings";
 import { KeyframeBarHeader } from "./KeyframeBarHeader";
 import { CurveGraph } from "./CurveGraph";
 import { PopoutCurveEditor } from "./PopoutCurveEditor";
+import { LANE_LABEL } from "./curveEditorUtils";
+import { LaneDot } from "./KeyframeBarHeader";
+import { chromeTheme, monoFont, sansFont, withAlpha, seriesColor } from "../../canvas/chromeTheme";
+import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
+import { IconButton } from "../common/IconButton";
+import { Button } from "../common/Button";
+import { SegmentedControl } from "../common/SegmentedControl";
+import { useMenuKeyboard } from "../../hooks/useMenuKeyboard";
 
 function CurveEditorResizeHandle() {
   const setCurveEditorHeight = useEditorStore((s) => s.setCurveEditorHeight);
@@ -62,12 +72,18 @@ function CurveEditorResizeHandle() {
   }, [setCurveEditorHeight]);
 
   return (
+    // Same look as the keyframe bar's own resize handle: a hairline that
+    // fills on hover, not a solid 4px bar.
     <div
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Resize curve editor"
+      className="ui-hover"
       onMouseDown={onMouseDown}
       style={{
         height: 4,
-        cursor: "row-resize",
-        backgroundColor: "var(--border-color)",
+        cursor: "ns-resize",
+        borderTop: "var(--rule) solid var(--border-color)",
         flexShrink: 0,
       }}
     />
@@ -97,9 +113,6 @@ interface DiamondHit {
 // previously only the render loop knew about group mode, so hit-tests used a
 // different (normal-mode) layout and clicks landed on the wrong row.
 type TaggedEvent = { event: LineEvent; color: string; globalIdx: number };
-
-// Per-member diamond colors in group mode (kept in sync with the render loop).
-const GROUP_MEMBER_COLORS = ["#ff6b6b", "#4dabf7", "#69db7c", "#ffd43b", "#da77f2", "#38d9a9", "#ffa94d", "#748ffc"];
 
 interface ContextMenuState {
   x: number;
@@ -161,24 +174,9 @@ export function KeyframeBar() {
     return viewStart + (px / canvasWidth) * viewRange;
   }, [viewStart, viewRange]);
 
-  // ---- Close context menu on outside click or Escape ----
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClose = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setContextMenu(null);
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setContextMenu(null);
-    };
-    document.addEventListener("mousedown", handleClose);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClose);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [contextMenu]);
+  // ---- Context menu: outside press / Escape close it, arrows move between items ----
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  useMenuKeyboard(contextMenu !== null, closeContextMenu, menuRef, { focusFirst: true, closeOnOutsidePress: true });
 
   // ---- Compute display data — SINGLE source of truth for both render & hit-test ----
   // K4: the render loop used to compute the group-mode lane layout (`kinds`,
@@ -220,7 +218,7 @@ export function KeyframeBar() {
       for (let mi = 0; mi < activeGroup.lines.length; mi++) {
         const memberLine = cs.chart.lines[activeGroup.lines[mi].lineIndex];
         if (!memberLine) continue;
-        const memberColor = GROUP_MEMBER_COLORS[mi % GROUP_MEMBER_COLORS.length];
+        const memberColor = seriesColor(mi);
         for (const evt of memberLine.events) {
           if (!visibleKinds.has(evt.kind)) continue;
           tagged.push({ event: evt, color: memberColor, globalIdx: raw.length });
@@ -353,16 +351,17 @@ export function KeyframeBar() {
       }
 
       const cs = useChartStore.getState();
+      const t = chromeTheme();
 
       const lineIdx = getSelectedLineIndex();
       if (lineIdx === null || lineIdx < 0 || lineIdx >= cs.chart.lines.length) {
         // No line selected — draw empty strip
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#141419";
+        ctx.fillStyle = t.bgPrimary;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-        ctx.font = "11px monospace";
+        ctx.fillStyle = t.textSecondary;
+        ctx.font = sansFont(11);
         ctx.textAlign = "center";
         ctx.fillText("Select a line to view events", canvas.width / 2, canvas.height / 2 + 4);
 
@@ -374,11 +373,11 @@ export function KeyframeBar() {
 
       // ---- Clear ----
       ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = "#141419";
+      ctx.fillStyle = t.bgPrimary;
       ctx.fillRect(0, 0, width, height);
 
       // ---- Beat grid lines ----
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+      ctx.strokeStyle = t.beatLineSecondary;
       ctx.lineWidth = 1;
       const startBeatFloor = Math.floor(viewStart);
       const endBeatCeil = Math.ceil(viewStart + viewRange);
@@ -392,8 +391,8 @@ export function KeyframeBar() {
 
         // Beat number label (every 4 beats)
         if (b % 4 === 0) {
-          ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
-          ctx.font = "8px monospace";
+          ctx.fillStyle = t.textSecondary;
+          ctx.font = monoFont(10);
           ctx.textAlign = "center";
           ctx.fillText(String(b), px, height - 2);
         }
@@ -408,12 +407,12 @@ export function KeyframeBar() {
         const bandRight = Math.min(width, Math.max(loopStartPx, loopEndPx));
 
         // Draw the highlighted loop band
-        ctx.fillStyle = loopEnabled ? "rgba(100, 200, 255, 0.12)" : "rgba(100, 200, 255, 0.05)";
+        ctx.fillStyle = withAlpha(t.accentPrimary, loopEnabled ? 0.12 : 0.05);
         ctx.fillRect(bandLeft, 0, bandRight - bandLeft, height);
 
         // Draw dashed boundary lines at loop edges
         ctx.save();
-        ctx.strokeStyle = loopEnabled ? "rgba(100, 200, 255, 0.6)" : "rgba(100, 200, 255, 0.25)";
+        ctx.strokeStyle = withAlpha(t.accentPrimary, loopEnabled ? 0.6 : 0.25);
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         if (loopStartPx >= 0 && loopStartPx <= width) {
@@ -462,11 +461,11 @@ export function KeyframeBar() {
       for (let ki = 0; ki < kinds.length; ki++) {
         const kind = kinds[ki];
         const cy = 4 + laneHeight * (ki + 0.5);
-        const kindColor = EVENT_COLORS[kind] || "#888";
+        const kindColor = EVENT_COLORS[kind] || t.textSecondary;
 
         // Kind label
         ctx.fillStyle = kindColor;
-        ctx.font = "bold 8px monospace";
+        ctx.font = monoFont(10, 600);
         ctx.textAlign = "left";
         ctx.fillText(KIND_SHORT[kind] || kind.charAt(0).toUpperCase(), 3, cy + 3);
 
@@ -522,9 +521,9 @@ export function KeyframeBar() {
 
             // Start diamond
             if (startPx >= -5 && startPx <= width + 5) {
-              // Selected highlight ring
+              // Selected highlight ring (canvas selection colour)
               if (isSelected) {
-                ctx.fillStyle = "#ffffff";
+                ctx.fillStyle = t.selectionColor;
                 ctx.beginPath();
                 ctx.moveTo(startPx, cy - DIAMOND_SIZE - 2);
                 ctx.lineTo(startPx + DIAMOND_SIZE + 2, cy);
@@ -534,7 +533,7 @@ export function KeyframeBar() {
                 ctx.fill();
               }
 
-              ctx.fillStyle = isSelected ? "#ffffff" : kindColor;
+              ctx.fillStyle = isSelected ? t.selectionColor : kindColor;
               ctx.beginPath();
               ctx.moveTo(startPx, cy - DIAMOND_SIZE);
               ctx.lineTo(startPx + DIAMOND_SIZE, cy);
@@ -559,7 +558,7 @@ export function KeyframeBar() {
 
         ctx.save();
 
-        // Selected: draw a white outline ring and a vertical snap line
+        // Selected: draw a selection-colour outline and a vertical snap line
         if (isSelected) {
           // Vertical snap guide line
           ctx.strokeStyle = bm.color + "40";
@@ -571,8 +570,8 @@ export function KeyframeBar() {
           ctx.stroke();
           ctx.setLineDash([]);
 
-          // White outline behind the triangle
-          ctx.fillStyle = "#ffffff";
+          // Selection outline behind the triangle
+          ctx.fillStyle = t.selectionColor;
           ctx.beginPath();
           ctx.moveTo(bmPx, 11);
           ctx.lineTo(bmPx - 5, 2);
@@ -598,7 +597,7 @@ export function KeyframeBar() {
       const playheadPx = beatToPixel(curBeat, width);
 
       if (playheadPx >= 0 && playheadPx <= width) {
-        ctx.strokeStyle = "#ff5555";
+        ctx.strokeStyle = t.indicatorColor;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(playheadPx, 0);
@@ -606,7 +605,7 @@ export function KeyframeBar() {
         ctx.stroke();
 
         // Playhead triangle
-        ctx.fillStyle = "#ff5555";
+        ctx.fillStyle = t.indicatorColor;
         ctx.beginPath();
         ctx.moveTo(playheadPx - 5, 0);
         ctx.lineTo(playheadPx + 5, 0);
@@ -885,188 +884,101 @@ export function KeyframeBar() {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        background: "var(--bg-accent)",
-        borderTop: "1px solid var(--border-color)",
+        background: "var(--bg-secondary)",
+        borderTop: "var(--rule) solid var(--border-color)",
         flexShrink: 0,
       }}
     >
-      {/* ---- Row 1: Controls (28px) ---- */}
+      {/* ---- Row 1: Controls (32px) ---- */}
       <div
         style={{
-          height: 28,
+          height: 32,
           display: "flex",
           alignItems: "center",
-          gap: 4,
-          padding: "0 10px",
-          borderBottom: "1px solid rgba(42, 42, 53, 0.4)",
+          gap: "var(--space-8)",
+          padding: "0 var(--space-8) 0 var(--space-10)",
+          borderBottom: "var(--rule) solid var(--separator)",
           flexShrink: 0,
         }}
       >
         {/* Section label */}
-        <span style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 600, letterSpacing: 0.5, marginRight: 6 }}>
-          KEYFRAMES
+        <span style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)", fontWeight: 600 }}>
+          Keyframes
         </span>
 
-        {/* Divider */}
-        <div style={{ width: 1, height: 14, background: "var(--border-color)" }} />
-
-        {/* Layer pills */}
+        {/* Layer switch */}
         {hasLayers && (
-          <div style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: 4 }}>
-            {[0, 1, 2, 3, 4].map((i) => (
-              <button
-                key={i}
-                onClick={() => setActiveLayer(i)}
-                style={{
-                  padding: "2px 6px",
-                  borderRadius: 6,
-                  border: "none",
-                  fontSize: 9,
-                  cursor: "pointer",
-                  fontWeight: 500,
-                  transition: "all 0.15s",
-                  background: activeLayer === i ? "var(--accent-primary)" : "transparent",
-                  color: activeLayer === i ? "#fff" : "var(--text-secondary, #888)",
-                  fontFamily: "inherit",
-                }}
-              >
-                L{i}
-              </button>
-            ))}
-            <button
-              onClick={() => setActiveLayer(-1)}
-              style={{
-                padding: "2px 6px",
-                borderRadius: 6,
-                border: "none",
-                fontSize: 9,
-                cursor: "pointer",
-                fontWeight: 500,
-                transition: "all 0.15s",
-                background: activeLayer === -1 ? "var(--accent-primary)" : "transparent",
-                color: activeLayer === -1 ? "#fff" : "var(--text-secondary, #888)",
-                fontFamily: "inherit",
-              }}
-            >
-              Flat
-            </button>
-          </div>
+          <SegmentedControl
+            label="Event layer"
+            size="sm"
+            value={activeLayer}
+            onChange={setActiveLayer}
+            options={[
+              ...[0, 1, 2, 3, 4].map((i) => ({ value: i, label: `L${i}`, title: `Layer ${i}` })),
+              { value: -1, label: "Flat", title: "Flat events (no layer)" },
+            ]}
+          />
         )}
 
         {/* Spacer */}
         <div style={{ flex: 1 }} />
 
-        {/* Event lane toggle badges */}
-        <div style={{ display: "flex", gap: 3, marginRight: 4 }}>
-          {CORE_KINDS.map((kind) => {
-            const color = EVENT_COLORS[kind] || "#888";
-            return (
-              <div
-                key={kind}
+        {/* Event lane legend */}
+        <div
+          aria-label="Event lanes"
+          style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}
+        >
+          {CORE_KINDS.map((kind) => (
+            <Tooltip key={kind} content={`${LANE_LABEL[kind]} lane`}>
+              <span
                 style={{
-                  width: 14,
-                  height: 14,
-                  borderRadius: 3,
-                  background: `${color}25`,
-                  border: `1px solid ${color}50`,
-                  display: "flex",
+                  display: "inline-flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 7,
-                  fontWeight: 700,
-                  color,
-                  cursor: "pointer",
+                  gap: "var(--space-4)",
+                  fontSize: "var(--fs-caption)",
+                  color: "var(--text-secondary)",
+                  whiteSpace: "nowrap",
                 }}
-                title={`${kind} lane`}
               >
-                {KIND_SHORT[kind] || kind.charAt(0).toUpperCase()}
-              </div>
-            );
-          })}
+                <LaneDot color={EVENT_COLORS[kind] || "var(--text-secondary)"} on />
+                {LANE_LABEL[kind] ?? KIND_SHORT[kind] ?? kind}
+              </span>
+            </Tooltip>
+          ))}
         </div>
 
-        {/* Divider */}
-        <div style={{ width: 1, height: 14, background: "var(--border-color)" }} />
-
         {/* Zoom controls */}
-        <div style={{ display: "flex", gap: 2 }}>
-          <button
+        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+          <IconButton
+            icon={Minus}
+            label="Zoom out"
+            size="md"
             onClick={() => setViewRange((prev) => Math.min(200, prev * 1.25))}
-            title="Zoom out"
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: 4,
-              border: "none",
-              background: "transparent",
-              color: "var(--text-muted)",
-              fontSize: 12,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: "inherit",
-            }}
-          >
-            −
-          </button>
-          <button
+          />
+          <IconButton
+            icon={Plus}
+            label="Zoom in"
+            size="md"
             onClick={() => setViewRange((prev) => Math.max(2, prev * 0.8))}
-            title="Zoom in"
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: 4,
-              border: "none",
-              background: "transparent",
-              color: "var(--text-muted)",
-              fontSize: 12,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: "inherit",
-            }}
-          >
-            +
-          </button>
+          />
         </div>
 
         {/* Inspector toggle (when closed) */}
         {!inspectorOpen && (
-          <button
-            onClick={toggleInspector}
-            style={{
-              background: "none",
-              border: "1px solid #333",
-              borderRadius: 6,
-              color: "#666",
-              cursor: "pointer",
-              fontSize: 9,
-              padding: "2px 6px",
-              fontFamily: "inherit",
-            }}
-          >
-            Inspector {"\u25B8"}
-          </button>
+          <Button variant="ghost" size="sm" onClick={toggleInspector}>
+            Inspector
+            <Icon icon={ChevronRight} size={12} />
+          </Button>
         )}
 
         {/* Close keyframe bar */}
-        <button
+        <IconButton
+          icon={X}
+          label="Close keyframe bar"
+          shortcut="K"
+          size="md"
           onClick={() => useEditorStore.getState().toggleKeyframeBar()}
-          title="Close keyframe bar (K)"
-          style={{
-            background: "none",
-            border: "none",
-            color: "#555",
-            cursor: "pointer",
-            fontSize: 14,
-            padding: "0 4px",
-            fontFamily: "inherit",
-          }}
-        >
-          {"\u00D7"}
-        </button>
+        />
       </div>
 
       {/* ---- Row 2: Diamond strip (64px) ---- */}
@@ -1104,23 +1016,21 @@ export function KeyframeBar() {
       {contextMenu && (
         <div
           ref={menuRef}
+          role="menu"
+          aria-label={contextMenu.bookmarkHit ? "Bookmark actions" : "Event actions"}
+          className="ui-popover"
           style={{
             position: "fixed",
             left: contextMenu.x,
             top: contextMenu.y,
-            background: "var(--bg-secondary)",
-            border: "1px solid var(--border-color)",
-            borderRadius: 4,
-            padding: "4px 0",
-            zIndex: 200,
-            minWidth: 160,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            zIndex: "var(--z-overlay)",
+            minWidth: 180,
           }}
         >
           {contextMenu.bookmarkHit ? (
             <>
               {/* Bookmark context menu */}
-              <div style={{ padding: "4px 12px", fontSize: 10, color: "var(--text-muted)", borderBottom: "1px solid var(--border-color)" }}>
+              <div style={{ padding: "var(--space-4) var(--space-10)", fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>
                 Bookmark {contextMenu.bookmarkHit.label || contextMenu.bookmarkHit.preset || ""}
               </div>
               <button
@@ -1132,46 +1042,24 @@ export function KeyframeBar() {
                   seekToBeat(bmBeat);
                   setContextMenu(null);
                 }}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  padding: "4px 12px",
-                  background: "transparent",
-                  border: "none",
-                  color: "#ccc",
-                  cursor: "pointer",
-                  fontSize: 11,
-                  textAlign: "left",
-                  fontFamily: "inherit",
-                }}
-                onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--bg-active)"; }}
-                onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "transparent"; }}
+                type="button"
+                role="menuitem"
+                className="ui-menu-item"
               >
-                Snap to Bookmark
+                Snap to bookmark
               </button>
-              <div style={{ height: 1, background: "var(--border-color)", margin: "2px 0" }} />
+              <div className="ui-menu-separator" />
               <button
                 onClick={() => {
                   if (!contextMenu.bookmarkHit) return;
                   useBookmarkStore.getState().removeBookmark(contextMenu.bookmarkHit.id);
                   setContextMenu(null);
                 }}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  padding: "4px 12px",
-                  background: "transparent",
-                  border: "none",
-                  color: "#ff6b6b",
-                  cursor: "pointer",
-                  fontSize: 11,
-                  textAlign: "left",
-                  fontFamily: "inherit",
-                }}
-                onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--bg-active)"; }}
-                onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "transparent"; }}
+                type="button"
+                role="menuitem"
+                className="ui-menu-item ui-menu-item--danger"
               >
-                Delete Bookmark
+                Delete bookmark
               </button>
               {useBookmarkStore.getState().selectedBookmarkIds.length > 1 && (
                 <button
@@ -1179,22 +1067,11 @@ export function KeyframeBar() {
                     useBookmarkStore.getState().deleteSelected();
                     setContextMenu(null);
                   }}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "4px 12px",
-                    background: "transparent",
-                    border: "none",
-                    color: "#ff6b6b",
-                    cursor: "pointer",
-                    fontSize: 11,
-                    textAlign: "left",
-                    fontFamily: "inherit",
-                  }}
-                  onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--bg-active)"; }}
-                  onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "transparent"; }}
+                  type="button"
+                  role="menuitem"
+                  className="ui-menu-item ui-menu-item--danger"
                 >
-                  Delete All Selected ({useBookmarkStore.getState().selectedBookmarkIds.length})
+                  Delete all selected ({useBookmarkStore.getState().selectedBookmarkIds.length})
                 </button>
               )}
             </>
@@ -1203,22 +1080,11 @@ export function KeyframeBar() {
               {/* Event context menu */}
               <button
                 onClick={handleDeleteEvent}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  padding: "4px 12px",
-                  background: "transparent",
-                  border: "none",
-                  color: "#ff6b6b",
-                  cursor: "pointer",
-                  fontSize: 11,
-                  textAlign: "left",
-                  fontFamily: "inherit",
-                }}
-                onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--bg-active)"; }}
-                onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "transparent"; }}
+                type="button"
+                role="menuitem"
+                className="ui-menu-item ui-menu-item--danger"
               >
-                Delete Event
+                Delete event
               </button>
 
               {/* Split Event at Playhead */}
@@ -1274,15 +1140,11 @@ export function KeyframeBar() {
                   }
                   setContextMenu(null);
                 }}
-                style={{
-                  display: "block", width: "100%", padding: "4px 12px",
-                  background: "transparent", border: "none", color: "#ccc",
-                  cursor: "pointer", fontSize: 11, textAlign: "left", fontFamily: "inherit",
-                }}
-                onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--bg-active)"; }}
-                onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "transparent"; }}
+                type="button"
+                role="menuitem"
+                className="ui-menu-item"
               >
-                Split at Playhead
+                Split at playhead
               </button>
 
               {/* Duplicate Event After */}
@@ -1308,73 +1170,57 @@ export function KeyframeBar() {
                   cs.addEventRouted(lineIdx, newEvent, getDisplayData()?.layerIdx ?? -1);
                   setContextMenu(null);
                 }}
-                style={{
-                  display: "block", width: "100%", padding: "4px 12px",
-                  background: "transparent", border: "none", color: "#ccc",
-                  cursor: "pointer", fontSize: 11, textAlign: "left", fontFamily: "inherit",
-                }}
-                onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--bg-active)"; }}
-                onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "transparent"; }}
+                type="button"
+                role="menuitem"
+                className="ui-menu-item"
               >
-                Duplicate After
+                Duplicate after
               </button>
 
               {/* Divider */}
-              <div style={{ height: 1, background: "var(--border-color)", margin: "2px 0" }} />
+              <div className="ui-menu-separator" />
 
-              {/* Change Easing toggle */}
+              {/* Change easing toggle */}
               <button
                 onClick={() => setContextMenu((prev) => prev ? { ...prev, showEasingSubmenu: !prev.showEasingSubmenu } : null)}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  padding: "4px 12px",
-                  background: contextMenu.showEasingSubmenu ? "var(--bg-active)" : "transparent",
-                  border: "none",
-                  color: "#ccc",
-                  cursor: "pointer",
-                  fontSize: 11,
-                  textAlign: "left",
-                  fontFamily: "inherit",
-                }}
-                onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--bg-active)"; }}
-                onMouseLeave={(e) => {
-                  if (!contextMenu.showEasingSubmenu) {
-                    (e.target as HTMLElement).style.background = "transparent";
-                  }
-                }}
+                type="button"
+                role="menuitem"
+                aria-haspopup="menu"
+                aria-expanded={contextMenu.showEasingSubmenu}
+                className="ui-menu-item"
+                style={contextMenu.showEasingSubmenu ? { background: "var(--bg-active)" } : undefined}
               >
-                Change Easing {contextMenu.showEasingSubmenu ? "\u25BE" : "\u25B8"}
+                <span style={{ flex: 1 }}>Change easing</span>
+                <Icon
+                  icon={contextMenu.showEasingSubmenu ? ChevronDown : ChevronRight}
+                  size={12}
+                  style={{ color: "var(--text-secondary)" }}
+                />
               </button>
 
               {/* Easing submenu */}
               {contextMenu.showEasingSubmenu && (
                 <div
+                  role="menu"
+                  aria-label="Easing"
                   style={{
                     maxHeight: 200,
                     overflowY: "auto",
-                    borderTop: "1px solid var(--border-color)",
-                    padding: "2px 0",
+                    paddingTop: "var(--space-2)",
                   }}
                 >
                   {EASING_OPTIONS.map((opt) => (
                     <button
                       key={String(opt.value)}
                       onClick={() => handleChangeEasing(opt.value as EasingType)}
+                      type="button"
+                      role="menuitem"
+                      className="ui-menu-item"
                       style={{
-                        display: "block",
-                        width: "100%",
-                        padding: "3px 20px",
-                        background: "transparent",
-                        border: "none",
-                        color: "#aaa",
-                        cursor: "pointer",
-                        fontSize: 10,
-                        textAlign: "left",
-                        fontFamily: "inherit",
+                        minHeight: "var(--control-sm)",
+                        paddingLeft: "var(--space-20)",
+                        fontSize: "var(--fs-control)",
                       }}
-                      onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--bg-active)"; (e.target as HTMLElement).style.color = "#fff"; }}
-                      onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "transparent"; (e.target as HTMLElement).style.color = "#aaa"; }}
                     >
                       {opt.label}
                     </button>

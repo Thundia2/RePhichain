@@ -278,6 +278,14 @@ export function UnifiedCanvas() {
     };
   }, [resizeCanvas]);
 
+  // ---- Helper: Get selected line's render info ----
+  const getSelectedLineInfo = useCallback((): RenderedLineInfo | null => {
+    const rr = lastRenderResultRef.current;
+    const selLineIdx = getSelectedLineIndex();
+    if (!rr || selLineIdx === null) return null;
+    return rr.lines.find((l) => l.lineIndex === selLineIdx) ?? null;
+  }, []);
+
   // ---- Render loop ----
   useEffect(() => {
     if (!rendererRef.current && !pixiRendererRef.current) return;
@@ -687,15 +695,7 @@ export function UnifiedCanvas() {
 
     rafRef.current = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(rafRef.current);
-  }, []); // Empty deps — loop reads from stores directly
-
-  // ---- Helper: Get selected line's render info ----
-  const getSelectedLineInfo = useCallback((): RenderedLineInfo | null => {
-    const rr = lastRenderResultRef.current;
-    const selLineIdx = getSelectedLineIndex();
-    if (!rr || selLineIdx === null) return null;
-    return rr.lines.find((l) => l.lineIndex === selLineIdx) ?? null;
-  }, []);
+  }, [getSelectedLineInfo]); // Stable deps — loop reads from stores directly
 
   // ---- Mouse Down Handler ----
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1322,7 +1322,7 @@ export function UnifiedCanvas() {
     <div
       ref={containerRef}
       className="w-full h-full relative"
-      style={{ backgroundColor: "#000" }}
+      style={{ backgroundColor: "var(--canvas-bg)" }}
     >
       <canvas
         ref={canvasRef}
@@ -1372,10 +1372,7 @@ export function UnifiedCanvas() {
       />
       {!isLoaded && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <span
-            className="text-sm"
-            style={{ color: "var(--text-muted)" }}
-          >
+          <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-body)", fontFamily: "var(--font-sans)" }}>
             No chart loaded — import or create a chart first
           </span>
         </div>

@@ -18,6 +18,7 @@
 
 import type { Note, LineEvent, CurveNoteTrack } from "../types/chart";
 import { CANVAS_WIDTH, beatToFloat } from "../types/chart";
+import { chromeTheme, monoFont, withAlpha } from "./chromeTheme";
 import { generateCurveNotes } from "../utils/curveNoteTrack";
 import type { DragSelectionRect, PendingNote } from "../stores/editorStore";
 import {
@@ -40,14 +41,15 @@ const NOTE_TL_HEIGHT = 6;
 const HOLD_TL_WIDTH = 12;
 
 // ============================================================
-// Color palette (Timeline keeps its own selection color — #90ee90,
-// distinct from GameRenderer/UnrolledRenderer's #32cd32)
+// Color palette — chrome colours come from the design tokens via
+// chromeTheme(); the timeline keeps the canvas selection token
+// (--selection-color), distinct from GameRenderer/UnrolledRenderer's #32cd32.
 // ============================================================
 
 /** Timeline uses the shared above-note palette */
 const NOTE_COLORS = ABOVE_NOTE_COLORS;
 
-const SELECTION_COLOR = "#90ee90";
+const selectionColor = () => chromeTheme().selectionColor;
 
 // ============================================================
 // Renderer
@@ -152,7 +154,7 @@ export class TimelineRenderer {
 
     // ---- Clear ----
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-    ctx.fillStyle = "#16213e";
+    ctx.fillStyle = chromeTheme().bgPrimary;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
     // ---- Visible beat range ----
@@ -273,7 +275,7 @@ export class TimelineRenderer {
       const pnBeat = beatToFloat(pn.beat);
       const pnY = TimelineRenderer.beatToY(pnBeat, scrollBeat, zoom, canvasHeight);
       const pnX = TimelineRenderer.noteXToPixel(pn.x, noteAreaLeft, noteAreaWidth);
-      const color = NOTE_COLORS[pn.kind] ?? "#fff";
+      const color = NOTE_COLORS[pn.kind] ?? chromeTheme().textPrimary;
 
       ctx.globalAlpha = 0.25;
       ctx.fillStyle = color;
@@ -289,9 +291,9 @@ export class TimelineRenderer {
       const rw = Math.abs(r.x2 - r.x1);
       const rh = Math.abs(r.y2 - r.y1);
 
-      ctx.fillStyle = "rgba(144, 238, 144, 0.12)";
+      ctx.fillStyle = withAlpha(chromeTheme().selectionColor, 0.12);
       ctx.fillRect(rx, ry, rw, rh);
-      ctx.strokeStyle = "rgba(144, 238, 144, 0.6)";
+      ctx.strokeStyle = withAlpha(chromeTheme().selectionColor, 0.6);
       ctx.lineWidth = 1;
       ctx.strokeRect(rx, ry, rw, rh);
     }
@@ -299,7 +301,7 @@ export class TimelineRenderer {
     // ---- Indicator line (current playback position) ----
     const indicatorY = TimelineRenderer.beatToY(currentBeat, scrollBeat, zoom, canvasHeight);
     if (indicatorY >= 0 && indicatorY <= canvasHeight) {
-      ctx.strokeStyle = "#00e5ff";
+      ctx.strokeStyle = chromeTheme().indicatorColor;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(BEAT_GUTTER_WIDTH, indicatorY);
@@ -307,7 +309,7 @@ export class TimelineRenderer {
       ctx.stroke();
 
       // Small triangle indicator
-      ctx.fillStyle = "#00e5ff";
+      ctx.fillStyle = chromeTheme().indicatorColor;
       ctx.beginPath();
       ctx.moveTo(BEAT_GUTTER_WIDTH, indicatorY - 5);
       ctx.lineTo(BEAT_GUTTER_WIDTH + 8, indicatorY);
@@ -316,7 +318,7 @@ export class TimelineRenderer {
     }
 
     // ---- Separator line: beat gutter right edge ----
-    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.strokeStyle = chromeTheme().borderColor;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(BEAT_GUTTER_WIDTH, 0);
@@ -346,8 +348,8 @@ export class TimelineRenderer {
       const isWholeBeat = i % effectiveDensity === 0;
 
       ctx.strokeStyle = isWholeBeat
-        ? "rgba(255, 255, 255, 0.25)"
-        : "rgba(255, 255, 255, 0.08)";
+        ? chromeTheme().beatLinePrimary
+        : chromeTheme().beatLineSecondary;
       ctx.lineWidth = isWholeBeat ? 1 : 0.5;
 
       ctx.beginPath();
@@ -357,8 +359,8 @@ export class TimelineRenderer {
 
       // Beat number label
       if (isWholeBeat) {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
-        ctx.font = "10px monospace";
+        ctx.fillStyle = chromeTheme().textSecondary;
+        ctx.font = monoFont(10);
         ctx.textAlign = "right";
         ctx.textBaseline = "middle";
         ctx.fillText(Math.round(b).toString(), BEAT_GUTTER_WIDTH - 4, y);
@@ -386,13 +388,13 @@ export class TimelineRenderer {
 
       if (i === 0 || i === verticalLines - 1) {
         // Edge lines — slightly brighter than interior
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+        ctx.strokeStyle = withAlpha(chromeTheme().textPrimary, 0.15);
       } else if (isOdd && i === centerIdx) {
         // Center line — only when N is odd (real snap point at X=0)
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.23)";
+        ctx.strokeStyle = chromeTheme().beatLinePrimary;
       } else {
         // Regular interior grid line
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+        ctx.strokeStyle = chromeTheme().beatLineSecondary;
       }
 
       ctx.beginPath();
@@ -448,7 +450,7 @@ export class TimelineRenderer {
       const alpha = marker.strength * opacity;
       if (alpha < 0.02) continue; // Too faint to see
 
-      ctx.strokeStyle = `rgba(255, 170, 50, ${alpha})`;
+      ctx.strokeStyle = withAlpha(chromeTheme().onsetColor, alpha);
       ctx.lineWidth = Math.max(1, marker.strength * 2.5);
 
       ctx.beginPath();
@@ -458,7 +460,7 @@ export class TimelineRenderer {
 
       // Small triangle marker on the left edge for strong onsets
       if (marker.strength > 0.3) {
-        ctx.fillStyle = `rgba(255, 170, 50, ${alpha * 0.8})`;
+        ctx.fillStyle = withAlpha(chromeTheme().onsetColor, alpha * 0.8);
         ctx.beginPath();
         ctx.moveTo(BEAT_GUTTER_WIDTH - 4, y - 2);
         ctx.lineTo(BEAT_GUTTER_WIDTH, y);
@@ -479,7 +481,7 @@ export class TimelineRenderer {
   ) {
     const y = TimelineRenderer.beatToY(beat, scrollBeat, zoom, canvasHeight);
     const x = TimelineRenderer.noteXToPixel(note.x, noteAreaLeft, noteAreaWidth);
-    const color = NOTE_COLORS[note.kind] ?? "#fff";
+    const color = NOTE_COLORS[note.kind] ?? chromeTheme().textPrimary;
 
     // Draw hold body first (behind the note head)
     if (note.kind === "hold" && note.hold_beat) {
@@ -521,7 +523,7 @@ export class TimelineRenderer {
     // Selection highlight
     if (isSelected) {
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = SELECTION_COLOR;
+      ctx.strokeStyle = selectionColor();
       ctx.lineWidth = 2;
       ctx.strokeRect(
         x - NOTE_TL_WIDTH / 2 - 2,

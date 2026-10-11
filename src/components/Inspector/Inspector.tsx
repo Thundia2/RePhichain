@@ -6,8 +6,11 @@
 // (start/end beat, value, easing), and line settings (name,
 // texture, hierarchy). Auto-switches between note, event, and
 // line inspector views based on the active editor selection.
+// Note type and side are picked with SegmentedControls (note types
+// drawn with NoteGlyph); everything else uses the shared form fields.
 // ============================================================
 
+import type React from "react";
 import { useMemo, useEffect, useRef, useState } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import {
@@ -17,8 +20,30 @@ import {
 } from "../../stores/selection";
 import type { Note, LineEvent, NoteKind, EasingType } from "../../types/chart";
 import { Field, SelectField, BeatField, EASING_OPTIONS } from "../common/FormFields";
-import { Card, SectionHeader, ActionButton } from "../common/UIKit";
+import { Card, SectionHeader, ActionButton, INPUT_STYLE } from "../common/UIKit";
 import { ColorPicker } from "../common/ColorPicker";
+import { NoteGlyph } from "../common/NoteGlyph";
+import { SegmentedControl, type SegmentOption } from "../common/SegmentedControl";
+
+const TEXTAREA_STYLE: React.CSSProperties = {
+  ...INPUT_STYLE,
+  height: "auto",
+  resize: "vertical",
+  minHeight: 40,
+};
+
+const CAPTION_STYLE: React.CSSProperties = {
+  fontSize: "var(--fs-caption)",
+  color: "var(--text-secondary)",
+};
+
+/** "scale_x" → "Scale X", "x" → "X" (sentence case, axis letters upper-case). */
+function eventKindLabel(kind: string): string {
+  return kind
+    .split("_")
+    .map((w, i) => (w.length === 1 ? w.toUpperCase() : i === 0 ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
 
 /** Texture thumbnail + upload/remove for a line's custom texture */
 function TexturePreview({ textureName, lineIndex }: { textureName?: string; lineIndex: number }) {
@@ -64,7 +89,7 @@ function TexturePreview({ textureName, lineIndex }: { textureName?: string; line
   };
 
   return (
-    <div style={{ marginTop: 2, marginBottom: 4 }}>
+    <div style={{ marginTop: "var(--space-2)", marginBottom: "var(--space-4)" }}>
       {previewUrl && (
         <img
           src={previewUrl}
@@ -72,22 +97,22 @@ function TexturePreview({ textureName, lineIndex }: { textureName?: string; line
           style={{
             maxWidth: "100%",
             maxHeight: 80,
-            borderRadius: 6,
-            border: "1px solid var(--border-color)",
-            marginBottom: 4,
+            borderRadius: "var(--radius-md)",
+            border: "var(--rule) solid var(--border-color)",
+            marginBottom: "var(--space-4)",
             objectFit: "contain",
-            background: "rgba(0,0,0,0.3)",
+            background: "var(--canvas-bg)",
           }}
         />
       )}
       {textureName && !previewUrl && (
-        <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>
+        <div style={{ ...CAPTION_STYLE, marginBottom: "var(--space-4)" }}>
           Image not loaded ({textureName})
         </div>
       )}
-      <div style={{ display: "flex", gap: 4 }}>
+      <div style={{ display: "flex", gap: "var(--space-4)" }}>
         <ActionButton variant="primary" onClick={handleUpload}>
-          {textureName ? "Change..." : "+ Add Texture"}
+          {textureName ? "Change…" : "Add texture…"}
         </ActionButton>
         {textureName && (
           <ActionButton variant="danger" onClick={handleRemove}>
@@ -99,25 +124,57 @@ function TexturePreview({ textureName, lineIndex }: { textureName?: string; line
   );
 }
 
-const NOTE_KIND_OPTIONS = [
-  { value: "tap", label: "Tap" },
-  { value: "drag", label: "Drag" },
-  { value: "flick", label: "Flick" },
-  { value: "hold", label: "Hold" },
+const NOTE_KIND_LABELS: Record<NoteKind, string> = { tap: "Tap", drag: "Drag", flick: "Flick", hold: "Hold" };
+
+const NOTE_KIND_SEGMENTS: SegmentOption<NoteKind>[] = (["tap", "drag", "flick", "hold"] as const).map((k) => ({
+  value: k,
+  title: NOTE_KIND_LABELS[k],
+  label: <><NoteGlyph kind={k} size={14} /><span className="sr-only">{NOTE_KIND_LABELS[k]}</span></>,
+}));
+
+const SIDE_SEGMENTS: SegmentOption<"above" | "below">[] = [
+  { value: "above", label: "Above" },
+  { value: "below", label: "Below" },
 ];
+
+/** Label + control row laid out like the shared Field / SelectField. */
+function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="w-16 text-right flex-shrink-0" style={{ color: "var(--text-secondary)" }}>{label}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+/** Note type picker: one segment per type, drawn with its NoteGlyph. null = mixed selection. */
+function NoteKindPicker({ value, onChange }: { value: NoteKind | null; onChange: (k: NoteKind) => void }) {
+  return (
+    <FieldRow label="Kind">
+      <SegmentedControl options={NOTE_KIND_SEGMENTS} value={value} onChange={onChange} size="sm" block label="Note type" />
+    </FieldRow>
+  );
+}
+
+/** Above / below picker. null = mixed selection. */
+function SidePicker({ value, onChange }: { value: "above" | "below" | null; onChange: (v: "above" | "below") => void }) {
+  return (
+    <FieldRow label="Side">
+      <SegmentedControl options={SIDE_SEGMENTS} value={value} onChange={onChange} size="sm" block label="Side" />
+    </FieldRow>
+  );
+}
 
 function NoteInspector({ note, lineIndex, noteIndex }: { note: Note; lineIndex: number; noteIndex: number }) {
   const editNote = useChartStore((s) => s.editNote);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: 8 }}>
-      <SectionHeader color="var(--accent-primary)">Note #{noteIndex}</SectionHeader>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", padding: "var(--space-8)" }}>
+      <SectionHeader color="var(--text-primary)">Note #{noteIndex}</SectionHeader>
       <Card>
-        <div style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <SelectField
-            label="Kind"
+        <div style={{ padding: "var(--space-6) var(--space-8)", display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          <NoteKindPicker
             value={note.kind}
-            options={NOTE_KIND_OPTIONS}
             onChange={(v) => {
               // P6: switching to "hold" without a hold_beat exports a zero-length
               // hold (garbage). Seed one beat so the hold is valid. Same guard in
@@ -144,13 +201,8 @@ function NoteInspector({ note, lineIndex, noteIndex }: { note: Note; lineIndex: 
             onChange={(v) => { const val = parseFloat(v); editNote(lineIndex, noteIndex, { speed: isNaN(val) ? 1 : val }); }}
             step="0.1"
           />
-          <SelectField
-            label="Side"
+          <SidePicker
             value={note.above ? "above" : "below"}
-            options={[
-              { value: "above", label: "Above" },
-              { value: "below", label: "Below" },
-            ]}
             onChange={(v) => editNote(lineIndex, noteIndex, { above: v === "above" })}
           />
           {note.kind === "hold" && note.hold_beat && (
@@ -162,9 +214,9 @@ function NoteInspector({ note, lineIndex, noteIndex }: { note: Note; lineIndex: 
           )}
         </div>
       </Card>
-      <SectionHeader>RPE Properties</SectionHeader>
+      <SectionHeader>RPE properties</SectionHeader>
       <Card>
-        <div style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ padding: "var(--space-6) var(--space-8)", display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           <Field
             label="Size"
             value={note.size ?? 1}
@@ -184,7 +236,7 @@ function NoteInspector({ note, lineIndex, noteIndex }: { note: Note; lineIndex: 
             step="1"
           />
           <Field
-            label="Vis. Time"
+            label="Vis. time"
             value={note.visible_time ?? 999999}
             onChange={(v) => {
               const val = parseFloat(v);
@@ -202,7 +254,7 @@ function NoteInspector({ note, lineIndex, noteIndex }: { note: Note; lineIndex: 
             onChange={(v) => editNote(lineIndex, noteIndex, { fake: v === "true" ? true : undefined })}
           />
           <Field
-            label="Y Offset"
+            label="Y offset"
             value={note.y_offset ?? 0}
             onChange={(v) => {
               const val = parseFloat(v);
@@ -211,7 +263,7 @@ function NoteInspector({ note, lineIndex, noteIndex }: { note: Note; lineIndex: 
             step="0.5"
           />
           <Field
-            label="Judge Area"
+            label="Judge area"
             value={note.judge_area ?? 1}
             onChange={(v) => {
               const val = parseFloat(v);
@@ -220,7 +272,7 @@ function NoteInspector({ note, lineIndex, noteIndex }: { note: Note; lineIndex: 
             step="0.1"
           />
           <Field
-            label="Hit Sound"
+            label="Hit sound"
             type="text"
             value={note.hitsound ?? ""}
             onChange={(v) => editNote(lineIndex, noteIndex, { hitsound: v || undefined })}
@@ -252,10 +304,10 @@ function EventInspectorPanel({ event, lineIndex, eventIndex }: { event: LineEven
   const valueMin = isScaleEvent ? "0" : undefined;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: 8 }}>
-      <SectionHeader color="var(--accent-primary)">Event #{eventIndex} ({event.kind})</SectionHeader>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", padding: "var(--space-8)" }}>
+      <SectionHeader color="var(--text-primary)">Event #{eventIndex} ({eventKindLabel(event.kind)})</SectionHeader>
       <Card>
-        <div style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ padding: "var(--space-6) var(--space-8)", display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           <BeatField
             label="Start"
             beat={event.start_beat}
@@ -272,18 +324,18 @@ function EventInspectorPanel({ event, lineIndex, eventIndex }: { event: LineEven
             const rgb = (event.value as { color_constant: [number, number, number] }).color_constant;
             return (
               <>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
                   <div style={{
-                    width: 24, height: 24, borderRadius: 6,
+                    width: 24, height: 24, borderRadius: "var(--radius-md)",
                     backgroundColor: `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`,
-                    border: "1px solid var(--border-color)",
+                    border: "var(--rule) solid var(--border-color)",
                   }} />
-                  <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+                  <span style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
                     rgb({rgb[0]}, {rgb[1]}, {rgb[2]})
                   </span>
                 </div>
                 <ActionButton variant="primary" onClick={() => setShowColorPicker("constant")}>
-                  Edit Color
+                  Edit color…
                 </ActionButton>
                 <Field label="R" value={rgb[0]} onChange={(v) => editEvent(lineIndex, eventIndex, { value: { color_constant: [parseInt(v) || 0, rgb[1], rgb[2]] } })} step="1" min="0" max="255" />
                 <Field label="G" value={rgb[1]} onChange={(v) => editEvent(lineIndex, eventIndex, { value: { color_constant: [rgb[0], parseInt(v) || 0, rgb[2]] } })} step="1" min="0" max="255" />
@@ -304,18 +356,18 @@ function EventInspectorPanel({ event, lineIndex, eventIndex }: { event: LineEven
             const ct = (event.value as { color_transition: { start: [number, number, number]; end: [number, number, number]; easing: EasingType } }).color_transition;
             return (
               <>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600 }}>Start Color</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                  <div style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: `rgb(${ct.start[0]},${ct.start[1]},${ct.start[2]})`, border: "1px solid var(--border-color)", cursor: "pointer" }} onClick={() => setShowColorPicker("start")} />
-                  <ActionButton onClick={() => setShowColorPicker("start")}>Edit</ActionButton>
+                <div style={{ ...CAPTION_STYLE, fontWeight: 600 }}>Start color</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", marginBottom: "var(--space-2)" }}>
+                  <button type="button" aria-label="Edit start color" style={{ width: 16, height: 16, padding: 0, borderRadius: "var(--radius-xs)", backgroundColor: `rgb(${ct.start[0]},${ct.start[1]},${ct.start[2]})`, border: "var(--rule) solid var(--border-color)", cursor: "pointer" }} onClick={() => setShowColorPicker("start")} />
+                  <ActionButton onClick={() => setShowColorPicker("start")}>Edit…</ActionButton>
                 </div>
                 <Field label="R" value={ct.start[0]} onChange={(v) => editEvent(lineIndex, eventIndex, { value: { color_transition: { ...ct, start: [parseInt(v) || 0, ct.start[1], ct.start[2]] } } })} step="1" min="0" max="255" />
                 <Field label="G" value={ct.start[1]} onChange={(v) => editEvent(lineIndex, eventIndex, { value: { color_transition: { ...ct, start: [ct.start[0], parseInt(v) || 0, ct.start[2]] } } })} step="1" min="0" max="255" />
                 <Field label="B" value={ct.start[2]} onChange={(v) => editEvent(lineIndex, eventIndex, { value: { color_transition: { ...ct, start: [ct.start[0], ct.start[1], parseInt(v) || 0] } } })} step="1" min="0" max="255" />
-                <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, marginTop: 4 }}>End Color</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                  <div style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: `rgb(${ct.end[0]},${ct.end[1]},${ct.end[2]})`, border: "1px solid var(--border-color)", cursor: "pointer" }} onClick={() => setShowColorPicker("end")} />
-                  <ActionButton onClick={() => setShowColorPicker("end")}>Edit</ActionButton>
+                <div style={{ ...CAPTION_STYLE, fontWeight: 600, marginTop: "var(--space-4)" }}>End color</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", marginBottom: "var(--space-2)" }}>
+                  <button type="button" aria-label="Edit end color" style={{ width: 16, height: 16, padding: 0, borderRadius: "var(--radius-xs)", backgroundColor: `rgb(${ct.end[0]},${ct.end[1]},${ct.end[2]})`, border: "var(--rule) solid var(--border-color)", cursor: "pointer" }} onClick={() => setShowColorPicker("end")} />
+                  <ActionButton onClick={() => setShowColorPicker("end")}>Edit…</ActionButton>
                 </div>
                 <Field label="R" value={ct.end[0]} onChange={(v) => editEvent(lineIndex, eventIndex, { value: { color_transition: { ...ct, end: [parseInt(v) || 0, ct.end[1], ct.end[2]] } } })} step="1" min="0" max="255" />
                 <Field label="G" value={ct.end[1]} onChange={(v) => editEvent(lineIndex, eventIndex, { value: { color_transition: { ...ct, end: [ct.end[0], parseInt(v) || 0, ct.end[2]] } } })} step="1" min="0" max="255" />
@@ -349,21 +401,13 @@ function EventInspectorPanel({ event, lineIndex, eventIndex }: { event: LineEven
             const text = (event.value as { text_value: string }).text_value;
             return (
               <>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <label style={{ fontSize: 10, color: "var(--text-muted)" }}>Text</label>
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                  <label style={CAPTION_STYLE}>Text</label>
                   <textarea
+                    aria-label="Text"
                     value={text}
                     onChange={(e) => editEvent(lineIndex, eventIndex, { value: { text_value: e.target.value } })}
-                    style={{
-                      backgroundColor: "var(--bg-primary)",
-                      color: "var(--text-primary)",
-                      border: "1px solid var(--border-color)",
-                      borderRadius: 4,
-                      padding: "4px 6px",
-                      fontSize: 11,
-                      resize: "vertical",
-                      minHeight: 40,
-                    }}
+                    style={TEXTAREA_STYLE}
                   />
                 </div>
                 {event.font !== undefined && (
@@ -378,28 +422,22 @@ function EventInspectorPanel({ event, lineIndex, eventIndex }: { event: LineEven
             const tt = (event.value as { text_transition: { start: string; end: string; easing: EasingType } }).text_transition;
             return (
               <>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <label style={{ fontSize: 10, color: "var(--text-muted)" }}>Start Text</label>
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                  <label style={CAPTION_STYLE}>Start text</label>
                   <textarea
+                    aria-label="Start text"
                     value={tt.start}
                     onChange={(e) => editEvent(lineIndex, eventIndex, { value: { text_transition: { ...tt, start: e.target.value } } })}
-                    style={{
-                      backgroundColor: "var(--bg-primary)", color: "var(--text-primary)",
-                      border: "1px solid var(--border-color)", borderRadius: 4,
-                      padding: "4px 6px", fontSize: 11, resize: "vertical", minHeight: 40,
-                    }}
+                    style={TEXTAREA_STYLE}
                   />
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <label style={{ fontSize: 10, color: "var(--text-muted)" }}>End Text</label>
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                  <label style={CAPTION_STYLE}>End text</label>
                   <textarea
+                    aria-label="End text"
                     value={tt.end}
                     onChange={(e) => editEvent(lineIndex, eventIndex, { value: { text_transition: { ...tt, end: e.target.value } } })}
-                    style={{
-                      backgroundColor: "var(--bg-primary)", color: "var(--text-primary)",
-                      border: "1px solid var(--border-color)", borderRadius: 4,
-                      padding: "4px 6px", fontSize: 11, resize: "vertical", minHeight: 40,
-                    }}
+                    style={TEXTAREA_STYLE}
                   />
                 </div>
                 {event.font !== undefined && (
@@ -482,13 +520,13 @@ function EventInspectorPanel({ event, lineIndex, eventIndex }: { event: LineEven
                     }
                   />
                   <Field
-                    label="Ease L"
+                    label="Ease left"
                     value={event.easing_left ?? 0}
                     onChange={(v) => editEvent(lineIndex, eventIndex, { easing_left: parseFloat(v) })}
                     step="0.05"
                   />
                   <Field
-                    label="Ease R"
+                    label="Ease right"
                     value={event.easing_right ?? 1}
                     onChange={(v) => { const val = parseFloat(v); editEvent(lineIndex, eventIndex, { easing_right: isNaN(val) ? 1 : val }); }}
                     step="0.05"
@@ -506,7 +544,7 @@ function EventInspectorPanel({ event, lineIndex, eventIndex }: { event: LineEven
                 />
               )}
               {isScaleEvent && (
-                <div style={{ fontSize: 9, color: "var(--text-muted)", padding: "0 0 0 4px" }}>
+                <div style={{ ...CAPTION_STYLE, padding: "0 0 0 var(--space-4)" }}>
                   0.0 = invisible, 1.0 = normal, 2.0 = double size
                 </div>
               )}
@@ -525,27 +563,27 @@ function LineInspector({ lineIndex }: { lineIndex: number }) {
   if (!line) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: 8 }}>
-      <SectionHeader color="var(--accent-primary)">Line #{lineIndex}</SectionHeader>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", padding: "var(--space-8)" }}>
+      <SectionHeader color="var(--text-primary)">Line #{lineIndex}</SectionHeader>
       <Card>
-        <div style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ padding: "var(--space-6) var(--space-8)", display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           <Field
             label="Name"
             type="text"
             value={line.name}
             onChange={(v) => editLine(lineIndex, { name: v })}
           />
-          <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
+          <div style={CAPTION_STYLE}>
             {line.notes.length} notes, {line.events.length} events
             {line.event_layers && line.event_layers.length > 0 ? `, ${line.event_layers.length} layers` : ""}
           </div>
         </div>
       </Card>
-      <SectionHeader>RPE Properties</SectionHeader>
+      <SectionHeader>RPE properties</SectionHeader>
       <Card>
-        <div style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ padding: "var(--space-6) var(--space-8)", display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           <Field
-            label="Z Order"
+            label="Z order"
             value={line.z_order ?? 0}
             onChange={(v) => {
               const val = parseInt(v);
@@ -554,7 +592,7 @@ function LineInspector({ lineIndex }: { lineIndex: number }) {
             step="1"
           />
           <SelectField
-            label="Is Cover"
+            label="Is cover"
             value={line.is_cover === false ? "false" : "true"}
             options={[
               { value: "true", label: "Yes" },
@@ -563,7 +601,7 @@ function LineInspector({ lineIndex }: { lineIndex: number }) {
             onChange={(v) => editLine(lineIndex, { is_cover: v === "false" ? false : undefined })}
           />
           <Field
-            label="BPM Factor"
+            label="BPM factor"
             value={line.bpm_factor ?? 1}
             onChange={(v) => {
               const val = parseFloat(v);
@@ -588,7 +626,7 @@ function LineInspector({ lineIndex }: { lineIndex: number }) {
           />
           <TexturePreview textureName={line.texture} lineIndex={lineIndex} />
           <SelectField
-            label="Rot w/ Father"
+            label="Rotate with father"
             value={line.rotate_with_father === false ? "false" : "true"}
             options={[
               { value: "true", label: "Yes" },
@@ -597,7 +635,7 @@ function LineInspector({ lineIndex }: { lineIndex: number }) {
             onChange={(v) => editLine(lineIndex, { rotate_with_father: v === "false" ? false : undefined })}
           />
           <Field
-            label="Father Idx"
+            label="Father index"
             value={line.father_index ?? -1}
             onChange={(v) => {
               const val = parseInt(v);
@@ -610,13 +648,13 @@ function LineInspector({ lineIndex }: { lineIndex: number }) {
             value={line.attach_ui ?? ""}
             options={[
               { value: "", label: "None" },
-              { value: "pause", label: "Pause Button" },
-              { value: "combonumber", label: "Combo Number" },
-              { value: "combo", label: "Combo Label" },
+              { value: "pause", label: "Pause button" },
+              { value: "combonumber", label: "Combo number" },
+              { value: "combo", label: "Combo label" },
               { value: "score", label: "Score" },
-              { value: "bar", label: "Progress Bar" },
-              { value: "name", label: "Song Name" },
-              { value: "level", label: "Level Label" },
+              { value: "bar", label: "Progress bar" },
+              { value: "name", label: "Song name" },
+              { value: "level", label: "Level label" },
             ]}
             onChange={(v) => editLine(lineIndex, { attach_ui: v || undefined })}
           />
@@ -631,16 +669,16 @@ function LineInspector({ lineIndex }: { lineIndex: number }) {
           />
         </div>
       </Card>
-      <SectionHeader>Incline & GIF Hints</SectionHeader>
+      <SectionHeader>Incline and GIF hints</SectionHeader>
       <Card>
-        <div style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ fontSize: 9, color: "var(--text-muted)" }}>
+        <div style={{ padding: "var(--space-6) var(--space-8)", display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          <div style={CAPTION_STYLE}>
             <strong>Incline events</strong> control 3D tilt perspective. Values are in degrees.
           </div>
-          <div style={{ fontSize: 9, color: "var(--text-muted)" }}>
+          <div style={CAPTION_STYLE}>
             <strong>GIF events</strong> control animated texture playback. 0.0 = start, 1.0 = end (step 0.01).
           </div>
-          <div style={{ fontSize: 9, color: "var(--text-muted)" }}>
+          <div style={CAPTION_STYLE}>
             Set <strong>Is GIF = Yes</strong> to mark this line's texture as an animated GIF.
           </div>
         </div>
@@ -653,35 +691,24 @@ function MultiNoteInspector({ count, lineIndex, indices }: { count: number; line
   const editNotes = useChartStore((s) => s.editNotes);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: 8 }}>
-      <SectionHeader color="var(--accent-primary)">{count} notes selected</SectionHeader>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", padding: "var(--space-8)" }}>
+      <SectionHeader color="var(--text-primary)">{count} notes selected</SectionHeader>
       <Card>
-        <div style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <SelectField
-            label="Kind"
-            value=""
-            options={[{ value: "", label: "(mixed)" }, ...NOTE_KIND_OPTIONS]}
-            onChange={(v) => {
-              if (v) editNotes(lineIndex, indices, { kind: v as NoteKind });
-            }}
+        <div style={{ padding: "var(--space-6) var(--space-8)", display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+          {/* Mixed selection: no segment is pre-selected; picking one applies it to all */}
+          <NoteKindPicker
+            value={null}
+            onChange={(v) => editNotes(lineIndex, indices, { kind: v })}
           />
-          <SelectField
-            label="Side"
-            value=""
-            options={[
-              { value: "", label: "(mixed)" },
-              { value: "above", label: "Above" },
-              { value: "below", label: "Below" },
-            ]}
-            onChange={(v) => {
-              if (v) editNotes(lineIndex, indices, { above: v === "above" });
-            }}
+          <SidePicker
+            value={null}
+            onChange={(v) => editNotes(lineIndex, indices, { above: v === "above" })}
           />
         </div>
       </Card>
-      <SectionHeader>RPE Properties</SectionHeader>
+      <SectionHeader>RPE properties</SectionHeader>
       <Card>
-        <div style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ padding: "var(--space-6) var(--space-8)", display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
           <Field
             label="Size"
             type="text"
@@ -701,7 +728,7 @@ function MultiNoteInspector({ count, lineIndex, indices }: { count: number; line
             }}
           />
           <Field
-            label="Vis. Time"
+            label="Vis. time"
             type="text"
             value=""
             onChange={(v) => {
@@ -736,7 +763,7 @@ export function Inspector() {
   if (selectedLineIndex === null) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
-        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+        <span style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>
           No line selected
         </span>
       </div>
@@ -795,7 +822,7 @@ export function Inspector() {
   if (selectedEventIndices.length > 1) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
-        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+        <span style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>
           {selectedEventIndices.length} events selected
         </span>
       </div>

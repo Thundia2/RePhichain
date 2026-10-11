@@ -3,13 +3,18 @@
 //
 // Shown after recording mode is toggled off (when there are
 // recorded keyframes). Allows the user to apply simplification
-// before committing the keyframes as events.
+// before committing the keyframes as events. Opened with nothing
+// recorded, it explains how to record instead of doing nothing.
 // ============================================================
 
 import { useState, useMemo } from "react";
+import { CircleDot } from "lucide-react";
 import { useEditorStore } from "../../stores/editorStore";
 import { previewSimplification } from "../../utils/keyframeSimplify";
 import type { SimplifiableKeyframe } from "../../utils/keyframeSimplify";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
+import { Kbd } from "../common/Kbd";
 
 interface RecordReviewDialogProps {
   open: boolean;
@@ -35,91 +40,88 @@ export function RecordReviewDialog({ open, onClose, onAccept }: RecordReviewDial
     [asSimplifiable, threshold],
   );
 
-  if (!open || recordedKeyframes.length === 0) return null;
+  if (!open) return null;
+
+  if (recordedKeyframes.length === 0) {
+    return (
+      <Dialog
+        title="Review recorded keyframes"
+        icon={CircleDot}
+        onClose={onClose}
+        width={320}
+        footer={<Button onClick={onClose}>Close</Button>}
+      >
+        <div style={{ fontSize: "var(--fs-body)", color: "var(--text-secondary)", lineHeight: "18px" }}>
+          Nothing recorded yet. Turn on record mode with <Kbd>Alt+R</Kbd>, move the line during playback,
+          then turn it off to review the keyframes here.
+        </div>
+      </Dialog>
+    );
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+    <Dialog
+      title="Review recorded keyframes"
+      icon={CircleDot}
+      onClose={onClose}
+      width={384}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={() => onAccept(null)}>Accept raw</Button>
+          <Button variant="primary" onClick={() => onAccept(threshold)}>Accept simplified</Button>
+        </>
+      }
+    >
+      <div style={{ fontSize: "var(--fs-body)", color: "var(--text-secondary)", marginBottom: "var(--space-12)" }}>
+        Recorded <strong style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{recordedKeyframes.length}</strong> keyframes.
+        Adjust simplification to reduce redundant points.
+      </div>
+
+      {/* Simplification threshold slider */}
+      <label style={{ display: "block", marginBottom: "var(--space-12)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-4)" }}>
+          <span style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>Simplification threshold</span>
+          <span style={{ fontSize: "var(--fs-control)", fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>{threshold.toFixed(2)}</span>
+        </div>
+        <input
+          type="range"
+          min={0.01}
+          max={10}
+          step={0.01}
+          value={threshold}
+          onChange={(e) => setThreshold(parseFloat(e.target.value))}
+          style={{ width: "100%", accentColor: "var(--accent-primary)" }}
+        />
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginTop: "var(--space-2)",
+            fontSize: "var(--fs-caption)",
+            color: "var(--text-secondary)",
+          }}
+        >
+          <span>Fine (0.01)</span>
+          <span>Coarse (10.0)</span>
+        </div>
+      </label>
+
+      {/* Preview count */}
       <div
-        className="rounded-lg p-5 w-96"
         style={{
-          backgroundColor: "var(--bg-secondary)",
-          border: "1px solid var(--border-color)",
-          color: "var(--text-primary)",
+          padding: "var(--space-8)",
+          borderRadius: "var(--radius-lg)",
+          backgroundColor: "var(--bg-active)",
+          fontSize: "var(--fs-body)",
+          textAlign: "center",
         }}
       >
-        <h3 className="text-sm font-semibold mb-3">Review Recorded Keyframes</h3>
-
-        <div className="text-xs mb-3" style={{ color: "var(--text-secondary)" }}>
-          Recorded <strong>{recordedKeyframes.length}</strong> keyframes.
-          Adjust simplification to reduce redundant points.
-        </div>
-
-        {/* Simplification threshold slider */}
-        <label className="block mb-3">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>Simplification Threshold</span>
-            <span className="text-xs font-mono" style={{ color: "var(--text-secondary)" }}>{threshold.toFixed(2)}</span>
-          </div>
-          <input
-            type="range"
-            min={0.01}
-            max={10}
-            step={0.01}
-            value={threshold}
-            onChange={(e) => setThreshold(parseFloat(e.target.value))}
-            className="w-full"
-            style={{ accentColor: "var(--accent-primary)" }}
-          />
-          <div className="flex justify-between text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-            <span>Fine (0.01)</span>
-            <span>Coarse (10.0)</span>
-          </div>
-        </label>
-
-        {/* Preview count */}
-        <div
-          className="text-xs text-center py-2 mb-3 rounded"
-          style={{ backgroundColor: "var(--bg-active)" }}
-        >
-          {recordedKeyframes.length} keyframes &rarr; <strong>{simplifiedCount}</strong> after simplification
-          <span className="ml-2" style={{ color: "var(--text-muted)" }}>
-            ({Math.round((1 - simplifiedCount / recordedKeyframes.length) * 100)}% reduction)
-          </span>
-        </div>
-
-        {/* Buttons */}
-        <div className="flex gap-2 justify-end">
-          <button
-            className="px-3 py-1.5 rounded text-xs"
-            style={{
-              backgroundColor: "var(--bg-active)",
-              color: "var(--text-secondary)",
-              border: "1px solid var(--border-color)",
-            }}
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            className="px-3 py-1.5 rounded text-xs"
-            style={{
-              backgroundColor: "var(--bg-active)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--border-color)",
-            }}
-            onClick={() => onAccept(null)}
-          >
-            Accept Raw
-          </button>
-          <button
-            className="px-3 py-1.5 rounded text-xs font-medium"
-            style={{ backgroundColor: "var(--accent-primary)", color: "#fff" }}
-            onClick={() => onAccept(threshold)}
-          >
-            Accept Simplified
-          </button>
-        </div>
+        {recordedKeyframes.length} keyframes &rarr; <strong>{simplifiedCount}</strong> after simplification
+        <span style={{ marginLeft: "var(--space-8)", color: "var(--text-secondary)" }}>
+          ({Math.round((1 - simplifiedCount / recordedKeyframes.length) * 100)}% reduction)
+        </span>
       </div>
-    </div>
+    </Dialog>
   );
 }

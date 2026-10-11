@@ -24,7 +24,7 @@ export function LineEventEditor({ lineIndex }: LineEventEditorProps) {
   if (!line) {
     return (
       <div className="flex items-center justify-center h-full">
-        <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+        <span style={{ fontSize: "var(--fs-body)", color: "var(--text-secondary)" }}>
           Line {lineIndex} not found. It may have been deleted.
         </span>
       </div>

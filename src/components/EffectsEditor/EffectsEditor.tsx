@@ -18,8 +18,26 @@ import type { ShaderEffect, VideoBackground, ExtraConfig } from "../../types/ext
 import type { Beat } from "../../types/chart";
 import { beatToFloat, floatToBeat } from "../../types/chart";
 import { SHADER_DEFAULTS } from "../../canvas/shaders";
-import { Card, ActionButton, Pill, Toggle, INPUT_STYLE, SELECT_STYLE } from "../common/UIKit";
+import { Plus, Trash2 } from "lucide-react";
+import { Card, Toggle, EmptyState, INPUT_STYLE, SELECT_STYLE } from "../common/UIKit";
+import { Button } from "../common/Button";
+import { IconButton } from "../common/IconButton";
+import { SegmentedControl } from "../common/SegmentedControl";
 import { safeParseNumber } from "../common/FormFields";
+
+/** Field label above an input (caption, text-secondary). */
+const LABEL_STYLE: React.CSSProperties = {
+  display: "block",
+  color: "var(--text-secondary)",
+  fontSize: "var(--fs-caption)",
+  marginBottom: "var(--space-2)",
+};
+
+/** Numeric inputs use the mono face. */
+const NUM_INPUT_STYLE: React.CSSProperties = {
+  ...INPUT_STYLE,
+  fontFamily: "var(--font-mono)",
+};
 
 const BUILTIN_SHADERS = [
   "chromatic", "circleBlur", "fisheye", "glitch", "grayscale",
@@ -83,32 +101,31 @@ export function EffectsEditor() {
   };
 
   return (
-    <div className="h-full overflow-y-auto" style={{ padding: "8px", fontSize: "12px" }}>
+    <div className="h-full overflow-y-auto" style={{ padding: "var(--space-8)", fontSize: "var(--fs-body)" }}>
       {/* Tab selector */}
-      <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
-        <Pill
-          active={activeTab === "effects"}
-          onClick={() => setActiveTab("effects")}
-        >
-          Shader Effects ({effects.length})
-        </Pill>
-        <Pill
-          active={activeTab === "videos"}
-          onClick={() => setActiveTab("videos")}
-        >
-          Video Backgrounds ({videos.length})
-        </Pill>
-      </div>
+      <SegmentedControl
+        role="tablist"
+        label="Effects editor sections"
+        block
+        value={activeTab}
+        onChange={setActiveTab}
+        options={[
+          { value: "effects", label: `Shader effects (${effects.length})` },
+          { value: "videos", label: `Video backgrounds (${videos.length})` },
+        ]}
+        style={{ marginBottom: "var(--space-8)" }}
+      />
 
       {activeTab === "effects" && (
         <div>
-          <ActionButton
+          <Button
             variant="primary"
+            icon={Plus}
             onClick={addEffect}
-            style={{ marginBottom: "8px" }}
+            style={{ marginBottom: "var(--space-8)" }}
           >
-            + Add Shader Effect
-          </ActionButton>
+            Add shader effect
+          </Button>
 
           {effects.map((effect, i) => (
             <EffectCard
@@ -121,22 +138,23 @@ export function EffectsEditor() {
           ))}
 
           {effects.length === 0 && (
-            <div style={{ color: "var(--text-muted)", padding: "16px 0", textAlign: "center" }}>
-              No shader effects. Click "+ Add Shader Effect" to create one.
-            </div>
+            <EmptyState>
+              No shader effects. Click "Add shader effect" to create one.
+            </EmptyState>
           )}
         </div>
       )}
 
       {activeTab === "videos" && (
         <div>
-          <ActionButton
+          <Button
             variant="primary"
+            icon={Plus}
             onClick={addVideo}
-            style={{ marginBottom: "8px" }}
+            style={{ marginBottom: "var(--space-8)" }}
           >
-            + Add Video Background
-          </ActionButton>
+            Add video background
+          </Button>
 
           {videos.map((video, i) => (
             <VideoCard
@@ -149,9 +167,9 @@ export function EffectsEditor() {
           ))}
 
           {videos.length === 0 && (
-            <div style={{ color: "var(--text-muted)", padding: "16px 0", textAlign: "center" }}>
-              No video backgrounds. Click "+ Add Video Background" to create one.
-            </div>
+            <EmptyState>
+              No video backgrounds. Click "Add video background" to create one.
+            </EmptyState>
           )}
         </div>
       )}
@@ -177,17 +195,15 @@ function EffectCard({
 
   return (
     <Card>
-      <div style={{ padding: "8px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-          <span style={{ fontWeight: "bold", fontSize: "11px" }}>Effect #{index + 1}</span>
-          <ActionButton variant="danger" onClick={onRemove}>
-            Remove
-          </ActionButton>
+      <div style={{ padding: "var(--space-8) var(--space-10)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-6)" }}>
+          <span style={{ fontWeight: 600, fontSize: "var(--fs-control)" }}>Effect {index + 1}</span>
+          <IconButton icon={Trash2} label="Remove effect" size="md" danger onClick={onRemove} />
         </div>
 
         {/* Shader selector */}
-        <div style={{ marginBottom: "4px" }}>
-          <label style={{ color: "var(--text-muted)", fontSize: "10px" }}>Shader</label>
+        <div style={{ marginBottom: "var(--space-4)" }}>
+          <label style={LABEL_STYLE}>Shader</label>
           <select
             value={effect.shader}
             onChange={(e) => onUpdate({ shader: e.target.value, vars: {} })}
@@ -204,26 +220,27 @@ function EffectCard({
         </div>
 
         {/* Start/End beats */}
-        <div style={{ display: "flex", gap: "8px", marginBottom: "4px" }}>
+        <div style={{ display: "flex", gap: "var(--space-8)", marginBottom: "var(--space-4)" }}>
           <BeatInput label="Start" value={effect.start} onChange={(v) => onUpdate({ start: v })} />
           <BeatInput label="End" value={effect.end} onChange={(v) => onUpdate({ end: v })} />
         </div>
 
         {/* Global toggle */}
-        <div style={{ marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+        <div style={{ marginBottom: "var(--space-4)", display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
           <Toggle
             checked={effect.global ?? false}
             onChange={(v) => onUpdate({ global: v })}
+            label="Global (affects UI elements)"
           />
-          <label style={{ fontSize: "10px", color: "var(--text-primary)" }}>
+          <span style={{ fontSize: "var(--fs-control)", color: "var(--text-primary)" }}>
             Global (affects UI elements)
-          </label>
+          </span>
         </div>
 
         {/* Shader variables */}
         {varNames.length > 0 && (
-          <div style={{ marginTop: "4px" }}>
-            <label style={{ color: "var(--text-muted)", fontSize: "10px" }}>Variables</label>
+          <div style={{ marginTop: "var(--space-4)" }}>
+            <label style={LABEL_STYLE}>Variables</label>
             {varNames.map((name) => {
               const defaultVal = defaults[name];
               const currentVal = effect.vars?.[name];
@@ -237,11 +254,11 @@ function EffectCard({
                              Array.isArray(defaultVal) ? 0 : 0;
 
               return (
-                <div key={name} style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "2px" }}>
-                  <span style={{ fontSize: "10px", color: "var(--text-muted)", minWidth: "80px" }}>{name}</span>
+                <div key={name} style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", marginBottom: "var(--space-2)" }}>
+                  <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", minWidth: "80px" }}>{name}</span>
                   {isAnimated ? (
-                    <span style={{ fontSize: "10px", color: "var(--accent-primary)", flex: 1 }}>
-                      animated · {(currentVal as unknown[]).length} keyframe{(currentVal as unknown[]).length !== 1 ? "s" : ""}
+                    <span style={{ fontSize: "var(--fs-caption)", color: "var(--accent-primary)", flex: 1 }}>
+                      Animated · {(currentVal as unknown[]).length} keyframe{(currentVal as unknown[]).length !== 1 ? "s" : ""}
                     </span>
                   ) : (
                     <input
@@ -254,8 +271,9 @@ function EffectCard({
                         const newVars = { ...(effect.vars ?? {}), [name]: n };
                         onUpdate({ vars: newVars });
                       }}
+                      aria-label={name}
                       style={{
-                        ...INPUT_STYLE,
+                        ...NUM_INPUT_STYLE,
                         flex: 1,
                       }}
                     />
@@ -285,16 +303,14 @@ function VideoCard({
 }) {
   return (
     <Card>
-      <div style={{ padding: "8px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-          <span style={{ fontWeight: "bold", fontSize: "11px" }}>Video #{index + 1}</span>
-          <ActionButton variant="danger" onClick={onRemove}>
-            Remove
-          </ActionButton>
+      <div style={{ padding: "var(--space-8) var(--space-10)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-6)" }}>
+          <span style={{ fontWeight: 600, fontSize: "var(--fs-control)" }}>Video {index + 1}</span>
+          <IconButton icon={Trash2} label="Remove video" size="md" danger onClick={onRemove} />
         </div>
 
-        <div style={{ marginBottom: "4px" }}>
-          <label style={{ color: "var(--text-muted)", fontSize: "10px" }}>Path</label>
+        <div style={{ marginBottom: "var(--space-4)" }}>
+          <label style={LABEL_STYLE}>Path</label>
           <input
             type="text"
             value={video.path}
@@ -307,10 +323,10 @@ function VideoCard({
           />
         </div>
 
-        <div style={{ display: "flex", gap: "8px", marginBottom: "4px" }}>
+        <div style={{ display: "flex", gap: "var(--space-8)", marginBottom: "var(--space-4)" }}>
           <BeatInput label="Time" value={video.time ?? [0, 0, 1]} onChange={(v) => onUpdate({ time: v })} />
           <div style={{ flex: 1 }}>
-            <label style={{ color: "var(--text-muted)", fontSize: "10px" }}>Scale</label>
+            <label style={LABEL_STYLE}>Scale</label>
             <select
               value={video.scale ?? "cropCenter"}
               onChange={(e) => onUpdate({ scale: e.target.value as VideoBackground["scale"] })}
@@ -327,9 +343,9 @@ function VideoCard({
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ display: "flex", gap: "var(--space-8)" }}>
           <div style={{ flex: 1 }}>
-            <label style={{ color: "var(--text-muted)", fontSize: "10px" }}>Alpha</label>
+            <label style={LABEL_STYLE}>Alpha</label>
             <input
               type="number"
               step="0.1"
@@ -338,14 +354,14 @@ function VideoCard({
               value={typeof video.alpha === "number" ? video.alpha : 1}
               onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) onUpdate({ alpha: n }); }}
               style={{
-                ...INPUT_STYLE,
+                ...NUM_INPUT_STYLE,
                 display: "block",
                 width: "100%",
               }}
             />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={{ color: "var(--text-muted)", fontSize: "10px" }}>Dim</label>
+            <label style={LABEL_STYLE}>Dim</label>
             <input
               type="number"
               step="0.1"
@@ -354,7 +370,7 @@ function VideoCard({
               value={typeof video.dim === "number" ? video.dim : 0}
               onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) onUpdate({ dim: n }); }}
               style={{
-                ...INPUT_STYLE,
+                ...NUM_INPUT_STYLE,
                 display: "block",
                 width: "100%",
               }}
@@ -381,14 +397,14 @@ function BeatInput({
 
   return (
     <div style={{ flex: 1 }}>
-      <label style={{ color: "var(--text-muted)", fontSize: "10px" }}>{label}</label>
+      <label style={LABEL_STYLE}>{label}</label>
       <input
         type="number"
         step="0.25"
         value={beatFloat}
         onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) onChange(floatToBeat(n)); }}
         style={{
-          ...INPUT_STYLE,
+          ...NUM_INPUT_STYLE,
           display: "block",
           width: "100%",
         }}

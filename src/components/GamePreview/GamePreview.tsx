@@ -459,7 +459,7 @@ export function GamePreview() {
     <div
       ref={containerRef}
       className="w-full h-full relative"
-      style={{ backgroundColor: "#000" }}
+      style={{ backgroundColor: "var(--canvas-bg)" }}
       onClick={handleClick}
     >
       <canvas
@@ -480,8 +480,7 @@ export function GamePreview() {
       {!isLoaded && (
         <div className="absolute inset-0 flex items-center justify-center">
           <span
-            className="text-sm"
-            style={{ color: "var(--text-muted)" }}
+            style={{ color: "var(--text-secondary)", fontSize: "var(--fs-body)" }}
           >
             No chart loaded
           </span>

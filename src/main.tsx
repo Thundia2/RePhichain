@@ -143,7 +143,7 @@ if (isTauri()) {
           try {
             // Dynamic import: showConfirm requires ConfirmDialog to be mounted (React ready)
             const { showConfirm } = await import("./components/common/ConfirmDialog");
-            const confirmed = await showConfirm("You have unsaved changes. Quit anyway?");
+            const confirmed = await showConfirm("Your unsaved changes will be lost.", { title: "Quit without saving?", confirmLabel: "Quit", danger: true });
             if (confirmed) {
               await saveAppState();
               // Use destroy() instead of close() to avoid re-triggering this handler

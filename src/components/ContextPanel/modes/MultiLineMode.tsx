@@ -2,19 +2,35 @@
 // MultiLineMode — Context panel content for multi-line selection mode
 // ============================================================
 
-import React, { useState, useCallback } from "react";
+import type React from "react";
+import { useState, useCallback } from "react";
+import { Copy, Gauge, Layers, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import { useEditorStore } from "../../../stores/editorStore";
 import { useMultiSelectedLineIndices } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
+import type { Line } from "../../../types/chart";
 import { BUILTIN_PRESETS } from "../../../presets/builtinPresets";
 import { applyPresetAtPlayhead } from "../../../utils/applyPreset";
 import { BatchOffsetEditor } from "../batch/BatchOffsetEditor";
+import { INPUT_STYLE, SELECT_STYLE } from "../../common/UIKit";
 
 // ---- Shared sub-components (extracted to shared/) ----
-import { HotkeyButton } from "../shared/HotkeyButton";
+import { HotkeyList, type HotkeySection } from "../shared/HotkeyList";
 import { SectionHeader } from "../shared/SectionHeader";
 import { ActionButton } from "../shared/ActionButton";
 import { ContextBadge } from "../shared/ContextBadge";
+
+// ---- Shared styles ----
+
+const FIELD_INPUT: React.CSSProperties = { ...INPUT_STYLE, width: "100%" };
+const FIELD_NUMBER: React.CSSProperties = { ...FIELD_INPUT, fontFamily: "var(--font-mono)" };
+const FIELD_ROW: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "var(--space-2)" };
+const FIELD_LABEL: React.CSSProperties = {
+  fontSize: "var(--fs-caption)", fontWeight: 500, color: "var(--text-secondary)", marginBottom: "var(--space-2)",
+};
+
+/** "gameplay" → "Gameplay" (sentence case for stored lowercase ids). */
+const sentenceCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // ---- Props ----
 
@@ -72,7 +88,7 @@ function BatchOpsTab() {
 
   const handleSetCategory = useCallback((category: string) => {
     for (const idx of multiSelectedLineIndices) {
-      editLine(idx, { _category: (category || undefined) as any });
+      editLine(idx, { _category: (category || undefined) as Line["_category"] });
     }
   }, [multiSelectedLineIndices, editLine]);
 
@@ -143,49 +159,39 @@ function BatchOpsTab() {
       ).slice(0, 6)
     : [];
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "4px 6px", fontSize: 11, fontFamily: "inherit",
-    background: "var(--bg-primary)", border: "1px solid var(--border-color)",
-    borderRadius: 4, color: "var(--text-primary)", outline: "none",
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: 9, fontWeight: 600, color: "var(--text-muted)", marginBottom: 2,
-    textTransform: "uppercase" as const, letterSpacing: "0.5px",
-  };
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
       {/* Context badge */}
       <ContextBadge
-        icon={<span style={{ fontSize: 12 }}>{"\u2630"}</span>}
+        icon={Layers}
         label={`${selectedLines.length} lines selected`}
-        detail={`${totalNotes} total notes`}
+        detail={`${totalNotes} notes in total`}
         variant="line"
       />
 
       {/* Selected lines list */}
-      <SectionHeader label="SELECTED LINES" count={selectedLines.length} />
-      <div style={{ maxHeight: 140, overflowY: "auto", borderRadius: 5, border: "1px solid var(--border-color)" }}>
-        {selectedLines.map(({ line, index }) => (
+      <SectionHeader label="Selected lines" count={selectedLines.length} />
+      <div style={{ maxHeight: 140, overflowY: "auto", borderRadius: "var(--radius-xl)", background: "var(--bg-active)" }}>
+        {selectedLines.map(({ line, index }, i) => (
           <div
             key={index}
             style={{
-              display: "flex", alignItems: "center", gap: 6, padding: "4px 8px",
-              fontSize: 10, borderBottom: "1px solid rgba(42,42,53,0.5)",
+              display: "flex", alignItems: "center", gap: "var(--space-6)", padding: "var(--space-4) var(--space-10)",
+              fontSize: "var(--fs-caption)",
+              borderBottom: i < selectedLines.length - 1 ? "var(--rule) solid var(--separator)" : "none",
             }}
           >
-            <span style={{ fontFamily: "'JetBrains Mono', monospace", color: "var(--text-muted)", width: 20, textAlign: "right" }}>
+            <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)", minWidth: 20, textAlign: "right" }}>
               #{index}
             </span>
-            <span style={{ color: "var(--text-primary)", flex: 1 }}>{line.name}</span>
-            <span style={{ color: "var(--text-muted)", fontSize: 9 }}>{line.notes.length}n</span>
+            <span style={{ color: "var(--text-primary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{line.name}</span>
+            <span style={{ color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>{line.notes.length} notes</span>
             {line._category && (
               <span style={{
-                fontSize: 8, padding: "1px 4px", borderRadius: 3,
-                background: "var(--bg-tertiary)", color: "var(--text-muted)",
+                fontSize: "var(--fs-badge)", fontWeight: 600, lineHeight: "12px", padding: "1px var(--space-6)",
+                borderRadius: "var(--radius-full)", background: "var(--bg-tertiary)", color: "var(--text-secondary)",
               }}>
-                {line._category}
+                {sentenceCase(line._category)}
               </span>
             )}
           </div>
@@ -193,12 +199,12 @@ function BatchOpsTab() {
       </div>
 
       {/* Batch operations */}
-      <SectionHeader label="BATCH PROPERTIES" />
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 4px" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <label style={labelStyle}>Set Parent (line index)</label>
+      <SectionHeader label="Batch properties" />
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)", padding: "0 var(--space-4)" }}>
+        <label style={FIELD_ROW}>
+          <span style={FIELD_LABEL}>Set parent (line index)</span>
           <input
-            style={inputStyle}
+            style={FIELD_NUMBER}
             type="number"
             placeholder="-1 = none"
             onBlur={(e) => {
@@ -206,11 +212,11 @@ function BatchOpsTab() {
               if (!isNaN(val)) handleSetParent(val);
             }}
           />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <label style={labelStyle}>Move to Group</label>
+        </label>
+        <label style={FIELD_ROW}>
+          <span style={FIELD_LABEL}>Move to group</span>
           <input
-            style={inputStyle}
+            style={FIELD_NUMBER}
             type="number"
             placeholder="Group index"
             onBlur={(e) => {
@@ -218,34 +224,37 @@ function BatchOpsTab() {
               if (!isNaN(val)) handleSetGroup(val);
             }}
           />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <label style={labelStyle}>Set Category</label>
+        </label>
+        <label style={FIELD_ROW}>
+          <span style={FIELD_LABEL}>Set category</span>
           <select
-            style={{ ...inputStyle, appearance: "none" as const }}
+            style={{ ...SELECT_STYLE, width: "100%" }}
             onChange={(e) => handleSetCategory(e.target.value)}
           >
-            <option value="">-- Choose --</option>
+            <option value="">Choose…</option>
             <option value="">None</option>
             <option value="gameplay">Gameplay</option>
             <option value="visual">Visual</option>
             <option value="text">Text</option>
             <option value="helper">Helper</option>
           </select>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <label style={labelStyle}>Apply Preset</label>
+        </label>
+        <div style={FIELD_ROW}>
+          <label htmlFor="multi-line-preset-search" style={FIELD_LABEL}>Apply preset</label>
           <input
-            style={inputStyle}
-            placeholder="Search presets..."
+            id="multi-line-preset-search"
+            style={FIELD_INPUT}
+            placeholder="Search presets…"
             value={presetSearch}
             onChange={(e) => setPresetSearch(e.target.value)}
           />
           {filteredPresets.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 2 }}>
-              {filteredPresets.map((preset) => (
-                <div
+            <div style={{ marginTop: "var(--space-4)", borderRadius: "var(--radius-lg)", background: "var(--bg-active)", overflow: "hidden" }}>
+              {filteredPresets.map((preset, i) => (
+                <button
                   key={preset.id}
+                  type="button"
+                  className="ui-hover"
                   onClick={() => {
                     for (const { index } of selectedLines) {
                       applyPresetAtPlayhead(index, preset);
@@ -253,17 +262,18 @@ function BatchOpsTab() {
                     setPresetSearch("");
                   }}
                   style={{
-                    display: "flex", alignItems: "center", gap: 6, padding: "4px 8px",
-                    borderRadius: 4, cursor: "pointer",
-                    background: "var(--bg-primary)", border: "1px solid var(--border-color)",
-                    fontSize: 10, color: "var(--text-secondary)", transition: "border-color 0.12s",
+                    display: "flex", alignItems: "center", gap: "var(--space-6)", width: "100%",
+                    padding: "var(--space-4) var(--space-8)", minHeight: "var(--control-md)",
+                    border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                    borderBottom: i < filteredPresets.length - 1 ? "var(--rule) solid var(--separator)" : "none",
+                    fontSize: "var(--fs-caption)", color: "var(--text-secondary)",
                   }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--accent-primary)"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border-color)"; }}
                 >
                   <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{preset.name}</span>
-                  <span style={{ fontSize: 8, color: "var(--text-muted)", marginLeft: "auto" }}>{preset.category}</span>
-                </div>
+                  {preset.category && (
+                    <span style={{ marginLeft: "auto" }}>{sentenceCase(preset.category)}</span>
+                  )}
+                </button>
               ))}
             </div>
           )}
@@ -271,18 +281,18 @@ function BatchOpsTab() {
       </div>
 
       {/* Batch events */}
-      <SectionHeader label="BATCH EVENTS" />
+      <SectionHeader label="Batch events" />
       <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <ActionButton icon={"\u25B3"} label="Fade-in all (opacity 0\u2192255)" onClick={handleBatchFadeIn} />
-        <ActionButton icon={"\u25BD"} label="Fade-out all (opacity 255\u21920)" onClick={handleBatchFadeOut} />
-        <ActionButton icon={"\u21C4"} label="Sync speed (constant 1)" onClick={handleSyncSpeed} />
+        <ActionButton icon={TrendingUp} label="Fade in all (opacity 0 to 255)" onClick={handleBatchFadeIn} />
+        <ActionButton icon={TrendingDown} label="Fade out all (opacity 255 to 0)" onClick={handleBatchFadeOut} />
+        <ActionButton icon={Gauge} label="Sync speed (constant 1)" onClick={handleSyncSpeed} />
       </div>
 
       {/* Danger zone */}
-      <SectionHeader label="DANGER ZONE" />
+      <SectionHeader label="Danger zone" />
       <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <ActionButton icon={"\u2398"} label={`Duplicate all ${selectedLines.length} lines`} onClick={handleDuplicateAll} />
-        <ActionButton icon={"\u2716"} label={`Delete all ${selectedLines.length} lines`} danger onClick={handleDeleteAll} />
+        <ActionButton icon={Copy} label={`Duplicate all ${selectedLines.length} lines`} onClick={handleDuplicateAll} />
+        <ActionButton icon={Trash2} label={`Delete all ${selectedLines.length} lines`} danger onClick={handleDeleteAll} />
       </div>
     </div>
   );
@@ -296,55 +306,20 @@ function BatchOffsetTab() {
 
 // ---- Hotkeys sub-tab ----
 
-const MULTI_HOTKEY_SECTIONS = [
+// Only keys that are actually bound (useHotkeys / useClipboard); registry
+// actions show their current binding from Settings > Hotkeys.
+const MULTI_HOTKEY_SECTIONS: HotkeySection[] = [
   {
-    title: "MULTI-LINE SELECTION",
+    title: "Multi-line selection",
     keys: [
-      { icon: "\u21E7", label: "Add to sel.", hotkey: "Shift+Click" },
-      { icon: "A", label: "Select all", hotkey: "Ctrl+A" },
-      { icon: "Esc", label: "Deselect", hotkey: "Esc" },
-      { icon: "G", label: "Group sel.", hotkey: "Ctrl+G" },
-      { icon: "U", label: "Ungroup", hotkey: "Ctrl+U" },
-      { icon: "I", label: "Invert sel.", hotkey: "Ctrl+I" },
-    ],
-  },
-  {
-    title: "BATCH OPERATIONS",
-    keys: [
-      { icon: "D", label: "Dup. all", hotkey: "Ctrl+D" },
-      { icon: "\u232B", label: "Del. all", hotkey: "Ctrl+Del" },
-      { icon: "C", label: "Set cat.", hotkey: "Ctrl+Shift+C" },
-      { icon: "P", label: "Set parent", hotkey: "Ctrl+Shift+P" },
-      { icon: "M", label: "Move group", hotkey: "Ctrl+Shift+M" },
-      { icon: "\u2B50", label: "Apply preset", hotkey: "Ctrl+Shift+A" },
-    ],
-  },
-  {
-    title: "ALIGNMENT",
-    keys: [
-      { icon: "\u2195", label: "Align Y", hotkey: "Alt+\u2195" },
-      { icon: "\u2194", label: "Align X", hotkey: "Alt+\u2194" },
-      { icon: "\u25CF", label: "Center", hotkey: "Alt+C" },
-      { icon: "\u21C5", label: "Flip order", hotkey: "Alt+F" },
-      { icon: "\u2263", label: "Distribute", hotkey: "Alt+D" },
-      { icon: "\u21BB", label: "Rotate arr.", hotkey: "Alt+R" },
+      { label: "Add or remove a line (line strip)", hotkey: "Ctrl+Click" },
+      { label: "Delete selected lines", hotkey: { action: "delete" } },
+      { label: "Create group", hotkey: "Ctrl+Shift+G" },
+      { label: "Paste to selected lines", hotkey: { action: "cross_line_paste" } },
     ],
   },
 ];
 
 function MultiLineHotkeys() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {MULTI_HOTKEY_SECTIONS.map((section) => (
-        <React.Fragment key={section.title}>
-          <SectionHeader label={section.title} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 3 }}>
-            {section.keys.map((k) => (
-              <HotkeyButton key={k.label} icon={k.icon} label={k.label} hotkey={k.hotkey} />
-            ))}
-          </div>
-        </React.Fragment>
-      ))}
-    </div>
-  );
+  return <HotkeyList sections={MULTI_HOTKEY_SECTIONS} />;
 }

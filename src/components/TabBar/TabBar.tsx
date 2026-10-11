@@ -9,6 +9,9 @@
 // configurable tab dimensions, and double-click-to-rename.
 // ============================================================
 
+import { X } from "lucide-react";
+import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTabStore } from "../../stores/tabStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -41,11 +44,18 @@ export function TabBar() {
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
 
+  // Seed the input with the tab's label when rename mode activates
+  // (adjusted during render, so the input never shows a stale value).
+  const [seededRenameId, setSeededRenameId] = useState(renamingTabId);
+  if (renamingTabId !== seededRenameId) {
+    setSeededRenameId(renamingTabId);
+    const tab = renamingTabId ? tabs.find((t) => t.id === renamingTabId) : undefined;
+    if (tab) setRenameValue(tab.label);
+  }
+
   // Focus and select input text when rename mode activates
   useEffect(() => {
     if (renamingTabId) {
-      const tab = useTabStore.getState().tabs.find((t) => t.id === renamingTabId);
-      if (tab) setRenameValue(tab.label);
       requestAnimationFrame(() => {
         renameInputRef.current?.focus();
         renameInputRef.current?.select();
@@ -63,11 +73,16 @@ export function TabBar() {
 
   return (
     <div
+      role="tablist"
+      aria-label="Open tabs"
       className="flex items-end flex-shrink-0 overflow-x-auto"
       style={{
         height: tabHeight + 4,
+        gap: "var(--space-2)",
+        padding: "0 var(--space-8)",
         backgroundColor: "var(--bg-primary)",
-        borderBottom: "1px solid var(--border-color)",
+        borderBottom: "var(--rule) solid var(--border-color)",
+        scrollbarWidth: "none",
       }}
     >
       {tabs.map((tab) => {
@@ -78,6 +93,9 @@ export function TabBar() {
         return (
           <button
             key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
             className={`tab-button${isActive ? " active" : ""}`}
             style={{
               height: tabHeight,
@@ -118,16 +136,16 @@ export function TabBar() {
                 }}
                 onClick={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
+                aria-label="Tab name"
                 style={{
                   flex: 1,
-                  background: "var(--bg-active)",
-                  border: "1px solid var(--accent-primary)",
-                  borderRadius: 3,
-                  padding: "1px 4px",
+                  background: "var(--bg-tertiary)",
+                  border: "var(--hairline) solid var(--accent-primary)",
+                  borderRadius: "var(--radius-xs)",
+                  padding: "1px var(--space-4)",
                   color: "var(--text-primary)",
-                  fontSize: 12,
+                  fontSize: "var(--fs-body)",
                   fontFamily: "inherit",
-                  outline: "none",
                   minWidth: 0,
                 }}
               />
@@ -137,15 +155,19 @@ export function TabBar() {
 
             {/* Close button — visible on hover/active */}
             {tab.closable && (
-              <span
-                className="tab-close"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeTab(tab.id);
-                }}
-              >
-                ✕
-              </span>
+              <Tooltip content="Close tab" position="bottom">
+                <span
+                  className="tab-close"
+                  role="button"
+                  aria-label={`Close ${tab.label}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeTab(tab.id);
+                  }}
+                >
+                  <Icon icon={X} size={12} />
+                </span>
+              </Tooltip>
             )}
           </button>
         );

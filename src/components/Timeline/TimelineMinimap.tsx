@@ -8,6 +8,7 @@ import { audioEngine } from "../../audio/audioEngine";
 import { beatToFloat } from "../../types/chart";
 import { BpmList } from "../../utils/bpmList";
 import { getPlayheadBeat } from "../../utils/playhead";
+import { chromeTheme, withAlpha } from "../../canvas/chromeTheme";
 
 export function TimelineMinimap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -65,13 +66,14 @@ export function TimelineMinimap() {
     bg.width = width;
     bg.height = height;
     const bgCtx = bg.getContext("2d");
+    const t = chromeTheme();
     if (bgCtx) {
-      bgCtx.fillStyle = "rgba(12, 12, 18, 0.6)";
+      bgCtx.fillStyle = t.bgSecondary;
       bgCtx.fillRect(0, 0, width, height);
       for (let x = 0; x < width; x++) {
         const intensity = density[x] / maxDensity;
         if (intensity > 0) {
-          bgCtx.fillStyle = `rgba(108, 138, 255, ${Math.max(0.15, intensity)})`;
+          bgCtx.fillStyle = withAlpha(t.accentPrimary, Math.max(0.15, intensity));
           bgCtx.fillRect(x, 0, 1, height);
         }
       }
@@ -89,7 +91,7 @@ export function TimelineMinimap() {
         ctx.clearRect(0, 0, width, height);
         ctx.drawImage(bg, 0, 0);
         const playheadX = (currentBeat / maxBeat) * width;
-        ctx.fillStyle = "rgba(108, 138, 255, 0.9)";
+        ctx.fillStyle = t.indicatorColor;
         ctx.fillRect(playheadX - 1, 0, 2, height);
       }
       raf = requestAnimationFrame(draw);
@@ -135,7 +137,7 @@ export function TimelineMinimap() {
       style={{
         width: "100%",
         height: 16,
-        borderBottom: "1px solid var(--border-color)",
+        borderBottom: "var(--rule) solid var(--border-color)",
         cursor: "pointer",
         display: "block",
         flexShrink: 0,

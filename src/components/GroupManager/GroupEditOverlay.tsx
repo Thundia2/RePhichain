@@ -2,12 +2,22 @@
 // Group Edit Overlay — Floating toolbar shown during group edit mode
 //
 // Positioned at the top of the canvas, shows:
-//   - Group name + color badge
-//   - "Exit Group Mode" button
-//   - Dim Others / Hide Others / Simplified Canvas toggles
+//   - Group name + color dot
+//   - Dim others / Hide others / Simplified canvas toggles (pills)
+//   - "Exit group" button
 // ============================================================
 
+import { LogOut } from "lucide-react";
 import { useGroupStore } from "../../stores/groupStore";
+import { Pill } from "../common/UIKit";
+import { Button } from "../common/Button";
+
+const DIVIDER_STYLE: React.CSSProperties = {
+  width: "var(--rule)",
+  height: 16,
+  background: "var(--border-color)",
+  flexShrink: 0,
+};
 
 export function GroupEditOverlay() {
   const activeGroup = useGroupStore((s) => s.getActiveGroup());
@@ -19,111 +29,78 @@ export function GroupEditOverlay() {
 
   return (
     <div
+      role="toolbar"
+      aria-label="Group edit mode"
       style={{
         position: "absolute",
-        top: 6,
+        top: "var(--space-6)",
         left: "50%",
         transform: "translateX(-50%)",
         display: "flex",
         alignItems: "center",
-        gap: 8,
-        padding: "4px 12px",
-        background: "rgba(22, 22, 29, 0.92)",
-        border: `1px solid ${activeGroup.color}60`,
-        borderRadius: 6,
-        zIndex: 50,
-        fontSize: 11,
-        backdropFilter: "blur(8px)",
-        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+        gap: "var(--space-8)",
+        padding: "var(--space-4) var(--space-6) var(--space-4) var(--space-12)",
+        background: "var(--bg-tertiary)",
+        border: "var(--rule) solid var(--border-color)",
+        borderRadius: "var(--radius-lg)",
+        zIndex: "var(--z-sticky)",
+        fontSize: "var(--fs-control)",
+        boxShadow: "var(--shadow-popover)",
       }}
     >
       {/* Color dot + group name */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
         <div
+          aria-hidden="true"
           style={{
             width: 8,
             height: 8,
-            borderRadius: "50%",
+            borderRadius: "var(--radius-full)",
             background: activeGroup.color,
             flexShrink: 0,
           }}
         />
-        <span style={{ color: "var(--text-primary)", fontWeight: "bold", fontSize: 11 }}>
+        <span style={{ color: "var(--text-primary)", fontWeight: 600, fontSize: "var(--fs-control)" }}>
           {activeGroup.name}
         </span>
-        <span style={{ color: "var(--text-secondary)", fontSize: 9 }}>
+        <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)" }}>
           ({activeGroup.type === "line"
             ? `${activeGroup.lines.length} lines`
             : `${activeGroup.notes.length} notes`})
         </span>
       </div>
 
-      {/* Separator */}
-      <div style={{ width: 1, height: 16, background: "var(--border-color)" }} />
+      <div style={DIVIDER_STYLE} />
 
       {/* Toggles */}
-      <OverlayToggle
-        label="Dim"
+      <Pill
         active={groupEditMode.dimOthers}
+        title="Dim lines outside the group"
         onClick={() => setGroupEditSettings({ dimOthers: !groupEditMode.dimOthers })}
-      />
-      <OverlayToggle
-        label="Hide"
+      >
+        Dim
+      </Pill>
+      <Pill
         active={groupEditMode.hideOthers}
+        title="Hide lines outside the group"
         onClick={() => setGroupEditSettings({ hideOthers: !groupEditMode.hideOthers })}
-      />
-      <OverlayToggle
-        label="Simple"
+      >
+        Hide
+      </Pill>
+      <Pill
         active={groupEditMode.simplifiedCanvas}
+        title="Simplified canvas"
         onClick={() => setGroupEditSettings({ simplifiedCanvas: !groupEditMode.simplifiedCanvas })}
-      />
+      >
+        Simple
+      </Pill>
 
-      {/* Separator */}
-      <div style={{ width: 1, height: 16, background: "var(--border-color)" }} />
+      <div style={DIVIDER_STYLE} />
 
       {/* Exit button */}
-      <button
-        onClick={exitGroupEditMode}
-        style={{
-          padding: "2px 8px",
-          fontSize: 10,
-          fontWeight: "bold",
-          background: "#ff4060",
-          color: "#fff",
-          border: "none",
-          borderRadius: 6,
-          cursor: "pointer",
-        }}
-      >
-        Exit Group
-      </button>
+      <Button variant="primary" size="sm" icon={LogOut} onClick={exitGroupEditMode}>
+        Exit group
+      </Button>
     </div>
-  );
-}
-
-function OverlayToggle({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: "1px 6px",
-        fontSize: 9,
-        background: active ? "var(--bg-active)" : "transparent",
-        color: active ? "var(--text-primary)" : "var(--text-secondary)",
-        border: active ? "1px solid var(--border-color)" : "1px solid transparent",
-        borderRadius: 4,
-        cursor: "pointer",
-      }}
-    >
-      {label}
-    </button>
   );
 }

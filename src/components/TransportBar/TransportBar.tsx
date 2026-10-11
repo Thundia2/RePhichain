@@ -3,7 +3,8 @@
 //
 // Sits between the canvas and keyframe bar. Contains:
 //   - Play/Pause + Stop buttons
-//   - Speed presets (0.25x, 0.5x, 0.75x, 1.0x)
+//   - Speed presets (0.25×, 0.5×, 0.75×, 1×) as a segmented control
+//   - Loop toggle + in/out markers
 //   - Time display (formatted time + beat)
 //   - Custom styled time scrub slider
 //
@@ -15,7 +16,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useAudioStore } from "../../stores/audioStore";
 import { audioEngine } from "../../audio/audioEngine";
 import { getPlayheadBeat } from "../../utils/playhead";
-import { Pill } from "../common/UIKit";
+import { ArrowLeftToLine, ArrowRightToLine, Pause, Play, Repeat, Square, X } from "lucide-react";
+import { Icon } from "../common/Icon";
+import { IconButton } from "../common/IconButton";
+import { SegmentedControl } from "../common/SegmentedControl";
+import { Tooltip } from "../common/Tooltip";
 
 // ============================================================
 // Constants
@@ -79,157 +84,89 @@ export function TransportBar() {
 
   return (
     <div
+      role="toolbar"
+      aria-label="Transport"
       style={{
-        height: 36,
+        height: "var(--panel-header-height)",
         display: "flex",
         alignItems: "center",
-        gap: 0,
-        padding: "0 10px",
+        gap: "var(--space-8)",
+        padding: "0 var(--space-12)",
         background: "var(--bg-secondary)",
-        borderTop: "1px solid var(--border-color)",
-        borderBottom: "1px solid var(--border-color)",
+        borderTop: "var(--rule) solid var(--border-color)",
+        borderBottom: "var(--rule) solid var(--border-color)",
         flexShrink: 0,
         fontFamily: "inherit",
+        fontSize: "var(--fs-control)",
       }}
     >
       {/* ── Play / Pause / Stop ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <button
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+        <IconButton
+          icon={isPlaying ? Pause : Play}
+          label={isPlaying ? "Pause" : "Play"}
+          shortcut={{ action: "toggle_playback" }}
+          size="lg"
+          iconSize={14}
+          active={isPlaying}
           onClick={togglePlayPause}
-          style={{
-            width: 26,
-            height: 26,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 6,
-            border: "none",
-            cursor: "pointer",
-            fontSize: 13,
-            fontFamily: "inherit",
-            background: isPlaying ? "rgba(108, 138, 255, 0.12)" : "transparent",
-            color: isPlaying ? "var(--accent-primary)" : "var(--text-primary)",
-            transition: "all 0.15s",
-          }}
-          title="Play / Pause (Space)"
-        >
-          {isPlaying ? "\u23F8" : "\u25B6"}
-        </button>
-        <button
-          onClick={stopPlayback}
-          style={{
-            width: 26,
-            height: 26,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 6,
-            border: "none",
-            cursor: "pointer",
-            fontSize: 13,
-            fontFamily: "inherit",
-            background: "transparent",
-            color: "var(--text-secondary, #888)",
-            transition: "all 0.15s",
-          }}
-          title="Stop"
-        >
-          {"\u23F9"}
-        </button>
+        />
+        <IconButton icon={Square} label="Stop" size="lg" iconSize={14} onClick={stopPlayback} />
       </div>
 
-      {/* ── Divider ── */}
-      <div style={{ width: 1, height: 16, background: "var(--border-color)", margin: "0 8px" }} />
+      <TransportDivider />
 
       {/* ── Speed presets ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <span style={{ fontSize: 9, color: "var(--text-muted)", marginRight: 2 }}>Speed</span>
-        {SPEED_PRESETS.map((s) => (
-          <Pill key={s} active={playbackRate === s} onClick={() => setPlaybackRate(s)}>
-            {s}×
-          </Pill>
-        ))}
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+        <span style={{ color: "var(--text-secondary)" }}>Speed</span>
+        <SegmentedControl
+          label="Playback speed"
+          tone="accent"
+          size="sm"
+          value={playbackRate}
+          onChange={setPlaybackRate}
+          options={SPEED_PRESETS.map((v) => ({ value: v, label: `${v}×` }))}
+        />
       </div>
 
-      {/* ── Divider ── */}
-      <div style={{ width: 1, height: 16, background: "var(--border-color)", margin: "0 8px" }} />
+      <TransportDivider />
 
       {/* ── Loop controls ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-        {/* Loop toggle */}
-        <button
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+        <IconButton
+          icon={Repeat}
+          label="Loop"
+          shortcut={{ action: "toggle_loop" }}
+          size="md"
+          active={loopEnabled}
           onClick={() => useAudioStore.getState().toggleLoop()}
-          style={{
-            display: "flex", alignItems: "center", gap: 3,
-            padding: "3px 7px", borderRadius: 6, border: "none", cursor: "pointer",
-            fontSize: 10, fontFamily: "inherit",
-            background: loopEnabled ? "rgba(108, 138, 255, 0.08)" : "transparent",
-            color: loopEnabled ? "var(--accent-primary)" : "var(--text-muted)",
-            transition: "all 0.15s",
-          }}
-          title="Toggle loop (\\)"
-        >
-          <span style={{ fontSize: 12 }}>{"\u21BB"}</span>
-          <span>Loop</span>
-        </button>
-
-        {/* Set loop start */}
-        <button
-          onClick={() => {
-            const beat = getPlayheadBeat();
-            useAudioStore.getState().setLoopStart(beat);
-          }}
-          style={{
-            padding: "3px 6px", borderRadius: 4, border: "none", cursor: "pointer",
-            fontSize: 9, fontFamily: "inherit",
-            background: loopStartBeat !== null ? "rgba(108, 138, 255, 0.08)" : "transparent",
-            color: loopStartBeat !== null ? "var(--accent-primary)" : "var(--text-muted)",
-            transition: "all 0.15s",
-          }}
-          title={loopStartBeat !== null ? `Loop start: beat ${loopStartBeat.toFixed(2)} ([)` : "Set loop start ([)"}
-        >
-          [{loopStartBeat !== null ? ` ${loopStartBeat.toFixed(1)}` : ""}
-        </button>
-
-        {/* Set loop end */}
-        <button
-          onClick={() => {
-            const beat = getPlayheadBeat();
-            useAudioStore.getState().setLoopEnd(beat);
-          }}
-          style={{
-            padding: "3px 6px", borderRadius: 4, border: "none", cursor: "pointer",
-            fontSize: 9, fontFamily: "inherit",
-            background: loopEndBeat !== null ? "rgba(108, 138, 255, 0.08)" : "transparent",
-            color: loopEndBeat !== null ? "var(--accent-primary)" : "var(--text-muted)",
-            transition: "all 0.15s",
-          }}
-          title={loopEndBeat !== null ? `Loop end: beat ${loopEndBeat.toFixed(2)} (])` : "Set loop end (])"}
-        >
-          {loopEndBeat !== null ? `${loopEndBeat.toFixed(1)} ` : ""}]
-        </button>
+        />
+        <Tooltip content={loopStartBeat !== null ? `Loop start at beat ${loopStartBeat.toFixed(2)}` : "Set loop start at the playhead"} shortcut={{ action: "loop_start" }}>
+          <button
+            type="button"
+            className="ui-btn ui-btn--ghost ui-btn--sm"
+            style={loopStartBeat !== null ? { fontFamily: "var(--font-mono)", color: "var(--accent-primary)" } : undefined}
+            onClick={() => useAudioStore.getState().setLoopStart(getPlayheadBeat())}
+          >
+            <Icon icon={ArrowRightToLine} size={12} />
+            {loopStartBeat !== null ? loopStartBeat.toFixed(1) : "In"}
+          </button>
+        </Tooltip>
+        <Tooltip content={loopEndBeat !== null ? `Loop end at beat ${loopEndBeat.toFixed(2)}` : "Set loop end at the playhead"} shortcut={{ action: "loop_end" }}>
+          <button
+            type="button"
+            className="ui-btn ui-btn--ghost ui-btn--sm"
+            style={loopEndBeat !== null ? { fontFamily: "var(--font-mono)", color: "var(--accent-primary)" } : undefined}
+            onClick={() => useAudioStore.getState().setLoopEnd(getPlayheadBeat())}
+          >
+            {loopEndBeat !== null ? loopEndBeat.toFixed(1) : "Out"}
+            <Icon icon={ArrowLeftToLine} size={12} />
+          </button>
+        </Tooltip>
 
         {/* Clear loop — only show when start or end is set */}
         {(loopStartBeat !== null || loopEndBeat !== null) && (
-          <button
-            onClick={() => useAudioStore.getState().clearLoop()}
-            style={{
-              padding: "3px 5px", borderRadius: 4, border: "none", cursor: "pointer",
-              fontSize: 9, fontFamily: "inherit",
-              background: "transparent", color: "var(--text-muted)",
-              transition: "all 0.15s",
-            }}
-            title="Clear loop markers"
-          >
-            {"\u2715"}
-          </button>
-        )}
-
-        {/* Loop range display when both bounds are set and loop is active */}
-        {loopEnabled && loopStartBeat !== null && loopEndBeat !== null && (
-          <span style={{ fontSize: 9, color: "var(--accent-primary)", marginLeft: 2, fontFamily: "var(--font-mono, monospace)" }}>
-            {"\u27F2"} {loopStartBeat.toFixed(1)}{"\u2013"}{loopEndBeat.toFixed(1)}
-          </span>
+          <IconButton icon={X} label="Clear loop markers" size="sm" onClick={() => useAudioStore.getState().clearLoop()} />
         )}
       </div>
 
@@ -241,22 +178,21 @@ export function TransportBar() {
         style={{
           display: "flex",
           alignItems: "baseline",
-          gap: 6,
-          marginRight: 10,
-          fontFamily: "var(--font-mono, monospace)",
+          gap: "var(--space-6)",
+          fontFamily: "var(--font-mono)",
         }}
       >
-        <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600 }}>
+        <span style={{ fontSize: "var(--fs-body)", color: "var(--text-primary)", fontWeight: 600 }}>
           {formatTime(displayTime)}
         </span>
-        <span style={{ fontSize: 9, color: "var(--text-muted)" }}>
+        <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>
           b{displayBeat.toFixed(2)}
         </span>
       </div>
 
       {/* ── Time scrub slider ── */}
-      <div style={{ width: 260, display: "flex", alignItems: "center", gap: 6 }}>
-        <div style={{ position: "relative", flex: 1, height: 16, display: "flex", alignItems: "center", overflow: "hidden" }}>
+      <div style={{ width: 260, display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
+        <div className="ui-scrub" style={{ position: "relative", flex: 1, height: 16, display: "flex", alignItems: "center" }}>
           {/* Track background */}
           <div
             style={{
@@ -264,7 +200,7 @@ export function TransportBar() {
               left: 0,
               right: 0,
               height: 4,
-              borderRadius: 2,
+              borderRadius: "var(--radius-full)",
               background: "var(--bg-active)",
             }}
           />
@@ -275,23 +211,23 @@ export function TransportBar() {
               left: 0,
               width: `${progress}%`,
               height: 4,
-              borderRadius: 2,
-              background: "linear-gradient(90deg, var(--accent-primary), #8aa4ff)",
+              borderRadius: "var(--radius-full)",
+              background: "var(--accent-primary)",
               transition: "width 0.05s linear",
             }}
           />
           {/* Thumb */}
           <div
+            className="ui-scrub__thumb"
             style={{
               position: "absolute",
               left: `${progress}%`,
               transform: "translateX(-50%)",
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              background: "var(--accent-primary)",
-              border: "2px solid var(--bg-secondary)",
-              boxShadow: "0 0 6px rgba(108, 138, 255, 0.4)",
+              width: 12,
+              height: 12,
+              borderRadius: "var(--radius-full)",
+              background: "var(--on-accent)",
+              boxShadow: "var(--shadow-thumb)",
               transition: "left 0.05s linear",
               pointerEvents: "none",
             }}
@@ -299,6 +235,7 @@ export function TransportBar() {
           {/* Invisible range input for interaction */}
           <input
             type="range"
+            aria-label="Playback position"
             min={0}
             max={maxTime}
             step={0.01}
@@ -317,9 +254,9 @@ export function TransportBar() {
         </div>
         <span
           style={{
-            fontSize: 9,
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-mono, monospace)",
+            fontSize: "var(--fs-caption)",
+            color: "var(--text-secondary)",
+            fontFamily: "var(--font-mono)",
             minWidth: 32,
             textAlign: "right",
           }}
@@ -329,4 +266,8 @@ export function TransportBar() {
       </div>
     </div>
   );
+}
+
+function TransportDivider() {
+  return <div aria-hidden="true" style={{ width: 1, height: 16, background: "var(--border-color)" }} />;
 }

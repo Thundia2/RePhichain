@@ -4,20 +4,41 @@
 // 210px wide panel that slides in from the left.
 // Shows all lines with visibility/lock toggles.
 // Supports: click to select, double-click rename, right-click
-// context menu (Delete, Duplicate, Set Parent, Set Group),
-// hierarchy indentation via father_index.
+// context menu (Rename, Duplicate, Delete, Set parent, Set group),
+// hierarchy indentation via father_index. Rows hover via
+// ui-hover; the context menu is a ui-popover; value prompts use
+// the shared showPrompt dialog.
 // ============================================================
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { Plus, Eye, EyeOff, Lock, LockOpen, TextCursorInput, Copy, Trash2, CornerLeftUp, Group } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useSelectedLineIndex, selectLineByIndex } from "../../stores/selection";
+import { Button } from "../common/Button";
+import { IconButton } from "../common/IconButton";
+import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
+import { showPrompt } from "../common/PromptDialog";
+import { useMenuKeyboard } from "../../hooks/useMenuKeyboard";
 
 // ---- Context menu state ----
 interface ContextMenu {
   x: number;
   y: number;
   lineIndex: number;
+  /** Document the menu opened in (the main window or a pop-out). */
+  doc: Document;
+}
+
+interface MenuEntry {
+  label: string;
+  icon: LucideIcon;
+  danger?: boolean;
+  separatorBefore?: boolean;
+  action: () => void;
 }
 
 // ---- Compute indentation depth from father_index chain ----
@@ -56,14 +77,6 @@ export function LineDrawer() {
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // ---- Inline prompt state (replaces window.prompt) ----
-  const [inlinePrompt, setInlinePrompt] = useState<{
-    label: string;
-    defaultValue: string;
-    onSubmit: (value: string) => void;
-  } | null>(null);
-  const inlinePromptRef = useRef<HTMLInputElement>(null);
-
   // Focus rename input when activated
   useEffect(() => {
     if (renamingIndex !== null && renameInputRef.current) {
@@ -72,24 +85,9 @@ export function LineDrawer() {
     }
   }, [renamingIndex]);
 
-  // Close context menu on click outside or Escape
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClose = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setContextMenu(null);
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setContextMenu(null);
-    };
-    document.addEventListener("mousedown", handleClose);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClose);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [contextMenu]);
+  // Context menu: outside press / Escape close it, arrows move between items
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  useMenuKeyboard(contextMenu !== null, closeContextMenu, menuRef, { focusFirst: true, closeOnOutsidePress: true });
 
   const commitRename = useCallback(() => {
     if (renamingIndex !== null) {
@@ -101,7 +99,7 @@ export function LineDrawer() {
   const handleContextMenu = useCallback((e: React.MouseEvent, i: number) => {
     e.preventDefault();
     e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY, lineIndex: i });
+    setContextMenu({ x: e.clientX, y: e.clientY, lineIndex: i, doc: e.currentTarget.ownerDocument });
   }, []);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent, i: number) => {
@@ -119,49 +117,36 @@ export function LineDrawer() {
         top: 0,
         bottom: 0,
         width: 210,
-        zIndex: 20,
-        background: "#16161dF0",
-        borderRight: "1px solid var(--border-color)",
-        backdropFilter: "blur(8px)",
+        zIndex: "var(--z-raised)",
+        background: "var(--bg-secondary)",
+        borderRight: "var(--rule) solid var(--border-color)",
         transform: drawerOpen ? "translateX(0)" : "translateX(-220px)",
-        transition: "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+        transition: "transform var(--dur-base) var(--ease-out)",
         display: "flex",
         flexDirection: "column",
-        fontSize: 11,
+        fontSize: "var(--fs-control)",
       }}
     >
       {/* Header */}
       <div
         style={{
-          padding: "8px 10px",
-          borderBottom: "1px solid var(--border-color)",
+          padding: "var(--space-6) var(--space-6) var(--space-6) var(--space-10)",
+          borderBottom: "var(--rule) solid var(--border-color)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
-        <span style={{ fontWeight: 700, color: "#aaa", fontSize: 10, letterSpacing: 1 }}>
-          LINES
+        <span style={{ fontWeight: 600, color: "var(--text-secondary)", fontSize: "var(--fs-control)" }}>
+          Lines
         </span>
-        <button
-          onClick={() => addLine()}
-          style={{
-            background: "var(--accent-primary)",
-            color: "#fff",
-            border: "none",
-            borderRadius: 4,
-            padding: "2px 8px",
-            cursor: "pointer",
-            fontSize: 10,
-            fontFamily: "inherit",
-          }}
-        >
-          + Add
-        </button>
+        <Button variant="primary" size="sm" icon={Plus} onClick={() => addLine()}>
+          Add
+        </Button>
       </div>
 
       {/* Line list */}
-      <div style={{ flex: 1, overflowY: "auto", padding: 4 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "var(--space-4)" }}>
         {lines.map((line, i) => {
           const isSelected = selectedLineIndex === i;
           const isVisible = lineVisibility[i] !== false;
@@ -174,48 +159,39 @@ export function LineDrawer() {
               onClick={() => selectLineByIndex(i)}
               onContextMenu={(e) => handleContextMenu(e, i)}
               onDoubleClick={(e) => handleDoubleClick(e, i)}
+              className="ui-hover"
+              aria-current={isSelected ? "true" : undefined}
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 4,
-                padding: "4px 6px",
-                paddingLeft: 6 + depth * 14,
-                borderRadius: 4,
+                gap: "var(--space-2)",
+                padding: "var(--space-2) var(--space-6) var(--space-2) var(--space-2)",
+                paddingLeft: 2 + depth * 14,
+                borderRadius: "var(--radius-md)",
                 cursor: "pointer",
                 marginBottom: 1,
-                background: isSelected ? "#6c8aff15" : "transparent",
-                borderLeft: isSelected
-                  ? "2px solid var(--accent-primary)"
-                  : "2px solid transparent",
+                background: isSelected ? "var(--accent-selected)" : undefined,
               }}
             >
               {/* Visibility toggle */}
-              <span
+              <IconButton
+                icon={isVisible ? Eye : EyeOff}
+                label={isVisible ? "Hide line" : "Show line"}
+                size="sm"
+                tooltipPosition="right"
+                style={{ color: isVisible ? "var(--text-secondary)" : "var(--text-muted)" }}
                 onClick={(e) => { e.stopPropagation(); toggleVisibility(i); }}
-                style={{
-                  fontSize: 10,
-                  opacity: isVisible ? 0.4 : 0.15,
-                  cursor: "pointer",
-                  flexShrink: 0,
-                }}
-                title={isVisible ? "Hide line" : "Show line"}
-              >
-                {isVisible ? "\u{1F441}" : "\u{1F441}"}
-              </span>
+              />
 
               {/* Lock toggle */}
-              <span
+              <IconButton
+                icon={isLocked ? Lock : LockOpen}
+                label={isLocked ? "Unlock line" : "Lock line"}
+                size="sm"
+                tooltipPosition="right"
+                style={{ color: isLocked ? "var(--text-primary)" : "var(--text-muted)" }}
                 onClick={(e) => { e.stopPropagation(); toggleLocked(i); }}
-                style={{
-                  fontSize: 9,
-                  opacity: isLocked ? 0.6 : 0.2,
-                  cursor: "pointer",
-                  flexShrink: 0,
-                }}
-                title={isLocked ? "Unlock line" : "Lock line"}
-              >
-                {isLocked ? "\u{1F512}" : "\u{1F513}"}
-              </span>
+              />
 
               {/* Name (or inline rename input) */}
               {renamingIndex === i ? (
@@ -229,16 +205,17 @@ export function LineDrawer() {
                     if (e.key === "Escape") setRenamingIndex(null);
                   }}
                   onClick={(e) => e.stopPropagation()}
+                  aria-label="Line name"
                   style={{
                     flex: 1,
-                    background: "var(--bg-active)",
-                    border: "1px solid var(--accent-primary)",
-                    borderRadius: 3,
-                    padding: "1px 4px",
-                    color: "#e0e0e8",
-                    fontSize: 11,
+                    height: "var(--control-sm)",
+                    background: "var(--bg-tertiary)",
+                    border: "var(--hairline) solid var(--accent-primary)",
+                    borderRadius: "var(--radius-sm)",
+                    padding: "0 var(--space-4)",
+                    color: "var(--text-primary)",
+                    fontSize: "var(--fs-control)",
                     fontFamily: "inherit",
-                    outline: "none",
                     minWidth: 0,
                   }}
                 />
@@ -246,7 +223,8 @@ export function LineDrawer() {
                 <span
                   style={{
                     flex: 1,
-                    color: isSelected ? "#e0e0e8" : "#888",
+                    marginLeft: "var(--space-2)",
+                    color: isSelected ? "var(--accent-primary)" : "var(--text-primary)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -257,178 +235,92 @@ export function LineDrawer() {
               )}
 
               {/* Note count */}
-              <span style={{ color: "#555", fontSize: 9, flexShrink: 0 }}>
-                {line.notes.length}N
-              </span>
+              <Tooltip content={`${line.notes.length} ${line.notes.length === 1 ? "note" : "notes"}`} position="right">
+                <span
+                  aria-label={`${line.notes.length} ${line.notes.length === 1 ? "note" : "notes"}`}
+                  style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", flexShrink: 0 }}
+                >
+                  {line.notes.length}
+                </span>
+              </Tooltip>
             </div>
           );
         })}
       </div>
 
-      {/* Context menu */}
-      {contextMenu && (
+      {/* Context menu — portalled to the body: the drawer's slide transform would
+          otherwise make position: fixed relative to the drawer, not the window. */}
+      {contextMenu && createPortal(
         <div
           ref={menuRef}
+          role="menu"
+          aria-label="Line actions"
+          className="ui-popover"
           style={{
             position: "fixed",
             left: contextMenu.x,
             top: contextMenu.y,
-            background: "var(--bg-secondary)",
-            border: "1px solid var(--border-color)",
-            borderRadius: 4,
-            padding: "4px 0",
-            zIndex: 100,
-            minWidth: 140,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            zIndex: "var(--z-dropdown)",
+            minWidth: 160,
           }}
         >
-          {[
-            { label: "Rename", action: () => {
+          {([
+            { label: "Rename", icon: TextCursorInput, action: () => {
               const line = lines[contextMenu.lineIndex];
               setRenameValue(line?.name || `Line ${contextMenu.lineIndex}`);
               setRenamingIndex(contextMenu.lineIndex);
               setContextMenu(null);
             }},
-            { label: "Duplicate", action: () => {
+            { label: "Duplicate", icon: Copy, action: () => {
               duplicateLine(contextMenu.lineIndex);
               setContextMenu(null);
             }},
-            { label: "Delete", action: () => {
+            { label: "Delete", icon: Trash2, danger: true, action: () => {
               removeLine(contextMenu.lineIndex);
               setContextMenu(null);
             }},
-            { label: "Set Parent...", action: () => {
+            { label: "Set parent…", icon: CornerLeftUp, separatorBefore: true, action: async () => {
               const li = contextMenu.lineIndex;
               setContextMenu(null);
-              setInlinePrompt({
+              const val = await showPrompt({
+                title: "Set parent line",
                 label: "Parent line index (-1 for none)",
                 defaultValue: String(lines[li]?.father_index ?? -1),
-                onSubmit: (val) => {
-                  const idx = parseInt(val);
-                  if (!isNaN(idx)) editLine(li, { father_index: idx === -1 ? undefined : idx });
-                },
+                confirmLabel: "Set parent",
               });
+              if (val === null) return;
+              const idx = parseInt(val);
+              if (!isNaN(idx)) editLine(li, { father_index: idx === -1 ? undefined : idx });
             }},
-            { label: "Set Group...", action: () => {
+            { label: "Set group…", icon: Group, action: async () => {
               const li = contextMenu.lineIndex;
               setContextMenu(null);
-              setInlinePrompt({
+              const val = await showPrompt({
+                title: "Set group",
                 label: "Group number",
                 defaultValue: String(lines[li]?.group ?? 0),
-                onSubmit: (val) => {
-                  const num = parseInt(val);
-                  editLine(li, { group: isNaN(num) ? undefined : num === 0 ? undefined : num });
-                },
+                confirmLabel: "Set group",
               });
+              if (val === null) return;
+              const num = parseInt(val);
+              editLine(li, { group: isNaN(num) ? undefined : num === 0 ? undefined : num });
             }},
-          ].map((item) => (
-            <button
-              key={item.label}
-              onClick={item.action}
-              style={{
-                display: "block",
-                width: "100%",
-                padding: "4px 12px",
-                background: "transparent",
-                border: "none",
-                color: item.label === "Delete" ? "#ff6b6b" : "#ccc",
-                cursor: "pointer",
-                fontSize: 11,
-                textAlign: "left",
-                fontFamily: "inherit",
-              }}
-              onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--bg-active)"; }}
-              onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "transparent"; }}
-            >
-              {item.label}
-            </button>
+          ] as MenuEntry[]).map((item) => (
+            <div key={item.label} style={{ display: "contents" }}>
+              {item.separatorBefore && <div className="ui-menu-separator" role="separator" />}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={item.action}
+                className={item.danger ? "ui-menu-item ui-menu-item--danger" : "ui-menu-item"}
+              >
+                <Icon icon={item.icon} size={14} style={item.danger ? undefined : { color: "var(--text-secondary)" }} />
+                {item.label}
+              </button>
+            </div>
           ))}
-        </div>
-      )}
-
-      {/* Inline prompt overlay (replaces window.prompt) */}
-      {inlinePrompt && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 110,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "rgba(0,0,0,0.4)",
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget) setInlinePrompt(null); }}
-        >
-          <div
-            style={{
-              width: 260,
-              backgroundColor: "var(--bg-secondary)",
-              border: "1px solid var(--border-color)",
-              borderRadius: 10,
-              padding: 16,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-            }}
-          >
-            <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 8 }}>
-              {inlinePrompt.label}
-            </div>
-            <input
-              ref={inlinePromptRef}
-              defaultValue={inlinePrompt.defaultValue}
-              autoFocus
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                borderRadius: 8,
-                fontSize: 12,
-                border: "0.5px solid var(--border-color)",
-                backgroundColor: "var(--bg-active)",
-                color: "var(--text-primary)",
-                fontFamily: "inherit",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = "var(--accent-primary)"; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-color)"; }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  inlinePrompt.onSubmit((e.target as HTMLInputElement).value);
-                  setInlinePrompt(null);
-                } else if (e.key === "Escape") {
-                  setInlinePrompt(null);
-                }
-              }}
-            />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 10 }}>
-              <button
-                style={{
-                  padding: "5px 12px", borderRadius: 6, fontSize: 11,
-                  color: "var(--text-secondary)", background: "transparent",
-                  border: "none", cursor: "pointer",
-                }}
-                onClick={() => setInlinePrompt(null)}
-              >
-                Cancel
-              </button>
-              <button
-                style={{
-                  padding: "5px 12px", borderRadius: 6, fontSize: 11,
-                  background: "var(--accent-primary)", color: "#fff",
-                  border: "none", cursor: "pointer",
-                }}
-                onClick={() => {
-                  if (inlinePromptRef.current) {
-                    inlinePrompt.onSubmit(inlinePromptRef.current.value);
-                  }
-                  setInlinePrompt(null);
-                }}
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
+        </div>,
+        contextMenu.doc.body,
       )}
     </div>
   );

@@ -2,7 +2,7 @@
 // Shader Variable Animation Editor
 //
 // For each shader uniform variable, shows:
-//   - Toggle between "constant" and "animated" mode
+//   - Segmented switch between "constant" and "animated" mode
 //   - Constant mode: simple number input
 //   - Animated mode: mini keyframe strip with add/edit/remove
 //     - Animation events: { startTime, endTime, start, end, easingType }
@@ -19,8 +19,20 @@ import { beatToFloat, floatToBeat } from "../../types/chart";
 import { SHADER_DEFAULTS } from "../../canvas/shaders";
 import { getPlayheadBeat } from "../../utils/playhead";
 import { safeParseNumber } from "../common/FormFields";
-import { ActionButton, INPUT_STYLE, SELECT_STYLE } from "../common/UIKit";
+import { INPUT_STYLE, SELECT_STYLE } from "../common/UIKit";
+import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
+import { Button } from "../common/Button";
+import { IconButton } from "../common/IconButton";
+import { SegmentedControl } from "../common/SegmentedControl";
+import { Tooltip } from "../common/Tooltip";
+import { chromeTheme, withAlpha } from "../../canvas/chromeTheme";
 import { RPE_EASING_MAP } from "../../utils/rpeImport";
+
+/** Numeric inputs use the mono face. */
+const NUM_INPUT_STYLE: React.CSSProperties = { ...INPUT_STYLE, fontFamily: "var(--font-mono)" };
+
+/** Small inline field label (caption, text-secondary). */
+const FIELD_LABEL_STYLE: React.CSSProperties = { color: "var(--text-secondary)", fontSize: "var(--fs-caption)" };
 
 // ---- Types ----
 
@@ -48,7 +60,7 @@ export function ShaderVarAnimEditor({
 
   if (varNames.length === 0) {
     return (
-      <div style={{ color: "var(--text-muted)", fontSize: 10, padding: "4px 0" }}>
+      <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-caption)", padding: "var(--space-4) 0" }}>
         No configurable variables for this shader.
       </div>
     );
@@ -59,14 +71,12 @@ export function ShaderVarAnimEditor({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
       <div style={{
-        fontSize: 10,
+        fontSize: "var(--fs-control)",
         fontWeight: 600,
-        color: "var(--text-muted)",
-        textTransform: "uppercase",
-        letterSpacing: "0.3px",
-        marginBottom: 2,
+        color: "var(--text-secondary)",
+        marginBottom: "var(--space-2)",
       }}>
         Variables
       </div>
@@ -133,9 +143,8 @@ function VarRow({
 
   return (
     <div style={{
-      backgroundColor: "rgba(255,255,255,0.02)",
-      borderRadius: 6,
-      border: "1px solid rgba(255,255,255,0.05)",
+      backgroundColor: "var(--bg-active)",
+      borderRadius: "var(--radius-md)",
       overflow: "hidden",
       marginBottom: 1,
     }}>
@@ -143,39 +152,34 @@ function VarRow({
       <div style={{
         display: "flex",
         alignItems: "center",
-        gap: 4,
-        padding: "3px 6px",
+        gap: "var(--space-4)",
+        padding: "var(--space-2) var(--space-6)",
         minHeight: 26,
       }}>
         {/* Variable name */}
         <span style={{
-          fontSize: 10,
-          color: "var(--text-muted)",
+          fontSize: "var(--fs-caption)",
+          color: "var(--text-secondary)",
           minWidth: 70,
-          fontFamily: "monospace",
+          fontFamily: "var(--font-mono)",
         }}>
           {name}
         </span>
 
-        {/* Animated toggle */}
-        <button
-          onClick={toggleAnimated}
-          title={isAnimated ? "Switch to constant" : "Switch to animated"}
-          style={{
-            fontSize: 8,
-            padding: "1px 5px",
-            borderRadius: 3,
-            border: "none",
-            cursor: "pointer",
-            fontFamily: "inherit",
-            fontWeight: 600,
-            backgroundColor: isAnimated ? "var(--accent-primary)" : "var(--bg-active)",
-            color: isAnimated ? "#fff" : "var(--text-muted)",
-            transition: "all 0.15s",
+        {/* Constant / animated mode */}
+        <SegmentedControl
+          label={`${name} mode`}
+          size="sm"
+          tone="accent"
+          value={isAnimated ? "animated" : "constant"}
+          onChange={(mode) => {
+            if ((mode === "animated") !== isAnimated) toggleAnimated();
           }}
-        >
-          {isAnimated ? "ANIM" : "CONST"}
-        </button>
+          options={[
+            { value: "constant", label: "Constant", title: "Switch to constant" },
+            { value: "animated", label: "Animated", title: "Switch to animated" },
+          ]}
+        />
 
         {/* Constant value input */}
         {!isAnimated && (
@@ -187,8 +191,9 @@ function VarRow({
               const n = safeParseNumber(e.target.value);
               if (n !== null) onChange(n);
             }}
+            aria-label={name}
             style={{
-              ...INPUT_STYLE,
+              ...NUM_INPUT_STYLE,
               flex: 1,
               maxWidth: 80,
             }}
@@ -198,24 +203,16 @@ function VarRow({
         {/* Animated: show event count and expand toggle */}
         {isAnimated && (
           <>
-            <span style={{ fontSize: 9, color: "var(--text-muted)", flex: 1 }}>
+            <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", flex: 1 }}>
               {events.length} keyframe{events.length !== 1 ? "s" : ""}
             </span>
-            <button
+            <IconButton
+              icon={expanded ? ChevronUp : ChevronDown}
+              label={expanded ? "Collapse keyframes" : "Expand keyframes"}
+              size="sm"
+              aria-expanded={expanded}
               onClick={() => setExpanded(!expanded)}
-              style={{
-                fontSize: 8,
-                padding: "1px 4px",
-                borderRadius: 3,
-                border: "none",
-                cursor: "pointer",
-                backgroundColor: "var(--bg-active)",
-                color: "var(--text-muted)",
-                fontFamily: "inherit",
-              }}
-            >
-              {expanded ? "Collapse" : "Expand"}
-            </button>
+            />
           </>
         )}
       </div>
@@ -291,8 +288,10 @@ function MiniKeyframeStrip({
     if (beatRange <= 0) return;
     const pxPerBeat = w / beatRange;
 
+    const t = chromeTheme();
+
     // Background
-    ctx.fillStyle = "rgba(0,0,0,0.2)";
+    ctx.fillStyle = withAlpha(t.canvasBg, 0.2);
     ctx.fillRect(0, 0, w, h);
 
     // Value range for vertical positioning
@@ -318,7 +317,7 @@ function MiniKeyframeStrip({
       const ey = h - ((evVal - valMin) / valRange) * (h - 4) - 2;
 
       // Line segment
-      ctx.strokeStyle = getComputedStyle(canvas).getPropertyValue("--accent-primary").trim() || "#6c8aff";
+      ctx.strokeStyle = t.accentPrimary;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(sx, sy);
@@ -326,13 +325,13 @@ function MiniKeyframeStrip({
       ctx.stroke();
 
       // Start dot
-      ctx.fillStyle = "#61afef";
+      ctx.fillStyle = t.info;
       ctx.beginPath();
       ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
       ctx.fill();
 
       // End dot
-      ctx.fillStyle = "#98c379";
+      ctx.fillStyle = t.success;
       ctx.beginPath();
       ctx.arc(ex, ey, 2.5, 0, Math.PI * 2);
       ctx.fill();
@@ -341,7 +340,7 @@ function MiniKeyframeStrip({
     // Playhead
     const phX = (currentBeat - minBeat) * pxPerBeat;
     if (phX >= 0 && phX <= w) {
-      ctx.strokeStyle = "rgba(224, 108, 117, 0.7)";
+      ctx.strokeStyle = withAlpha(t.indicatorColor, 0.7);
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(phX, 0);
@@ -413,24 +412,38 @@ function MiniKeyframeStrip({
   );
 
   return (
-    <canvas
-      ref={canvasRef}
-      onClick={handleClick}
-      title="Click to add keyframe"
-      style={{
-        display: "block",
-        width: "100%",
-        height: STRIP_HEIGHT,
-        cursor: "crosshair",
-        borderTop: "1px solid rgba(255,255,255,0.04)",
-      }}
-    />
+    <Tooltip content="Click to add keyframe">
+      <canvas
+        ref={canvasRef}
+        onClick={handleClick}
+        role="img"
+        aria-label="Click to add keyframe"
+        style={{
+          display: "block",
+          width: "100%",
+          height: STRIP_HEIGHT,
+          cursor: "crosshair",
+          borderTop: "var(--rule) solid var(--separator)",
+        }}
+      />
+    </Tooltip>
   );
 }
 
 // ============================================================
 // Full Keyframe Editor (expanded view)
 // ============================================================
+
+// E5 stable React keys for keyframe rows (see KeyframeEditor). Keyed by object
+// identity, so one map serves every editor instance and entries are freed with
+// their events.
+const KEYFRAME_KEYS = new WeakMap<AnimationEvent, string>();
+let keyframeKeySeq = 0;
+function keyFor(ev: AnimationEvent): string {
+  let k = KEYFRAME_KEYS.get(ev);
+  if (!k) { k = `kf${keyframeKeySeq++}`; KEYFRAME_KEYS.set(ev, k); }
+  return k;
+}
 
 function KeyframeEditor({
   events,
@@ -449,13 +462,7 @@ function KeyframeEditor({
   // edit then lands on the wrong keyframe). Give each event object a persistent id via a
   // WeakMap and carry it onto the edited event's new object so React follows the row
   // through the sort. The data stays sorted (export-safe) — only the React keys are stable.
-  const keyMap = useRef(new WeakMap<AnimationEvent, string>());
-  const keySeq = useRef(0);
-  const keyFor = (ev: AnimationEvent): string => {
-    let k = keyMap.current.get(ev);
-    if (!k) { k = `kf${keySeq.current++}`; keyMap.current.set(ev, k); }
-    return k;
-  };
+  // The map lives at module scope (KEYFRAME_KEYS), since it is keyed by object identity.
 
   const addAtCurrentBeat = useCallback(() => {
     // Find what value to use at the current beat
@@ -502,8 +509,8 @@ function KeyframeEditor({
       const updated = events.map((ev, i) => {
         if (i !== index) return ev;
         const next = { ...ev, ...changes };
-        const id = keyMap.current.get(ev); // E5: carry the stable id onto the new object
-        if (id) keyMap.current.set(next, id);
+        const id = KEYFRAME_KEYS.get(ev); // E5: carry the stable id onto the new object
+        if (id) KEYFRAME_KEYS.set(next, id);
         return next;
       });
       onChange(updated.sort(
@@ -515,17 +522,17 @@ function KeyframeEditor({
 
   return (
     <div style={{
-      borderTop: "1px solid rgba(255,255,255,0.04)",
-      padding: "4px 6px",
+      borderTop: "var(--rule) solid var(--separator)",
+      padding: "var(--space-4) var(--space-6)",
       maxHeight: 200,
       overflowY: "auto",
     }}>
       {/* Add button */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-        <ActionButton variant="primary" onClick={addAtCurrentBeat}>
-          + Add at beat {currentBeat.toFixed(2)}
-        </ActionButton>
-        <span style={{ fontSize: 8, color: "var(--text-muted)", alignSelf: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "var(--space-4)" }}>
+        <Button variant="primary" size="sm" icon={Plus} onClick={addAtCurrentBeat}>
+          Add at beat <span style={{ fontFamily: "var(--font-mono)" }}>{currentBeat.toFixed(2)}</span>
+        </Button>
+        <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", alignSelf: "center" }}>
           {events.length} event{events.length !== 1 ? "s" : ""}
         </span>
       </div>
@@ -542,8 +549,8 @@ function KeyframeEditor({
       ))}
 
       {events.length === 0 && (
-        <div style={{ fontSize: 9, color: "var(--text-muted)", textAlign: "center", padding: 4 }}>
-          No keyframes. Click "+ Add" to create one.
+        <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", textAlign: "center", padding: "var(--space-4)" }}>
+          No keyframes. Click "Add at beat" to create one.
         </div>
       )}
     </div>
@@ -577,25 +584,26 @@ function KeyframeEventRow({
       display: "flex",
       flexWrap: "wrap",
       alignItems: "center",
-      gap: 3,
-      padding: "2px 0",
-      borderBottom: "1px solid rgba(255,255,255,0.03)",
-      fontSize: 9,
+      gap: "var(--space-4)",
+      padding: "var(--space-2) 0",
+      borderBottom: "var(--rule) solid var(--separator)",
+      fontSize: "var(--fs-caption)",
     }}>
       {/* Index badge */}
       <span style={{
-        fontSize: 8,
-        fontWeight: 700,
-        color: "var(--text-muted)",
+        fontSize: "var(--fs-badge)",
+        fontWeight: 600,
+        fontFamily: "var(--font-mono)",
+        color: "var(--text-secondary)",
         minWidth: 14,
         textAlign: "center",
       }}>
-        #{index + 1}
+        {index + 1}
       </span>
 
       {/* Start beat */}
-      <label style={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <span style={{ color: "var(--text-muted)", fontSize: 8 }}>B:</span>
+      <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+        <span style={FIELD_LABEL_STYLE}>Beat</span>
         <input
           type="number"
           step="0.25"
@@ -604,13 +612,13 @@ function KeyframeEventRow({
             const n = safeParseNumber(e.target.value);
             if (n !== null) onUpdate({ startTime: floatToBeat(Math.max(0, n)) });
           }}
-          style={{ ...INPUT_STYLE, width: 45 }}
+          style={{ ...NUM_INPUT_STYLE, width: 45 }}
         />
       </label>
 
       {/* End beat */}
-      <label style={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <span style={{ color: "var(--text-muted)", fontSize: 8 }}>-</span>
+      <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+        <span style={FIELD_LABEL_STYLE}>to</span>
         <input
           type="number"
           step="0.25"
@@ -619,13 +627,13 @@ function KeyframeEventRow({
             const n = safeParseNumber(e.target.value);
             if (n !== null) onUpdate({ endTime: floatToBeat(Math.max(0, n)) });
           }}
-          style={{ ...INPUT_STYLE, width: 45 }}
+          style={{ ...NUM_INPUT_STYLE, width: 45 }}
         />
       </label>
 
       {/* Start value */}
-      <label style={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <span style={{ color: "#61afef", fontSize: 8 }}>S:</span>
+      <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+        <span style={{ ...FIELD_LABEL_STYLE, color: "var(--info)" }}>Start</span>
         <input
           type="number"
           step="0.01"
@@ -634,13 +642,13 @@ function KeyframeEventRow({
             const n = safeParseNumber(e.target.value);
             if (n !== null) onUpdate({ start: n });
           }}
-          style={{ ...INPUT_STYLE, width: 50 }}
+          style={{ ...NUM_INPUT_STYLE, width: 50 }}
         />
       </label>
 
       {/* End value */}
-      <label style={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <span style={{ color: "#98c379", fontSize: 8 }}>E:</span>
+      <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+        <span style={{ ...FIELD_LABEL_STYLE, color: "var(--success)" }}>End</span>
         <input
           type="number"
           step="0.01"
@@ -649,46 +657,38 @@ function KeyframeEventRow({
             const n = safeParseNumber(e.target.value);
             if (n !== null) onUpdate({ end: n });
           }}
-          style={{ ...INPUT_STYLE, width: 50 }}
+          style={{ ...NUM_INPUT_STYLE, width: 50 }}
         />
       </label>
 
       {/* Easing */}
-      <select
-        value={easingNum}
-        onChange={(e) => {
-          const num = parseInt(e.target.value);
-          if (!isNaN(num)) onUpdate({ easingType: num });
-        }}
-        style={{ ...SELECT_STYLE, width: 80, fontSize: 8 }}
-        title={`Easing: ${easingName}`}
-      >
-        {RPE_EASING_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+      <Tooltip content={`Easing: ${easingName}`}>
+        <select
+          value={easingNum}
+          onChange={(e) => {
+            const num = parseInt(e.target.value);
+            if (!isNaN(num)) onUpdate({ easingType: num });
+          }}
+          style={{ ...SELECT_STYLE, width: 80, fontSize: "var(--fs-caption)" }}
+          aria-label="Easing"
+        >
+          {RPE_EASING_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </Tooltip>
 
       {/* Remove button */}
-      <button
+      <IconButton
+        icon={X}
+        label="Remove keyframe"
+        size="sm"
+        danger
         onClick={onRemove}
-        title="Remove keyframe"
-        style={{
-          fontSize: 9,
-          padding: "1px 4px",
-          borderRadius: 3,
-          border: "none",
-          cursor: "pointer",
-          backgroundColor: "rgba(224,108,117,0.2)",
-          color: "#e06c75",
-          fontFamily: "inherit",
-          fontWeight: 600,
-          marginLeft: "auto",
-        }}
-      >
-        X
-      </button>
+        style={{ marginLeft: "auto" }}
+      />
     </div>
   );
 }

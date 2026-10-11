@@ -9,36 +9,39 @@
 // visible via expandable viewer on every response path (success,
 // empty commands, and parse errors). Token usage + finish reason
 // shown inline after each response.
+// Styling: message bubbles sit on bg-active; the AI is marked with
+// the Sparkles icon; actions use the shared Button.
 // ============================================================
 
 import { useRef, useEffect, useCallback, useState } from "react";
+import { ChevronDown, ChevronRight, Send, Sparkles, Square } from "lucide-react";
 import { useAiChatStore } from "../../../stores/aiChatStore";
 import { useSettingsStore } from "../../../stores/settingsStore";
 import { generateAiCommandsStream } from "../../../utils/aiService";
 import { executeAiCommands, previewAiCommands } from "../../../utils/aiCommandExecutor";
 import type { AiParseError } from "../../../utils/aiService";
 import { useToastStore } from "../../../stores/toastStore";
+import { Button } from "../../common/Button";
+import { Icon } from "../../common/Icon";
 
 // ---- Styles ----
 
-const COLORS = {
-  aiAccent: "#3dd8e0",
-  aiAccentDim: "rgba(61, 216, 224, 0.12)",
-  aiAccentGlow: "rgba(61, 216, 224, 0.25)",
-  userBg: "rgba(108, 138, 255, 0.10)",
-  userBorder: "rgba(108, 138, 255, 0.18)",
-  assistantBg: "rgba(61, 216, 224, 0.06)",
-  assistantBorder: "rgba(61, 216, 224, 0.12)",
-  previewBg: "rgba(61, 216, 224, 0.05)",
-  previewBorder: "rgba(61, 216, 224, 0.20)",
-  dangerFg: "#ff4a6a",
-  dangerBg: "rgba(255, 74, 106, 0.08)",
-  successFg: "#4aff7a",
-  successBg: "rgba(74, 255, 122, 0.08)",
-  warnFg: "#ffb74d",
-  // Info card (empty commands)
-  infoBg: "rgba(108, 138, 255, 0.06)",
-  infoBorder: "rgba(108, 138, 255, 0.15)",
+const tint = (token: string, pct: number) => `color-mix(in srgb, var(${token}) ${pct}%, transparent)`;
+
+const BUBBLE: React.CSSProperties = {
+  borderRadius: "var(--radius-lg)",
+  background: "var(--bg-active)",
+  overflow: "hidden",
+};
+
+const ROLE_LABEL: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: "var(--space-4)",
+  fontSize: "var(--fs-caption)", fontWeight: 600, marginBottom: "var(--space-4)",
+};
+
+const BODY_TEXT: React.CSSProperties = {
+  fontSize: "var(--fs-control)", color: "var(--text-primary)", lineHeight: 1.45,
+  whiteSpace: "pre-wrap", wordBreak: "break-word",
 };
 
 export function AiTab() {
@@ -238,13 +241,13 @@ export function AiTab() {
   // ---- Not enabled state ----
   if (!aiEnabled) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: "32px 16px", textAlign: "center" }}>
-        <div style={{ width: 40, height: 40, borderRadius: "50%", background: COLORS.aiAccentDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-          <span style={{ color: COLORS.aiAccent, filter: "brightness(1.2)" }}>&#x2726;</span>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "var(--space-12)", padding: "var(--space-32) var(--space-16)", textAlign: "center" }}>
+        <div style={{ width: 40, height: 40, borderRadius: "var(--radius-full)", background: "var(--accent-tint)", color: "var(--accent-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon icon={Sparkles} size={20} />
         </div>
-        <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+        <div style={{ fontSize: "var(--fs-body)", color: "var(--text-secondary)", lineHeight: 1.5 }}>
           AI generation is disabled.<br />
-          Enable it in <span style={{ color: COLORS.aiAccent }}>Settings &gt; AI Generation</span>.
+          Enable it in <span style={{ color: "var(--text-primary)" }}>Settings &gt; AI generation</span>.
         </div>
       </div>
     );
@@ -253,21 +256,22 @@ export function AiTab() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0, height: "100%", minHeight: 0 }}>
       {/* ---- Messages area ---- */}
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, paddingBottom: 6, minHeight: 0 }}>
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "var(--space-6)", paddingBottom: "var(--space-6)", minHeight: 0 }}>
         {/* Empty state */}
         {messages.length === 0 && !isGenerating && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "20px 8px 12px", textAlign: "center" }}>
-            <div style={{ fontSize: 16, color: COLORS.aiAccent, letterSpacing: "0.08em", fontWeight: 600 }}>&#x2726; AI Chart Generation</div>
-            <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.6, maxWidth: 220 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-8)", padding: "var(--space-20) var(--space-8) var(--space-12)", textAlign: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", fontSize: "var(--fs-headline)", color: "var(--text-primary)", fontWeight: 600 }}>
+              <span style={{ display: "inline-flex", color: "var(--accent-primary)" }}><Icon icon={Sparkles} size={16} /></span>
+              AI chart generation
+            </div>
+            <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", lineHeight: 1.6, maxWidth: 220 }}>
               Describe what to generate in natural language. The AI will output structured commands that you can preview and apply.
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center", marginTop: 4 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)", justifyContent: "center", marginTop: "var(--space-4)" }}>
               {["5 tap notes from beat 6 to 11", "Circle motion from beat 0 to 32", "Fade in the selected line", "Add a sine wave of drag notes"].map((s) => (
-                <button key={s} onClick={() => { setInput(s); textareaRef.current?.focus(); }}
-                  style={{ padding: "3px 8px", borderRadius: 4, fontSize: 9, border: `1px solid ${COLORS.assistantBorder}`, background: COLORS.assistantBg, color: "var(--text-secondary)", cursor: "pointer", transition: "all 0.12s", whiteSpace: "nowrap" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = COLORS.aiAccent; e.currentTarget.style.color = COLORS.aiAccent; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = COLORS.assistantBorder; e.currentTarget.style.color = "var(--text-secondary)"; }}
-                >{s}</button>
+                <Button key={s} size="sm" onClick={() => { setInput(s); textareaRef.current?.focus(); }}>
+                  {s}
+                </Button>
               ))}
             </div>
           </div>
@@ -280,22 +284,20 @@ export function AiTab() {
 
         {/* Streaming / generating bubble */}
         {isGenerating && (
-          <div style={{ borderRadius: 6, background: COLORS.assistantBg, border: `1px solid ${COLORS.assistantBorder}`, overflow: "hidden" }}>
-            <div style={{ padding: "6px 10px" }}>
-              <div style={{ fontSize: 9, fontWeight: 600, color: COLORS.aiAccent, marginBottom: 3, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                {"\u2726"} AI
-              </div>
+          <div style={BUBBLE}>
+            <div style={{ padding: "var(--space-6) var(--space-10)" }}>
+              <AiRoleLabel />
               {streamingContent ? (
                 /* Tokens are arriving — show text progressively */
-                <div style={{ fontSize: 11, color: "var(--text-primary)", lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                <div style={BODY_TEXT}>
                   {streamingContent}
-                  <span style={{ display: "inline-flex", marginLeft: 2, verticalAlign: "middle" }}><LoadingDots /></span>
+                  <span style={{ display: "inline-flex", marginLeft: "var(--space-2)", verticalAlign: "middle" }}><LoadingDots /></span>
                 </div>
               ) : (
                 /* Waiting for first token */
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 0" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", padding: "var(--space-2) 0" }}>
                   <LoadingDots />
-                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Generating...</span>
+                  <span style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)" }}>Generating…</span>
                 </div>
               )}
             </div>
@@ -304,19 +306,19 @@ export function AiTab() {
 
         {/* Error display */}
         {error && (
-          <div style={{ borderRadius: 6, background: COLORS.dangerBg, border: `1px solid rgba(255, 74, 106, 0.2)`, overflow: "hidden" }}>
-            <div style={{ padding: "8px 10px", fontSize: 11, color: COLORS.dangerFg, lineHeight: 1.4, wordBreak: "break-word" }}>
+          <div style={{ borderRadius: "var(--radius-lg)", background: tint("--error", 10), overflow: "hidden" }}>
+            <div style={{ padding: "var(--space-8) var(--space-10)", fontSize: "var(--fs-control)", color: "var(--error)", lineHeight: 1.4, wordBreak: "break-word" }}>
               <strong>Error:</strong> {error}
             </div>
             {errorRaw && (
-              <ExpandableRaw label="Raw AI response" content={errorRaw} expanded={errorRawExpanded} onToggle={() => setErrorRawExpanded(!errorRawExpanded)} accentColor={COLORS.dangerFg} />
+              <ExpandableRaw label="Raw AI response" content={errorRaw} expanded={errorRawExpanded} onToggle={() => setErrorRawExpanded(!errorRawExpanded)} accentColor="var(--error)" />
             )}
           </div>
         )}
 
         {/* ---- Token usage + finish reason (shown after last response) ---- */}
         {!isGenerating && (lastTokenUsage || lastFinishReason) && messages.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 4px", fontSize: 9, fontFamily: "monospace", color: "var(--text-muted)", opacity: 0.6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)", padding: "var(--space-2) var(--space-4)", fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
             {lastTokenUsage && <span>{lastTokenUsage.prompt}p + {lastTokenUsage.completion}c = {lastTokenUsage.prompt + lastTokenUsage.completion} tokens</span>}
             {lastFinishReason && <span>finish: {lastFinishReason}</span>}
           </div>
@@ -329,18 +331,18 @@ export function AiTab() {
 
         {/* ---- Clarification questions card ---- */}
         {pendingQuestions && pendingQuestions.length > 0 && (
-          <div style={{ borderRadius: 6, border: `1px solid ${COLORS.warnFg}33`, background: `${COLORS.warnFg}0a`, overflow: "hidden" }}>
-            <div style={{ padding: "7px 10px", fontSize: 11, fontWeight: 600, color: COLORS.warnFg, letterSpacing: "0.04em" }}>
+          <div style={{ borderRadius: "var(--radius-lg)", background: tint("--warning", 8), overflow: "hidden" }}>
+            <div style={{ padding: "var(--space-6) var(--space-10)", fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--warning)" }}>
               Clarification needed
             </div>
-            <div style={{ padding: "2px 10px 8px", fontSize: 11, lineHeight: 1.6, color: "var(--text-secondary)" }}>
+            <div style={{ padding: "var(--space-2) var(--space-10) var(--space-8)", fontSize: "var(--fs-control)", lineHeight: 1.6, color: "var(--text-primary)" }}>
               {pendingQuestions.map((q, i) => (
                 <div key={i} style={{ marginBottom: 3 }}>
                   {i + 1}. {q}
                 </div>
               ))}
             </div>
-            <div style={{ padding: "0 10px 8px", fontSize: 9, color: "var(--text-muted)", fontStyle: "italic" }}>
+            <div style={{ padding: "0 var(--space-10) var(--space-8)", fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>
               Type your answer below to continue.
             </div>
           </div>
@@ -348,47 +350,41 @@ export function AiTab() {
 
         {/* ---- Preview card ---- */}
         {pendingCommands && pendingPreview && (
-          <div style={{ borderRadius: 6, border: `1px solid ${COLORS.previewBorder}`, background: COLORS.previewBg, overflow: "hidden" }}>
+          <div style={BUBBLE}>
             {/* Header */}
-            <button onClick={() => setPreviewExpanded(!previewExpanded)}
-              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", background: "none", border: "none", cursor: "pointer", color: COLORS.aiAccent, fontSize: 11, fontWeight: 600, fontFamily: "inherit" }}>
+            <button type="button" onClick={() => setPreviewExpanded(!previewExpanded)} aria-expanded={previewExpanded} className="ui-hover"
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: "var(--space-6)", padding: "var(--space-6) var(--space-10)", border: "none", cursor: "pointer", color: "var(--text-primary)", fontSize: "var(--fs-control)", fontWeight: 600, fontFamily: "inherit", textAlign: "left" }}>
+              <span style={{ display: "inline-flex", color: "var(--text-secondary)" }}><Icon icon={previewExpanded ? ChevronDown : ChevronRight} size={12} /></span>
               <span>Preview ({pendingCommands.length} command{pendingCommands.length !== 1 ? "s" : ""})</span>
-              <span style={{ fontSize: 9, opacity: 0.7 }}>{previewExpanded ? "COLLAPSE" : "EXPAND"}</span>
             </button>
             {/* Reasoning */}
             {previewExpanded && pendingReasoning && (
-              <div style={{ padding: "4px 10px 6px", fontSize: 10, color: "var(--text-muted)", fontStyle: "italic", lineHeight: 1.4, borderBottom: `1px solid ${COLORS.assistantBorder}` }}>
+              <div style={{ padding: "var(--space-4) var(--space-10) var(--space-6)", fontSize: "var(--fs-caption)", color: "var(--text-secondary)", fontStyle: "italic", lineHeight: 1.4, borderBottom: "var(--rule) solid var(--separator)" }}>
                 {pendingReasoning}
               </div>
             )}
             {/* Preview lines */}
             {previewExpanded && (
-              <div style={{ padding: "6px 10px", fontFamily: "monospace", fontSize: 10, lineHeight: 1.6, color: "var(--text-secondary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              <div style={{ padding: "var(--space-6) var(--space-10)", fontFamily: "var(--font-mono)", fontSize: "var(--fs-caption)", lineHeight: 1.6, color: "var(--text-secondary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                 {pendingPreview.split("\n").map((line, i) => {
                   let c = "var(--text-secondary)";
-                  if (line.startsWith("+")) c = COLORS.successFg;
-                  else if (line.startsWith("-")) c = COLORS.dangerFg;
-                  else if (line.startsWith("!")) c = COLORS.warnFg;
-                  else if (line.startsWith("~")) c = COLORS.aiAccent;
+                  if (line.startsWith("+")) c = "var(--success)";
+                  else if (line.startsWith("-")) c = "var(--error)";
+                  else if (line.startsWith("!")) c = "var(--warning)";
+                  else if (line.startsWith("~")) c = "var(--info)";
                   else if (line.startsWith("#")) c = "var(--accent-primary)";
                   return <div key={i} style={{ color: c }}>{line}</div>;
                 })}
               </div>
             )}
             {/* Apply / Discard */}
-            <div style={{ display: "flex", gap: 6, padding: "6px 10px 8px", borderTop: `1px solid ${COLORS.assistantBorder}` }}>
-              <button onClick={handleApply}
-                style={{ flex: 1, padding: "5px 0", borderRadius: 5, border: "none", fontSize: 11, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", background: COLORS.aiAccent, color: "#0a0a12", transition: "filter 0.12s" }}
-                onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}>
+            <div style={{ display: "flex", gap: "var(--space-6)", padding: "var(--space-6) var(--space-10) var(--space-8)", borderTop: "var(--rule) solid var(--separator)" }}>
+              <Button variant="primary" onClick={handleApply} style={{ flex: 1 }}>
                 Apply
-              </button>
-              <button onClick={handleDiscard}
-                style={{ flex: 1, padding: "5px 0", borderRadius: 5, border: "1px solid var(--border-color)", fontSize: 11, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", background: "transparent", color: "var(--text-secondary)", transition: "all 0.12s" }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = COLORS.dangerFg; e.currentTarget.style.color = COLORS.dangerFg; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-color)"; e.currentTarget.style.color = "var(--text-secondary)"; }}>
+              </Button>
+              <Button variant="ghost" onClick={handleDiscard} style={{ flex: 1 }}>
                 Discard
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -397,38 +393,32 @@ export function AiTab() {
       </div>
 
       {/* ---- Input area ---- */}
-      <div style={{ flexShrink: 0, borderTop: "1px solid var(--border-color)", paddingTop: 8 }}>
-        <div style={{ position: "relative", borderRadius: 6, border: `1px solid ${isGenerating ? COLORS.aiAccentGlow : "var(--border-color)"}`, background: "var(--bg-primary)", overflow: "hidden", transition: "border-color 0.2s" }}>
+      <div style={{ flexShrink: 0, borderTop: "var(--rule) solid var(--separator)", paddingTop: "var(--space-8)" }}>
+        <div style={{ position: "relative", borderRadius: "var(--radius-md)", border: `var(--hairline) solid ${isGenerating ? "var(--accent-primary)" : "var(--border-color)"}`, background: "var(--bg-tertiary)", overflow: "hidden", transition: "border-color var(--dur-base)" }}>
           <textarea ref={textareaRef} value={input}
+            aria-label="Message to the AI"
             onChange={(e) => { setInput(e.target.value); handleTextareaInput(); }}
-            onKeyDown={handleKeyDown} placeholder="Describe what to generate..." disabled={isGenerating} rows={1}
-            style={{ width: "100%", padding: "8px 10px", border: "none", outline: "none", background: "transparent", color: "var(--text-primary)", fontSize: 11, fontFamily: "inherit", lineHeight: 1.5, resize: "none", minHeight: 20, maxHeight: 120 }}
+            onKeyDown={handleKeyDown} placeholder="Describe what to generate…" disabled={isGenerating} rows={1}
+            style={{ display: "block", width: "100%", padding: "var(--space-8) var(--space-10)", border: "none", background: "transparent", color: "var(--text-primary)", fontSize: "var(--fs-control)", fontFamily: "inherit", lineHeight: 1.5, resize: "none", minHeight: 20, maxHeight: 120 }}
           />
         </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, gap: 6 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "var(--space-6)", gap: "var(--space-6)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
             {isGenerating ? (
               /* Stop button — shown during generation */
-              <button onClick={handleStop}
-                style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 5, border: `1px solid ${COLORS.dangerFg}`, fontSize: 11, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", background: COLORS.dangerBg, color: COLORS.dangerFg, transition: "all 0.15s" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255, 74, 106, 0.18)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = COLORS.dangerBg; }}>
-                <span style={{ fontSize: 11 }}>{"\u25A0"}</span> Stop
-              </button>
+              <Button variant="danger" icon={Square} onClick={handleStop}>
+                Stop
+              </Button>
             ) : (
               /* Generate button — shown when idle */
-              <button onClick={handleGenerate} disabled={!input.trim()}
-                style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 5, border: "none", fontSize: 11, fontWeight: 600, fontFamily: "inherit", cursor: !input.trim() ? "default" : "pointer", background: !input.trim() ? "var(--bg-active)" : COLORS.aiAccent, color: !input.trim() ? "var(--text-muted)" : "#0a0a12", transition: "all 0.15s" }}>
-                <span style={{ fontSize: 13 }}>&#x2726;</span> Generate
-              </button>
+              <Button variant="primary" icon={Send} onClick={handleGenerate} disabled={!input.trim()}>
+                Generate
+              </Button>
             )}
             {messages.length > 0 && !isGenerating && (
-              <button onClick={clearConversation}
-                style={{ padding: "4px 8px", borderRadius: 5, border: "1px solid var(--border-color)", fontSize: 10, fontFamily: "inherit", cursor: "pointer", background: "transparent", color: "var(--text-muted)", transition: "all 0.12s" }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = COLORS.dangerFg; e.currentTarget.style.borderColor = "rgba(255,74,106,0.3)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border-color)"; }}>
+              <Button variant="ghost" onClick={clearConversation}>
                 Clear
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -446,14 +436,14 @@ function ExpandableRaw({ label, content, expanded, onToggle, accentColor }: {
   label: string; content: string; expanded: boolean; onToggle: () => void; accentColor: string;
 }) {
   return (
-    <div style={{ borderTop: `1px solid ${accentColor}22` }}>
-      <button onClick={onToggle}
-        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 10px", background: "none", border: "none", cursor: "pointer", color: accentColor, fontSize: 10, fontFamily: "inherit", opacity: 0.8 }}>
+    <div style={{ borderTop: "var(--rule) solid var(--separator)" }}>
+      <button type="button" onClick={onToggle} aria-expanded={expanded} className="ui-hover"
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: "var(--space-6)", padding: "var(--space-4) var(--space-10)", border: "none", cursor: "pointer", color: accentColor, fontSize: "var(--fs-caption)", fontFamily: "inherit", textAlign: "left" }}>
+        <Icon icon={expanded ? ChevronDown : ChevronRight} size={12} />
         <span>{label} ({content.length} chars)</span>
-        <span>{expanded ? "HIDE" : "SHOW"}</span>
       </button>
       {expanded && (
-        <pre style={{ padding: "6px 10px 8px", margin: 0, fontSize: 9, fontFamily: "monospace", color: "var(--text-secondary)", lineHeight: 1.4, whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 250, overflowY: "auto", borderTop: `1px solid ${accentColor}15` }}>
+        <pre style={{ padding: "var(--space-6) var(--space-10) var(--space-8)", margin: 0, fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", color: "var(--text-secondary)", lineHeight: 1.4, whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 250, overflowY: "auto", borderTop: "var(--rule) solid var(--separator)" }}>
           {content}
         </pre>
       )}
@@ -478,10 +468,10 @@ function RawResponseCard({ rawResponse }: { rawResponse: string }) {
   }
 
   return (
-    <div style={{ borderRadius: 6, border: `1px solid ${COLORS.infoBorder}`, background: COLORS.infoBg, overflow: "hidden" }}>
+    <div style={BUBBLE}>
       {/* Summary line */}
       {summary && (
-        <div style={{ padding: "6px 10px", fontSize: 10, color: "var(--text-muted)", fontStyle: "italic", lineHeight: 1.4 }}>
+        <div style={{ padding: "var(--space-6) var(--space-10)", fontSize: "var(--fs-caption)", color: "var(--text-secondary)", fontStyle: "italic", lineHeight: 1.4 }}>
           {summary}
         </div>
       )}
@@ -491,8 +481,18 @@ function RawResponseCard({ rawResponse }: { rawResponse: string }) {
         content={prettyJson}
         expanded={expanded}
         onToggle={() => setExpanded(!expanded)}
-        accentColor="var(--accent-primary)"
+        accentColor="var(--text-secondary)"
       />
+    </div>
+  );
+}
+
+/** "AI" role label with the Sparkles mark */
+function AiRoleLabel() {
+  return (
+    <div style={{ ...ROLE_LABEL, color: "var(--accent-primary)" }}>
+      <Icon icon={Sparkles} size={12} />
+      AI
     </div>
   );
 }
@@ -526,20 +526,20 @@ function MessageBubble({ role, content }: { role: string; content: string }) {
       hasRawJson = content.length > 200;
       prettyRaw = content;
       if (content.length > 400) {
-        displayContent = content.slice(0, 400) + "...";
+        displayContent = content.slice(0, 400) + "…";
       }
     }
   }
 
   return (
-    <div style={{ borderRadius: 6, background: isUser ? COLORS.userBg : COLORS.assistantBg, border: `1px solid ${isUser ? COLORS.userBorder : COLORS.assistantBorder}`, overflow: "hidden" }}>
-      <div style={{ padding: "6px 10px" }}>
+    <div style={BUBBLE}>
+      <div style={{ padding: "var(--space-6) var(--space-10)" }}>
         {/* Role label */}
-        <div style={{ fontSize: 9, fontWeight: 600, color: isUser ? "var(--accent-primary)" : COLORS.aiAccent, marginBottom: 3, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-          {isUser ? "You" : "\u2726 AI"}
-        </div>
+        {isUser
+          ? <div style={{ ...ROLE_LABEL, color: "var(--text-secondary)" }}>You</div>
+          : <AiRoleLabel />}
         {/* Content */}
-        <div style={{ fontSize: 11, color: "var(--text-primary)", lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+        <div style={BODY_TEXT}>
           {displayContent}
         </div>
       </div>
@@ -550,7 +550,7 @@ function MessageBubble({ role, content }: { role: string; content: string }) {
           content={prettyRaw}
           expanded={rawExpanded}
           onToggle={() => setRawExpanded(!rawExpanded)}
-          accentColor={COLORS.aiAccent}
+          accentColor="var(--text-secondary)"
         />
       )}
     </div>
@@ -563,7 +563,7 @@ function LoadingDots() {
     <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
       <style>{`@keyframes aiDot { 0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1); } }`}</style>
       {[0, 1, 2].map((i) => (
-        <span key={i} style={{ width: 4, height: 4, borderRadius: "50%", backgroundColor: COLORS.aiAccent, animation: `aiDot 1.2s ease-in-out ${i * 0.15}s infinite` }} />
+        <span key={i} style={{ width: 4, height: 4, borderRadius: "50%", backgroundColor: "var(--accent-primary)", animation: `aiDot 1.2s ease-in-out ${i * 0.15}s infinite` }} />
       ))}
     </span>
   );

@@ -5,16 +5,25 @@
 // built-in event presets, and panel toggles. Results are scored
 // by match quality and grouped by source (Actions, Presets).
 // Selecting a result executes its action and closes the palette.
+//
+// Look: a popover-style palette (bg-tertiary, radius-xl,
+// shadow-popover) over the --overlay scrim at --z-modal. Rows are
+// menu items; the highlighted row uses accent-selected and
+// shortcuts render as Kbd chips.
 // ============================================================
 
 import { useState, useRef, useEffect, useMemo } from "react";
+import { Search } from "lucide-react";
 import { useMenus } from "../../hooks/useMenus";
 import type { Menu } from "../../hooks/useMenus";
 import { BUILTIN_PRESETS } from "../../presets/builtinPresets";
 import { applyPresetAtPlayhead } from "../../utils/applyPreset";
 import { getSelectedLineIndex } from "../../stores/selection";
 import { useFavoritesStore } from "../../stores/favoritesStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import type { PanelId } from "../../types/editor";
+import { Icon } from "../common/Icon";
+import { Kbd } from "../common/Kbd";
 
 interface CommandItem {
   id: string;
@@ -99,11 +108,12 @@ export function CommandPalette({
   onShowOnsetCalibration?: () => void;
 }) {
   const menus = useMenus(onTogglePanel, onResetLayout, onNewChart, onShowParametric, onShowBatchLine, onShowLyricsSync, onShowOnDemandPanel, onShowPasteSpecial, onShowGoToBeat, onShowExportDiff, onShowSelectiveExport, onShowSpinGenerator, onShowShakeGenerator, undefined, onShowOnsetCalibration);
+  const customPresets = useSettingsStore((s) => s.customPresets);
   const presetCommands = useMemo((): CommandItem[] => {
-    return BUILTIN_PRESETS.map((preset) => ({
+    return [...customPresets, ...BUILTIN_PRESETS].map((preset) => ({
       id: `preset:${preset.id}`,
       label: preset.name,
-      section: "Event Presets",
+      section: "Event presets",
       shortcut: undefined,
       action: () => {
         const lineIndex = getSelectedLineIndex();
@@ -112,11 +122,11 @@ export function CommandPalette({
       },
       disabled: getSelectedLineIndex() === null,
     }));
-  }, []);
+  }, [customPresets]);
   const favoritesCommands = useMemo((): CommandItem[] => [
     {
       id: "favorites:configure",
-      label: "Configure Favorites...",
+      label: "Configure favorites…",
       section: "Favorites",
       action: () => useFavoritesStore.getState().openWizard(),
     },
@@ -172,15 +182,25 @@ export function CommandPalette({
     }
   };
 
+  /** Next enabled command from `from` in direction `dir` (wraps; stays put if none). */
+  const stepEnabled = (from: number, dir: 1 | -1) => {
+    const n = flatFiltered.length;
+    for (let k = 1; k <= n; k++) {
+      const i = (((from + dir * k) % n) + n) % n;
+      if (!flatFiltered[i].disabled) return i;
+    }
+    return from;
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        setSelectedIndex((prev) => (prev + 1) % Math.max(1, flatFiltered.length));
+        setSelectedIndex((prev) => stepEnabled(prev, 1));
         break;
       case "ArrowUp":
         e.preventDefault();
-        setSelectedIndex((prev) => (prev - 1 + flatFiltered.length) % Math.max(1, flatFiltered.length));
+        setSelectedIndex((prev) => stepEnabled(prev, -1));
         break;
       case "Enter":
         e.preventDefault();
@@ -199,76 +219,88 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-[110] flex items-start justify-center"
+      className="fixed inset-0 flex items-start justify-center"
       style={{
-        backgroundColor: "rgba(0,0,0,0.5)",
+        zIndex: "var(--z-modal)",
+        backgroundColor: "var(--overlay)",
         paddingTop: "15vh",
-        animation: "cmdFadeIn 0.15s ease-out",
+        animation: "ui-fade-in var(--dur-fast) var(--ease-out)",
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
       onKeyDown={handleKeyDown}
     >
-      <style>{`
-        @keyframes cmdFadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes cmdScaleIn {
-          from { opacity: 0; transform: scale(0.97) translateY(-4px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-      `}</style>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
         style={{
           width: "100%",
           maxWidth: 420,
+          margin: "0 var(--space-16)",
           backgroundColor: "var(--bg-tertiary)",
-          border: "1px solid var(--border-color)",
-          borderRadius: 12,
-          boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
+          border: "var(--rule) solid var(--border-color)",
+          borderRadius: "var(--radius-xl)",
+          boxShadow: "var(--shadow-popover)",
           overflow: "hidden",
-          animation: "cmdScaleIn 0.15s ease-out",
+          animation: "ui-dialog-in var(--dur-fast) var(--ease-out)",
         }}
       >
         {/* Search input */}
-        <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color)" }}>
+        <div
+          className="flex items-center"
+          style={{
+            gap: "var(--space-8)",
+            padding: "var(--space-8) var(--space-12)",
+            borderBottom: "var(--rule) solid var(--border-color)",
+            color: "var(--text-secondary)",
+          }}
+        >
+          <Icon icon={Search} size={16} />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type a command..."
+            placeholder="Type a command…"
+            aria-label="Search commands"
+            aria-controls="command-palette-list"
+            aria-activedescendant={flatFiltered[selectedIndex] ? `cmd-${flatFiltered[selectedIndex].id}` : undefined}
             style={{
-              width: "100%",
-              padding: "6px 0",
+              flex: 1,
+              minWidth: 0,
+              padding: "var(--space-6) 0",
               backgroundColor: "transparent",
               border: "none",
-              outline: "none",
               color: "var(--text-primary)",
-              fontSize: 13,
+              fontSize: "var(--fs-headline)",
               fontFamily: "inherit",
             }}
           />
         </div>
 
         {/* Results */}
-        <div ref={listRef} style={{ padding: 4, maxHeight: 320, overflowY: "auto" }}>
+        <div
+          ref={listRef}
+          id="command-palette-list"
+          role="listbox"
+          aria-label="Commands"
+          style={{ padding: "var(--space-4)", maxHeight: 320, overflowY: "auto" }}
+        >
           {flatFiltered.length === 0 && (
-            <div style={{ padding: "16px 10px", textAlign: "center", color: "var(--text-muted)", fontSize: 12 }}>
+            <div style={{ padding: "var(--space-16) var(--space-10)", textAlign: "center", color: "var(--text-secondary)", fontSize: "var(--fs-body)" }}>
               No results found
             </div>
           )}
           {grouped.map(([section, items]) => (
-            <div key={section}>
+            <div key={section} role="group" aria-label={section}>
               <div
                 style={{
-                  padding: "6px 10px 4px",
-                  fontSize: 10,
-                  color: "var(--text-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
+                  padding: "var(--space-6) var(--space-10) var(--space-4)",
+                  fontSize: "var(--fs-caption)",
+                  fontWeight: 600,
+                  color: "var(--text-secondary)",
                 }}
               >
                 {section}
@@ -279,21 +311,23 @@ export function CommandPalette({
                 return (
                   <button
                     key={item.id}
+                    id={`cmd-${item.id}`}
+                    type="button"
+                    role="option"
+                    tabIndex={-1}
+                    aria-selected={isSelected}
+                    aria-disabled={item.disabled || undefined}
                     data-selected={isSelected}
-                    className="w-full flex items-center justify-between"
+                    className="ui-menu-item"
                     style={{
-                      padding: "6px 10px",
-                      borderRadius: 6,
-                      fontSize: 12,
-                      color: item.disabled ? "var(--text-muted)" : "var(--text-primary)",
-                      backgroundColor: isSelected ? "rgba(108, 138, 255, 0.15)" : "transparent",
+                      justifyContent: "space-between",
                       cursor: item.disabled ? "default" : "pointer",
-                      opacity: item.disabled ? 0.4 : 1,
-                      border: "none",
-                      textAlign: "left",
-                      transition: "background-color 0.08s",
+                      opacity: item.disabled ? "var(--opacity-disabled)" : undefined,
+                      ...(isSelected ? { backgroundColor: "var(--accent-selected)" } : {}),
                     }}
-                    onMouseEnter={() => setSelectedIndex(thisIndex)}
+                    // Hover moves the keyboard highlight (state, not styling);
+                    // disabled commands can't be highlighted.
+                    onMouseEnter={() => { if (!item.disabled) setSelectedIndex(thisIndex); }}
                     onClick={() => {
                       if (!item.disabled && item.action) {
                         item.action();
@@ -301,19 +335,11 @@ export function CommandPalette({
                       }
                     }}
                   >
-                    <span>{item.label}</span>
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {item.label}
+                    </span>
                     {item.shortcut && (
-                      <span
-                        style={{
-                          marginLeft: "auto",
-                          paddingLeft: 12,
-                          opacity: 0.4,
-                          fontSize: 11,
-                          fontFamily: "'SF Mono', 'Cascadia Code', 'Fira Code', monospace",
-                        }}
-                      >
-                        {item.shortcut}
-                      </span>
+                      <Kbd style={{ marginLeft: "auto", flexShrink: 0 }}>{item.shortcut}</Kbd>
                     )}
                   </button>
                 );

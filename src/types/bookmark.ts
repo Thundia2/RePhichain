@@ -30,15 +30,11 @@ export interface Bookmark {
   preset?: BookmarkPreset;
 }
 
-/** Preset colors for tap-to-mark mode */
-export const BOOKMARK_PRESETS = {
-  tap:    "#48b5ff",   // Q — blue
-  drag:   "#ffd24a",   // W — yellow
-  flick:  "#ff4a6a",   // E — red
-  hold:   "#2a7fbf",   // R — dark blue
-  orange: "#ffa94d",   // 1 — misc
-  green:  "#69db7c",   // 2 — misc
-  violet: "#da77f2",   // 3 — misc
-} as const;
+/**
+ * Tap-to-mark presets (Q W E R for the note kinds, 1–3 misc). Their colours
+ * are the --mark-* design tokens, resolved by bookmarkColor() in
+ * canvas/chromeTheme.ts and stored in each bookmark.
+ */
+export const BOOKMARK_PRESET_KEYS = ["tap", "drag", "flick", "hold", "orange", "green", "violet"] as const;
 
-export type BookmarkPreset = keyof typeof BOOKMARK_PRESETS;
+export type BookmarkPreset = (typeof BOOKMARK_PRESET_KEYS)[number];

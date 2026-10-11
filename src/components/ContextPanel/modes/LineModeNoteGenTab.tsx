@@ -7,7 +7,9 @@
 // LineMode.tsx for size management.
 // ============================================================
 
+import type React from "react";
 import { useState, useMemo } from "react";
+import { SquareDashed } from "lucide-react";
 import { useSelectedLineIndex } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { generateNotePattern, validateExpression } from "../../../utils/notePatternGenerator";
@@ -16,6 +18,10 @@ import type { NoteKind } from "../../../types/chart";
 import { NumericInput } from "../../common/FormFields";
 import { SectionHeader } from "../shared/SectionHeader";
 import { ContextBadge } from "../shared/ContextBadge";
+import { Button } from "../../common/Button";
+import { NoteGlyph } from "../../common/NoteGlyph";
+import { SegmentedControl } from "../../common/SegmentedControl";
+import { Pill, INPUT_STYLE } from "../../common/UIKit";
 
 // ---- Constants ----
 
@@ -30,12 +36,19 @@ const NOTE_GEN_SHAPES: { value: PatternShape; label: string }[] = [
   { value: "custom", label: "f(t)" },
 ];
 
-const NOTE_GEN_KINDS: { value: NoteKind; label: string; color: string }[] = [
-  { value: "tap", label: "Tap", color: "#48b5ff" },
-  { value: "drag", label: "Drag", color: "#ffd24a" },
-  { value: "flick", label: "Flick", color: "#ff4a6a" },
-  { value: "hold", label: "Hold", color: "#4aff7a" },
+const NOTE_GEN_KINDS: { value: NoteKind; label: string }[] = [
+  { value: "tap", label: "Tap" },
+  { value: "drag", label: "Drag" },
+  { value: "flick", label: "Flick" },
+  { value: "hold", label: "Hold" },
 ];
+
+const FIELD_LABEL: React.CSSProperties = {
+  display: "flex", flexDirection: "column", gap: "var(--space-2)",
+  fontSize: "var(--fs-caption)", color: "var(--text-secondary)",
+};
+
+const FIELD_INPUT: React.CSSProperties = { ...INPUT_STYLE, width: "100%", minWidth: 0, fontFamily: "var(--font-mono)" };
 
 // ---- Note Gen Tab ----
 
@@ -73,129 +86,121 @@ export function NoteGenTab() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
       <ContextBadge
-        icon={<span style={{ fontSize: 12 }}>{"\u2B1A"}</span>}
-        label="Note Pattern Generator"
+        icon={SquareDashed}
+        label="Note pattern generator"
         detail={`${previewNotes.length} notes`}
         variant="line"
       />
 
       {/* Shape selector */}
-      <SectionHeader label="SHAPE" />
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 2, padding: "0 4px" }}>
+      <SectionHeader label="Shape" />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", padding: "0 var(--space-4)" }}>
         {NOTE_GEN_SHAPES.map((s) => (
-          <button
-            key={s.value}
-            onClick={() => update({ shape: s.value })}
-            style={{
-              fontSize: 9, padding: "3px 7px", borderRadius: 4,
-              border: "none", cursor: "pointer", fontFamily: "inherit",
-              background: config.shape === s.value ? "var(--accent-primary)" : "var(--bg-active)",
-              color: config.shape === s.value ? "#fff" : "var(--text-muted)",
-              fontWeight: config.shape === s.value ? 600 : 400,
-              transition: "all 0.1s",
-            }}
-          >
+          <Pill key={s.value} active={config.shape === s.value} onClick={() => update({ shape: s.value })}>
             {s.label}
-          </button>
+          </Pill>
         ))}
       </div>
 
       {/* Timing */}
-      <SectionHeader label="TIMING" />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4, padding: "0 4px" }}>
-        <label style={{ fontSize: 9, color: "var(--text-muted)" }}>
-          Start Beat
-          <NumericInput value={config.startBeat} onChange={(v) => update({ startBeat: v })} step={0.25} style={{ width: "100%" }} />
+      <SectionHeader label="Timing" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "var(--space-4)", padding: "0 var(--space-4)" }}>
+        <label style={FIELD_LABEL}>
+          Start beat
+          <NumericInput value={config.startBeat} onChange={(v) => update({ startBeat: v })} step={0.25} style={FIELD_INPUT} />
         </label>
-        <label style={{ fontSize: 9, color: "var(--text-muted)" }}>
-          End Beat
-          <NumericInput value={config.endBeat} onChange={(v) => update({ endBeat: v })} step={0.25} style={{ width: "100%" }} />
+        <label style={FIELD_LABEL}>
+          End beat
+          <NumericInput value={config.endBeat} onChange={(v) => update({ endBeat: v })} step={0.25} style={FIELD_INPUT} />
         </label>
-        <label style={{ fontSize: 9, color: "var(--text-muted)" }}>
+        <label style={FIELD_LABEL}>
           Count
-          <NumericInput value={config.noteCount} onChange={(v) => update({ noteCount: Math.max(1, Math.round(v)) })} step={1} min={1} style={{ width: "100%" }} />
+          <NumericInput value={config.noteCount} onChange={(v) => update({ noteCount: Math.max(1, Math.round(v)) })} step={1} min={1} style={FIELD_INPUT} />
         </label>
       </div>
 
-      {/* X Range */}
-      <SectionHeader label="X RANGE" />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, padding: "0 4px" }}>
-        <label style={{ fontSize: 9, color: "var(--text-muted)" }}>
+      {/* X range */}
+      <SectionHeader label="X range" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-4)", padding: "0 var(--space-4)" }}>
+        <label style={FIELD_LABEL}>
           Start X
-          <NumericInput value={config.startX} onChange={(v) => update({ startX: v })} step={10} style={{ width: "100%" }} />
+          <NumericInput value={config.startX} onChange={(v) => update({ startX: v })} step={10} style={FIELD_INPUT} />
         </label>
-        <label style={{ fontSize: 9, color: "var(--text-muted)" }}>
+        <label style={FIELD_LABEL}>
           End X
-          <NumericInput value={config.endX} onChange={(v) => update({ endX: v })} step={10} style={{ width: "100%" }} />
+          <NumericInput value={config.endX} onChange={(v) => update({ endX: v })} step={10} style={FIELD_INPUT} />
         </label>
       </div>
 
       {/* Shape-specific params */}
       {showCycles && (
         <>
-          <SectionHeader label="WAVE PARAMS" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, padding: "0 4px" }}>
-            <label style={{ fontSize: 9, color: "var(--text-muted)" }}>
+          <SectionHeader label="Wave parameters" />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-4)", padding: "0 var(--space-4)" }}>
+            <label style={FIELD_LABEL}>
               Cycles
-              <NumericInput value={config.cycles ?? 2} onChange={(v) => update({ cycles: v })} step={0.5} min={0.5} style={{ width: "100%" }} />
+              <NumericInput value={config.cycles ?? 2} onChange={(v) => update({ cycles: v })} step={0.5} min={0.5} style={FIELD_INPUT} />
             </label>
-            <label style={{ fontSize: 9, color: "var(--text-muted)" }}>
+            <label style={FIELD_LABEL}>
               Amplitude
-              <NumericInput value={config.amplitude ?? 300} onChange={(v) => update({ amplitude: v })} step={10} style={{ width: "100%" }} />
+              <NumericInput value={config.amplitude ?? 300} onChange={(v) => update({ amplitude: v })} step={10} style={FIELD_INPUT} />
             </label>
           </div>
         </>
       )}
       {showStairWidth && (
-        <div style={{ padding: "0 4px" }}>
-          <label style={{ fontSize: 9, color: "var(--text-muted)" }}>
-            Stair Width
-            <NumericInput value={config.stairWidth ?? 4} onChange={(v) => update({ stairWidth: Math.max(1, Math.round(v)) })} step={1} min={1} style={{ width: "100%" }} />
+        <div style={{ padding: "0 var(--space-4)" }}>
+          <label style={FIELD_LABEL}>
+            Stair width
+            <NumericInput value={config.stairWidth ?? 4} onChange={(v) => update({ stairWidth: Math.max(1, Math.round(v)) })} step={1} min={1} style={FIELD_INPUT} />
           </label>
         </div>
       )}
       {showArcHeight && (
-        <div style={{ padding: "0 4px" }}>
-          <label style={{ fontSize: 9, color: "var(--text-muted)" }}>
-            Arc Height
-            <NumericInput value={config.arcHeight ?? 200} onChange={(v) => update({ arcHeight: v })} step={10} style={{ width: "100%" }} />
+        <div style={{ padding: "0 var(--space-4)" }}>
+          <label style={FIELD_LABEL}>
+            Arc height
+            <NumericInput value={config.arcHeight ?? 200} onChange={(v) => update({ arcHeight: v })} step={10} style={FIELD_INPUT} />
           </label>
         </div>
       )}
       {showExpression && (
         <>
-          <SectionHeader label="CUSTOM EXPRESSION" />
-          <div style={{ padding: "0 4px" }}>
-            <div style={{ fontSize: 8, color: "var(--text-muted)", marginBottom: 3 }}>
+          <SectionHeader label="Custom expression" />
+          <div style={{ padding: "0 var(--space-4)" }}>
+            <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", marginBottom: "var(--space-4)" }}>
               X = f(t), where t goes from 0 to 1. Available: sin, cos, tan, abs, sqrt, pow, pi, e, min, max, floor, ceil, round
             </div>
             <input
               type="text"
+              aria-label="Custom expression"
+              aria-invalid={expressionError ? true : undefined}
               value={config.expression ?? ""}
               onChange={(e) => update({ expression: e.target.value })}
               placeholder="300*sin(2*pi*t)"
               spellCheck={false}
               style={{
-                width: "100%", fontSize: 10, padding: "5px 8px", borderRadius: 4,
-                border: `1px solid ${expressionError ? "#ff4a6a" : config.expression ? "#4ade80" : "var(--border-color)"}`,
-                background: "var(--bg-tertiary)", color: "var(--text-primary)",
-                fontFamily: "'JetBrains Mono', monospace",
-                outline: "none", transition: "border-color 0.15s",
+                ...INPUT_STYLE,
+                width: "100%",
+                height: "var(--control-lg)",
+                fontFamily: "var(--font-mono)",
+                border: `var(--rule) solid ${expressionError ? "var(--error)" : config.expression ? "var(--success)" : "var(--border-color)"}`,
+                transition: "border-color var(--dur-fast)",
               }}
             />
             {expressionError && (
-              <div style={{ fontSize: 8, color: "#ff4a6a", marginTop: 2, fontFamily: "'JetBrains Mono', monospace" }}>
+              <div style={{ fontSize: "var(--fs-caption)", color: "var(--error)", marginTop: "var(--space-2)", fontFamily: "var(--font-mono)" }}>
                 {expressionError}
               </div>
             )}
             {!expressionError && config.expression && (
-              <div style={{ fontSize: 8, color: "#4ade80", marginTop: 2 }}>
+              <div style={{ fontSize: "var(--fs-caption)", color: "var(--success)", marginTop: "var(--space-2)" }}>
                 Valid expression
               </div>
             )}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginTop: 4 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
               {[
                 "300*sin(2*pi*t)",
                 "675*(2*t-1)",
@@ -203,19 +208,9 @@ export function NoteGenTab() {
                 "300*sin(pi*t)^2",
                 "675*sin(t*pi)*(1-t)",
               ].map((ex) => (
-                <button
-                  key={ex}
-                  onClick={() => update({ expression: ex })}
-                  style={{
-                    fontSize: 7, padding: "1px 4px", borderRadius: 3,
-                    border: "none", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
-                    background: config.expression === ex ? "rgba(108,138,255,0.15)" : "var(--bg-active)",
-                    color: config.expression === ex ? "var(--accent-primary)" : "var(--text-muted)",
-                    transition: "all 0.1s",
-                  }}
-                >
-                  {ex}
-                </button>
+                <Pill key={ex} active={config.expression === ex} onClick={() => update({ expression: ex })}>
+                  <span style={{ fontFamily: "var(--font-mono)" }}>{ex}</span>
+                </Pill>
               ))}
             </div>
           </div>
@@ -223,71 +218,41 @@ export function NoteGenTab() {
       )}
 
       {/* Note kind */}
-      <SectionHeader label="NOTE KIND" />
-      <div style={{ display: "flex", gap: 2, padding: "0 4px" }}>
-        {NOTE_GEN_KINDS.map((k) => (
-          <button
-            key={k.value}
-            onClick={() => update({ noteKind: k.value })}
-            style={{
-              flex: 1, fontSize: 9, padding: "4px 0", borderRadius: 4,
-              border: "none", cursor: "pointer", fontFamily: "inherit",
-              background: config.noteKind === k.value ? k.color : "var(--bg-active)",
-              color: config.noteKind === k.value ? "#000" : "var(--text-muted)",
-              fontWeight: config.noteKind === k.value ? 700 : 400,
-              transition: "all 0.1s",
-            }}
-          >
-            {k.label}
-          </button>
-        ))}
-      </div>
+      <SectionHeader label="Note kind" />
+      <div style={{ padding: "0 var(--space-4)", display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+        <SegmentedControl
+          label="Note kind"
+          block
+          options={NOTE_GEN_KINDS.map((k) => ({
+            value: k.value,
+            label: <><NoteGlyph kind={k.value} size={12} />{k.label}</>,
+          }))}
+          value={config.noteKind}
+          onChange={(v) => update({ noteKind: v })}
+        />
 
-      {/* Above/Below */}
-      <div style={{ display: "flex", gap: 4, padding: "0 4px" }}>
-        <button
-          onClick={() => update({ above: true })}
-          style={{
-            flex: 1, fontSize: 9, padding: "4px 0", borderRadius: 4,
-            border: "none", cursor: "pointer", fontFamily: "inherit",
-            background: config.above ? "#4ade80" : "var(--bg-active)",
-            color: config.above ? "#000" : "var(--text-muted)",
-            fontWeight: config.above ? 700 : 400,
-          }}
-        >
-          Above
-        </button>
-        <button
-          onClick={() => update({ above: false })}
-          style={{
-            flex: 1, fontSize: 9, padding: "4px 0", borderRadius: 4,
-            border: "none", cursor: "pointer", fontFamily: "inherit",
-            background: !config.above ? "#ef4444" : "var(--bg-active)",
-            color: !config.above ? "#fff" : "var(--text-muted)",
-            fontWeight: !config.above ? 700 : 400,
-          }}
-        >
-          Below
-        </button>
+        {/* Above/Below */}
+        <SegmentedControl
+          label="Note side"
+          tone="accent"
+          block
+          options={[{ value: "above", label: "Above" }, { value: "below", label: "Below" }]}
+          value={config.above ? "above" : "below"}
+          onChange={(v) => update({ above: v === "above" })}
+        />
       </div>
 
       {/* Generate */}
-      <div style={{ padding: "4px 4px 0" }}>
-        <button
+      <div style={{ padding: "var(--space-4) var(--space-4) 0" }}>
+        <Button
+          variant="primary"
+          size="lg"
+          block
           onClick={handleGenerate}
           disabled={selectedLineIndex === null || previewNotes.length === 0}
-          style={{
-            width: "100%", padding: "8px 0", borderRadius: 6,
-            border: "none", cursor: selectedLineIndex === null ? "not-allowed" : "pointer",
-            fontFamily: "inherit", fontSize: 11, fontWeight: 600,
-            background: selectedLineIndex !== null ? "var(--accent-primary)" : "var(--bg-active)",
-            color: selectedLineIndex !== null ? "#fff" : "var(--text-muted)",
-            opacity: selectedLineIndex === null ? 0.5 : 1,
-            transition: "all 0.15s",
-          }}
         >
           Generate {previewNotes.length} notes
-        </button>
+        </Button>
       </div>
     </div>
   );

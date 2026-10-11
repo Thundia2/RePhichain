@@ -132,7 +132,7 @@ export function EventPreview({ lineIndex }: EventPreviewProps) {
     <div
       ref={containerRef}
       className="w-full h-full relative"
-      style={{ backgroundColor: "#000" }}
+      style={{ backgroundColor: "var(--canvas-bg)" }}
     >
       <canvas ref={canvasRef} className="absolute inset-0" />
     </div>

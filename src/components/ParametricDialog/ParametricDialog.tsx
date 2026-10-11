@@ -1,17 +1,21 @@
 // ============================================================
-// Parametric Trajectory Dialog — Redesigned
+// Parametric Trajectory Dialog
 //
 // Modal dialog for generating line movement events from
-// parametric sin/cos equations. Sectioned card layout matching
-// the new dialog design system.
+// parametric sin/cos equations. Sectioned card layout inside
+// the shared Dialog chrome.
 // ============================================================
 
 import { useState } from "react";
+import { Waves } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { getSelectedLineIndex } from "../../stores/selection";
 import type { LineEventKind } from "../../types/chart";
 import { generateParametricEvents, type ParametricConfig } from "../../utils/parametricTrajectory";
 import { safeParseNumber, NumericInput } from "../common/FormFields";
+import { Card, CardRow, SectionHeader, INPUT_STYLE, withRowLabel } from "../common/UIKit";
+import { Dialog } from "../common/Dialog";
+import { Button } from "../common/Button";
 
 interface ParametricDialogProps {
   open: boolean;
@@ -20,36 +24,18 @@ interface ParametricDialogProps {
 
 /* ── Reusable sub-components ── */
 
-function SectionHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--text-muted)", marginBottom: 10 }}>
-      {children}
-    </div>
-  );
-}
-
-const INPUT_STYLE: React.CSSProperties = {
+const FIELD_STYLE: React.CSSProperties = {
+  ...INPUT_STYLE,
   width: "100%",
-  padding: "8px 12px",
-  borderRadius: 8,
-  fontSize: 12,
-  border: "0.5px solid var(--border-color)",
-  backgroundColor: "var(--bg-secondary)",
-  color: "var(--text-primary)",
-  fontFamily: "inherit",
-  outline: "none",
-  boxSizing: "border-box",
-  transition: "border-color 0.15s",
 };
 
-function focusInput(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--accent-primary)";
-}
-function blurInput(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--border-color)";
-}
+const NUM_STYLE: React.CSSProperties = {
+  ...FIELD_STYLE,
+  fontFamily: "var(--font-mono)",
+};
 
-function CardRow({
+/** Card row with a fixed-width control column. */
+function ControlRow({
   label,
   children,
   last = false,
@@ -59,16 +45,9 @@ function CardRow({
   last?: boolean;
 }) {
   return (
-    <div
-      className="flex items-center justify-between"
-      style={{
-        padding: "10px 14px",
-        borderBottom: last ? "none" : "1px solid rgba(42, 42, 53, 0.55)",
-      }}
-    >
-      <span style={{ fontSize: 12, color: "var(--text-primary)", minWidth: 0 }}>{label}</span>
-      <div className="flex-shrink-0 ml-3" style={{ width: 130 }}>{children}</div>
-    </div>
+    <CardRow label={label} last={last}>
+      <div style={{ width: 130 }}>{withRowLabel(children, label)}</div>
+    </CardRow>
   );
 }
 
@@ -84,14 +63,14 @@ function CardRowWide({
   return (
     <div
       style={{
-        padding: "10px 14px",
-        borderBottom: last ? "none" : "1px solid rgba(42, 42, 53, 0.55)",
+        padding: "var(--space-10) var(--space-12)",
+        borderBottom: last ? "none" : "var(--rule) solid var(--separator)",
       }}
     >
-      <label style={{ fontSize: 11, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
+      <div style={{ fontSize: "var(--fs-control)", color: "var(--text-secondary)", marginBottom: "var(--space-4)" }}>
         {label}
-      </label>
-      {children}
+      </div>
+      {withRowLabel(children, label)}
     </div>
   );
 }
@@ -144,254 +123,155 @@ export function ParametricDialog({ open, onClose }: ParametricDialogProps) {
   };
 
   return (
-    <>
-      <style>{`
-        @keyframes paramFadeIn { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes paramScaleIn { from { opacity: 0; transform: scale(0.96) } to { opacity: 1; transform: scale(1) } }
-      `}</style>
+    <Dialog
+      title="Parametric trajectory"
+      icon={Waves}
+      onClose={onClose}
+      width={420}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleGenerate}>Generate</Button>
+        </>
+      }
+    >
+      {/* WAVE PARAMETERS */}
+      <div style={{ marginBottom: "var(--space-16)" }}>
+        <SectionHeader>Wave parameters</SectionHeader>
+        <Card style={{ marginBottom: 0 }}>
+          <CardRowWide label="Event kind">
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value as LineEventKind)}
+              style={{ ...FIELD_STYLE, cursor: "pointer" }}
+            >
+              <option value="x">X position</option>
+              <option value="y">Y position</option>
+              <option value="rotation">Rotation</option>
+              <option value="opacity">Opacity</option>
+              <option value="scale_x">Scale X</option>
+              <option value="scale_y">Scale Y</option>
+            </select>
+          </CardRowWide>
+          <ControlRow label="Waveform">
+            <select
+              value={waveform}
+              onChange={(e) => setWaveform(e.target.value as "sin" | "cos")}
+              style={{ ...FIELD_STYLE, cursor: "pointer" }}
+            >
+              <option value="sin">sin</option>
+              <option value="cos">cos</option>
+            </select>
+          </ControlRow>
+          <ControlRow label="Amplitude">
+            <input
+              type="number"
+              step="1"
+              value={amplitude}
+              onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setAmplitude(n); }}
+              style={NUM_STYLE}
+            />
+          </ControlRow>
+          <ControlRow label="Frequency">
+            <input
+              type="number"
+              step="0.1"
+              value={frequency}
+              onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setFrequency(n); }}
+              style={NUM_STYLE}
+            />
+          </ControlRow>
+          <ControlRow label="Phase (rad)">
+            <input
+              type="number"
+              step="0.1"
+              value={phase}
+              onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setPhase(n); }}
+              style={NUM_STYLE}
+            />
+          </ControlRow>
+          <ControlRow label="Offset" last>
+            <input
+              type="number"
+              step="1"
+              value={offset}
+              onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setOffset(n); }}
+              style={NUM_STYLE}
+            />
+          </ControlRow>
+        </Card>
+      </div>
+
+      {/* RANGE */}
+      <div style={{ marginBottom: "var(--space-16)" }}>
+        <SectionHeader>Range</SectionHeader>
+        <Card style={{ marginBottom: 0 }}>
+          <ControlRow label="Start beat">
+            <input
+              type="number"
+              step="0.25"
+              value={startBeat}
+              onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setStartBeat(n); }}
+              style={NUM_STYLE}
+            />
+          </ControlRow>
+          <ControlRow label="End beat">
+            <input
+              type="number"
+              step="0.25"
+              value={endBeat}
+              onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setEndBeat(n); }}
+              style={NUM_STYLE}
+            />
+          </ControlRow>
+          <ControlRow label="Steps" last>
+            <NumericInput
+              commitMode="blur"
+              integer
+              min={1}
+              max={1000}
+              fallback={1}
+              value={steps}
+              onChange={setSteps}
+              style={NUM_STYLE}
+            />
+          </ControlRow>
+        </Card>
+      </div>
+
+      {/* Formula preview */}
       <div
         style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 100,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "rgba(0,0,0,0.5)",
-          animation: "paramFadeIn 0.15s",
+          padding: "var(--space-10) var(--space-12)",
+          borderRadius: "var(--radius-lg)",
+          backgroundColor: "var(--bg-active)",
+          fontSize: "var(--fs-control)",
+          color: "var(--text-primary)",
+          lineHeight: "1.5",
+          fontFamily: "var(--font-mono)",
         }}
-        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
-        <div
-          className="flex flex-col"
-          style={{
-            width: 420,
-            maxHeight: "80vh",
-            backgroundColor: "var(--bg-secondary)",
-            border: "1px solid var(--border-color)",
-            borderRadius: 14,
-            boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
-            overflow: "hidden",
-            animation: "paramScaleIn 0.15s ease-out",
-          }}
-        >
-          {/* Header */}
-          <div
-            className="flex items-center justify-between flex-shrink-0"
-            style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-color)" }}
-          >
-            <div className="flex items-center" style={{ gap: 8 }}>
-              <span style={{ fontSize: 16 }}>〰️</span>
-              <span style={{ fontWeight: 500, fontSize: 15, color: "var(--text-primary)" }}>Parametric Trajectory</span>
-            </div>
-            <button
-              className="flex items-center justify-center"
-              style={{
-                width: 28, height: 28, borderRadius: 6,
-                backgroundColor: "var(--bg-active)", color: "var(--text-muted)",
-                fontSize: 14, cursor: "pointer", border: "none", transition: "color 0.12s",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-primary)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"; }}
-              onClick={onClose}
-            >
-              ✕
-            </button>
-          </div>
-
-          {/* Scrollable body */}
-          <div style={{ overflowY: "auto", padding: "16px 20px" }}>
-
-            {/* WAVE PARAMETERS */}
-            <div style={{ marginBottom: 20 }}>
-              <SectionHeader>Wave parameters</SectionHeader>
-              <div style={{ backgroundColor: "var(--bg-active)", borderRadius: 10, overflow: "hidden" }}>
-                <CardRowWide label="Event kind">
-                  <select
-                    value={kind}
-                    onChange={(e) => setKind(e.target.value as LineEventKind)}
-                    style={{ ...INPUT_STYLE, cursor: "pointer" }}
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  >
-                    <option value="x">X Position</option>
-                    <option value="y">Y Position</option>
-                    <option value="rotation">Rotation</option>
-                    <option value="opacity">Opacity</option>
-                    <option value="scale_x">Scale X</option>
-                    <option value="scale_y">Scale Y</option>
-                  </select>
-                </CardRowWide>
-                <CardRow label="Waveform">
-                  <select
-                    value={waveform}
-                    onChange={(e) => setWaveform(e.target.value as "sin" | "cos")}
-                    style={{ ...INPUT_STYLE, cursor: "pointer" }}
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  >
-                    <option value="sin">sin</option>
-                    <option value="cos">cos</option>
-                  </select>
-                </CardRow>
-                <CardRow label="Amplitude">
-                  <input
-                    type="number"
-                    step="1"
-                    value={amplitude}
-                    onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setAmplitude(n); }}
-                    style={INPUT_STYLE}
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  />
-                </CardRow>
-                <CardRow label="Frequency">
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={frequency}
-                    onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setFrequency(n); }}
-                    style={INPUT_STYLE}
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  />
-                </CardRow>
-                <CardRow label="Phase (rad)">
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={phase}
-                    onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setPhase(n); }}
-                    style={INPUT_STYLE}
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  />
-                </CardRow>
-                <CardRow label="Offset" last>
-                  <input
-                    type="number"
-                    step="1"
-                    value={offset}
-                    onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setOffset(n); }}
-                    style={INPUT_STYLE}
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  />
-                </CardRow>
-              </div>
-            </div>
-
-            {/* RANGE */}
-            <div style={{ marginBottom: 16 }}>
-              <SectionHeader>Range</SectionHeader>
-              <div style={{ backgroundColor: "var(--bg-active)", borderRadius: 10, overflow: "hidden" }}>
-                <CardRow label="Start beat">
-                  <input
-                    type="number"
-                    step="0.25"
-                    value={startBeat}
-                    onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setStartBeat(n); }}
-                    style={INPUT_STYLE}
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  />
-                </CardRow>
-                <CardRow label="End beat">
-                  <input
-                    type="number"
-                    step="0.25"
-                    value={endBeat}
-                    onChange={(e) => { const n = safeParseNumber(e.target.value); if (n !== null) setEndBeat(n); }}
-                    style={INPUT_STYLE}
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  />
-                </CardRow>
-                <CardRow label="Steps" last>
-                  <NumericInput
-                    commitMode="blur"
-                    integer
-                    min={1}
-                    max={1000}
-                    fallback={1}
-                    value={steps}
-                    onChange={setSteps}
-                    style={INPUT_STYLE}
-                    onFocus={focusInput}
-                    onBlur={blurInput}
-                  />
-                </CardRow>
-              </div>
-            </div>
-
-            {/* Formula preview */}
-            <div
-              style={{
-                padding: "10px 14px",
-                borderRadius: 8,
-                backgroundColor: "var(--bg-active)",
-                fontSize: 11,
-                color: "var(--text-secondary)",
-                lineHeight: "1.5",
-                fontFamily: "monospace",
-              }}
-            >
-              <div>{kind}(t) = {amplitude} * {waveform}({frequency} * t * 2π + {phase}) + {offset}</div>
-              <div style={{ color: "var(--text-muted)", marginTop: 2 }}>
-                Generates {steps} transition events from beat {startBeat} to {endBeat}
-              </div>
-            </div>
-
-            {/* Error */}
-            {error && (
-              <div
-                style={{
-                  marginTop: 12,
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  color: "#ff6b6b",
-                  backgroundColor: "rgba(255,70,70,0.1)",
-                }}
-              >
-                {error}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div
-            className="flex items-center justify-end flex-shrink-0"
-            style={{ padding: "14px 20px", borderTop: "1px solid var(--border-color)", gap: 8 }}
-          >
-            <button
-              style={{
-                padding: "7px 16px", borderRadius: 8, fontSize: 12,
-                color: "var(--text-secondary)", cursor: "pointer",
-                border: "none", background: "transparent", transition: "background 0.1s",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--bg-active)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-            <button
-              style={{
-                padding: "7px 20px", borderRadius: 8, fontSize: 12,
-                backgroundColor: "var(--accent-primary)", color: "#fff",
-                cursor: "pointer", fontWeight: 500, border: "none",
-                transition: "opacity 0.1s",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.85"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
-              onClick={handleGenerate}
-            >
-              Generate
-            </button>
-          </div>
+        <div>{kind}(t) = {amplitude} * {waveform}({frequency} * t * 2π + {phase}) + {offset}</div>
+        <div style={{ color: "var(--text-secondary)", marginTop: "var(--space-2)", fontFamily: "var(--font-sans)" }}>
+          Generates {steps} transition events from beat {startBeat} to {endBeat}
         </div>
       </div>
-    </>
+
+      {/* Error */}
+      {error && (
+        <div
+          style={{
+            marginTop: "var(--space-12)",
+            padding: "var(--space-8) var(--space-12)",
+            borderRadius: "var(--radius-lg)",
+            fontSize: "var(--fs-body)",
+            color: "var(--error)",
+            backgroundColor: "color-mix(in srgb, var(--error) 10%, transparent)",
+          }}
+        >
+          {error}
+        </div>
+      )}
+    </Dialog>
   );
 }

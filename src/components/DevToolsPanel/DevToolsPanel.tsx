@@ -2,10 +2,15 @@
 // DevTools Panel — Developer utilities
 //
 // Raw JSON view of selected line, chart statistics overview,
-// and an event evaluator. Toggle with Ctrl+Shift+D.
+// and an event evaluator. Toggle with F12.
+// Floating popover chrome; tabs are a SegmentedControl.
 // ============================================================
 
 import { useState, useMemo } from "react";
+import { X } from "lucide-react";
+import { IconButton } from "../common/IconButton";
+import { SegmentedControl } from "../common/SegmentedControl";
+import { INPUT_STYLE } from "../common/UIKit";
 import { useEditorStore } from "../../stores/editorStore";
 import { useSelectedLineIndex } from "../../stores/selection";
 import { useChartStore } from "../../stores/chartStore";
@@ -28,7 +33,7 @@ function JsonTab() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-2 py-1 text-xs" style={{ color: "var(--text-muted)" }}>
+      <div className="px-2 py-1 text-xs" style={{ color: "var(--text-secondary)" }}>
         {selectedLineIndex !== null
           ? `Line #${selectedLineIndex} — ${chart.lines[selectedLineIndex]?.name ?? "?"}`
           : "No line selected"}
@@ -69,13 +74,13 @@ function StatsTab() {
     }
 
     return {
-      lines: chart.lines.length,
-      totalNotes,
-      totalEvents,
-      bpmPoints: chart.bpm_list.length,
-      offset: chart.offset,
-      maxBeat: maxBeat.toFixed(2),
-      format: chart.format,
+      Lines: chart.lines.length,
+      Notes: totalNotes,
+      Events: totalEvents,
+      "BPM points": chart.bpm_list.length,
+      Offset: chart.offset,
+      "Last beat": maxBeat.toFixed(2),
+      Format: chart.format,
     };
   }, [chart]);
 
@@ -85,7 +90,7 @@ function StatsTab() {
         <tbody>
           {Object.entries(stats).map(([key, val]) => (
             <tr key={key}>
-              <td className="py-0.5 pr-3" style={{ color: "var(--text-muted)" }}>
+              <td className="py-0.5 pr-3" style={{ color: "var(--text-secondary)" }}>
                 {key}
               </td>
               <td className="py-0.5 font-mono" style={{ color: "var(--text-primary)" }}>
@@ -118,6 +123,7 @@ function EvaluatorTab() {
     // Find event values at this beat for each kind
     const values: Record<string, number | string> = {};
     const kinds = ["x", "y", "rotation", "opacity", "speed"] as const;
+    const kindLabels = { x: "X", y: "Y", rotation: "Rotation", opacity: "Opacity", speed: "Speed" };
 
     for (const kind of kinds) {
       const events = line.events.filter((e) => e.kind === kind);
@@ -127,42 +133,37 @@ function EvaluatorTab() {
         const end = beatToFloat(ev.end_beat);
         if (beatVal >= start && beatVal <= end) {
           if ("constant" in ev.value) {
-            values[kind] = ev.value.constant;
+            values[kindLabels[kind]] = ev.value.constant;
           } else if ("transition" in ev.value) {
             const t = end > start ? (beatVal - start) / (end - start) : 0;
             const { start: s, end: e, easing } = ev.value.transition;
             const easedT = evaluateEasing(easing, t);
-            values[kind] = +(s + (e - s) * easedT).toFixed(3);
+            values[kindLabels[kind]] = +(s + (e - s) * easedT).toFixed(3);
           }
           found = true;
           break;
         }
       }
-      if (!found) values[kind] = "N/A";
+      if (!found) values[kindLabels[kind]] = "No event";
     }
 
-    return { time: time.toFixed(3), bpm: bpm.toFixed(1), ...values };
+    return { "Time (s)": time.toFixed(3), BPM: bpm.toFixed(1), ...values };
   }, [beatInput, chart, selectedLineIndex]);
 
   return (
     <div className="p-2 flex flex-col gap-2">
       <label className="flex items-center gap-2 text-xs">
-        <span style={{ color: "var(--text-muted)" }}>Beat:</span>
+        <span style={{ color: "var(--text-secondary)" }}>Beat</span>
         <input
           type="number"
           step="0.25"
           value={beatInput}
           onChange={(e) => setBeatInput(e.target.value)}
-          className="w-20 px-1 py-0.5 rounded text-xs"
-          style={{
-            backgroundColor: "var(--bg-active)",
-            color: "var(--text-primary)",
-            border: "1px solid var(--border-color)",
-          }}
+          style={{ ...INPUT_STYLE, width: 80, fontFamily: "var(--font-mono)" }}
         />
       </label>
       {selectedLineIndex === null && (
-        <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+        <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
           Select a line to evaluate events
         </div>
       )}
@@ -171,7 +172,7 @@ function EvaluatorTab() {
           <tbody>
             {Object.entries(result).map(([key, val]) => (
               <tr key={key}>
-                <td className="py-0.5 pr-3" style={{ color: "var(--text-muted)" }}>
+                <td className="py-0.5 pr-3" style={{ color: "var(--text-secondary)" }}>
                   {key}
                 </td>
                 <td className="py-0.5 font-mono" style={{ color: "var(--text-primary)" }}>
@@ -201,59 +202,55 @@ export function DevToolsPanel() {
 
   return (
     <div
-      className="fixed bottom-7 right-0 z-50 flex flex-col"
+      role="dialog"
+      aria-label="DevTools"
+      className="fixed bottom-7 right-0 flex flex-col"
       style={{
         width: "360px",
         height: "320px",
+        zIndex: "var(--z-sticky)",
         backgroundColor: "var(--bg-secondary)",
-        border: "1px solid var(--border-color)",
-        borderRadius: "8px 0 0 0",
-        boxShadow: "0 -4px 24px rgba(0,0,0,0.4)",
+        border: "var(--rule) solid var(--border-color)",
+        borderRadius: "var(--radius-xl) 0 0 0",
+        boxShadow: "var(--shadow-popover)",
+        overflow: "hidden",
       }}
     >
       {/* Header */}
       <div
         className="flex items-center px-3 py-1.5 gap-2 flex-shrink-0"
         style={{
-          borderBottom: "1px solid var(--border-color)",
+          borderBottom: "var(--rule) solid var(--border-color)",
           backgroundColor: "var(--bg-tertiary)",
-          borderRadius: "8px 0 0 0",
         }}
       >
         <span
-          className="text-xs font-semibold uppercase tracking-wider"
+          className="text-xs font-semibold"
           style={{ color: "var(--text-secondary)" }}
         >
           DevTools
         </span>
 
         {/* Tab buttons */}
-        <div className="flex gap-1 ml-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              className="px-2 py-0.5 rounded text-xs"
-              style={{
-                backgroundColor:
-                  activeTab === tab.id ? "var(--accent-primary)" : "transparent",
-                color:
-                  activeTab === tab.id ? "#fff" : "var(--text-muted)",
-              }}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          options={tabs.map((tab) => ({ value: tab.id, label: tab.label }))}
+          value={activeTab}
+          onChange={setActiveTab}
+          size="sm"
+          role="tablist"
+          label="DevTools view"
+          style={{ marginLeft: "var(--space-8)" }}
+        />
 
         <div className="flex-1" />
-        <button
-          className="text-xs px-1 hover:opacity-80"
-          style={{ color: "var(--text-muted)" }}
+        <IconButton
+          icon={X}
+          label="Close DevTools"
+          shortcut={{ action: "toggle_devtools" }}
+          size="md"
+          tooltipPosition="left"
           onClick={toggleDevTools}
-        >
-          Close
-        </button>
+        />
       </div>
 
       {/* Content */}

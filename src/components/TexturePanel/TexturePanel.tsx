@@ -4,13 +4,28 @@
 // Shows all lines with textures, thumbnail previews, and lets
 // users select, upload, change, or remove textures.
 // Provides quick access to texture line properties.
+// Rows hover via ui-hover; the selected line is accent-selected.
 // ============================================================
 
 import { useMemo } from "react";
+import { Plus, Upload, ImageOff, SquarePen, X, Trash2, Link } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { useSelectedLineIndex, selectLineByIndex } from "../../stores/selection";
 import { useTabStore } from "../../stores/tabStore";
-import { SectionHeader, ActionButton, EmptyState } from "../common/UIKit";
+import { SectionHeader, EmptyState } from "../common/UIKit";
+import { Button } from "../common/Button";
+import { IconButton } from "../common/IconButton";
+import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
+
+const LIST_CARD_STYLE: React.CSSProperties = {
+  backgroundColor: "var(--bg-active)",
+  borderRadius: "var(--radius-xl)",
+  overflow: "hidden",
+  margin: "0 var(--space-8) var(--space-8)",
+};
+
+const DETAIL_STYLE: React.CSSProperties = { color: "var(--text-secondary)", fontSize: "var(--fs-caption)" };
 
 function TextureThumb({ textureName }: { textureName: string }) {
   const lineTextures = useChartStore((s) => s.lineTextures);
@@ -23,22 +38,25 @@ function TextureThumb({ textureName }: { textureName: string }) {
 
   if (!url) {
     return (
-      <div
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 6,
-          background: "var(--bg-active)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 9,
-          color: "var(--text-muted)",
-          flexShrink: 0,
-        }}
-      >
-        ?
-      </div>
+      <Tooltip content="Texture not loaded">
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: "var(--radius-md)",
+            background: "var(--bg-tertiary)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--text-secondary)",
+            flexShrink: 0,
+          }}
+          role="img"
+          aria-label={`${textureName} (not loaded)`}
+        >
+          <Icon icon={ImageOff} size={14} />
+        </div>
+      </Tooltip>
     );
   }
 
@@ -49,10 +67,9 @@ function TextureThumb({ textureName }: { textureName: string }) {
       style={{
         width: 40,
         height: 40,
-        borderRadius: 6,
+        borderRadius: "var(--radius-md)",
         objectFit: "cover",
-        border: "1px solid var(--border-color)",
-        background: "rgba(0,0,0,0.3)",
+        background: "var(--bg-tertiary)",
         flexShrink: 0,
       }}
     />
@@ -125,26 +142,26 @@ export function TexturePanel() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontSize: 12, minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontSize: "var(--fs-body)", minHeight: 0 }}>
       {/* Header actions */}
       <div
         style={{
           display: "flex",
-          gap: 6,
-          padding: "8px 12px",
-          borderBottom: "1px solid var(--border-color)",
+          gap: "var(--space-6)",
+          padding: "var(--space-8) var(--space-12)",
+          borderBottom: "var(--rule) solid var(--border-color)",
           flexWrap: "wrap",
           alignItems: "center",
           flexShrink: 0,
         }}
       >
-        <ActionButton variant="primary" onClick={handleAddTextureLine} title="Add a new line with a texture image">
-          + Texture Line
-        </ActionButton>
-        <ActionButton variant="default" onClick={handleUploadTexture} title="Upload a texture image asset">
-          Upload Asset
-        </ActionButton>
-        <span style={{ marginLeft: "auto", color: "var(--text-muted)", fontSize: 10 }}>
+        <Button variant="primary" size="sm" icon={Plus} onClick={handleAddTextureLine} title="Add a new line with a texture image">
+          Add texture line…
+        </Button>
+        <Button size="sm" icon={Upload} onClick={handleUploadTexture} title="Upload a texture image asset">
+          Upload asset…
+        </Button>
+        <span style={{ marginLeft: "auto", color: "var(--text-secondary)", fontSize: "var(--fs-caption)" }}>
           {texturedLines.length} line{texturedLines.length !== 1 ? "s" : ""} &middot;{" "}
           {textureAssets.length} asset{textureAssets.length !== 1 ? "s" : ""}
         </span>
@@ -154,9 +171,9 @@ export function TexturePanel() {
         {/* Empty state */}
         {texturedLines.length === 0 && textureAssets.length === 0 ? (
           <EmptyState>
-            <div style={{ fontSize: 11, marginBottom: 4 }}>No texture lines</div>
-            <div style={{ fontSize: 10 }}>
-              Import an RPE chart with textures, or click "+ Texture Line" to create one.
+            <div style={{ fontSize: "var(--fs-control)", color: "var(--text-primary)", marginBottom: "var(--space-4)" }}>No texture lines</div>
+            <div style={{ fontSize: "var(--fs-caption)" }}>
+              Import an RPE chart with textures, or click "Add texture line…" to create one.
             </div>
           </EmptyState>
         ) : (
@@ -164,32 +181,24 @@ export function TexturePanel() {
             {/* Lines with textures */}
             {texturedLines.length > 0 && (
               <div>
-                <div style={{ padding: "4px 12px" }}>
-                  <SectionHeader>Texture Lines</SectionHeader>
+                <div style={{ padding: "var(--space-4) var(--space-12)" }}>
+                  <SectionHeader>Texture lines</SectionHeader>
                 </div>
-                <div
-                  style={{
-                    backgroundColor: "var(--bg-active)",
-                    borderRadius: 10,
-                    overflow: "hidden",
-                    margin: "0 8px 8px",
-                  }}
-                >
+                <div style={LIST_CARD_STYLE}>
                   {texturedLines.map(({ line, idx }, i) => {
                     const isSelected = selectedLineIndex === idx;
                     return (
                       <div
                         key={idx}
+                        className="ui-hover"
+                        aria-current={isSelected ? "true" : undefined}
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          gap: 10,
-                          padding: "8px 12px",
-                          borderBottom: i < texturedLines.length - 1 ? "1px solid rgba(42, 42, 53, 0.55)" : "none",
-                          borderLeft: isSelected
-                            ? "2px solid var(--accent-primary)"
-                            : "2px solid transparent",
-                          background: isSelected ? "rgba(108, 138, 255, 0.06)" : "transparent",
+                          gap: "var(--space-10)",
+                          padding: "var(--space-8) var(--space-12)",
+                          borderBottom: i < texturedLines.length - 1 ? "var(--rule) solid var(--separator)" : "none",
+                          background: isSelected ? "var(--accent-selected)" : undefined,
                           cursor: "pointer",
                         }}
                         onClick={() => selectLineByIndex(idx)}
@@ -198,8 +207,8 @@ export function TexturePanel() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div
                             style={{
-                              color: "var(--text-primary)",
-                              fontSize: 11,
+                              color: isSelected ? "var(--accent-primary)" : "var(--text-primary)",
+                              fontSize: "var(--fs-control)",
                               fontWeight: isSelected ? 600 : 400,
                               overflow: "hidden",
                               textOverflow: "ellipsis",
@@ -208,13 +217,14 @@ export function TexturePanel() {
                           >
                             {line.name || `Line ${idx + 1}`}
                           </div>
-                          <div style={{ color: "var(--text-muted)", fontSize: 9 }}>
-                            #{idx} &middot; {line.texture}
+                          <div style={DETAIL_STYLE}>
+                            <span style={{ fontFamily: "var(--font-mono)" }}>#{idx}</span> &middot; {line.texture}
                           </div>
                         </div>
-                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                          <ActionButton
-                            variant="primary"
+                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", flexShrink: 0 }}>
+                          <Button
+                            size="sm"
+                            icon={SquarePen}
                             onClick={(e) => {
                               e.stopPropagation();
                               openLineEventEditor(idx, line.name || `Line ${idx + 1}`);
@@ -222,17 +232,17 @@ export function TexturePanel() {
                             title="Edit events for this texture line"
                           >
                             Events
-                          </ActionButton>
-                          <ActionButton
-                            variant="danger"
+                          </Button>
+                          <IconButton
+                            icon={X}
+                            label="Remove texture from this line"
+                            size="md"
+                            danger
                             onClick={(e) => {
                               e.stopPropagation();
                               handleRemoveTexture(idx);
                             }}
-                            title="Remove texture from this line"
-                          >
-                            X
-                          </ActionButton>
+                          />
                         </div>
                       </div>
                     );
@@ -244,17 +254,10 @@ export function TexturePanel() {
             {/* Texture assets */}
             {textureAssets.length > 0 && (
               <div>
-                <div style={{ padding: "4px 12px" }}>
-                  <SectionHeader>Loaded Assets</SectionHeader>
+                <div style={{ padding: "var(--space-4) var(--space-12)" }}>
+                  <SectionHeader>Loaded assets</SectionHeader>
                 </div>
-                <div
-                  style={{
-                    backgroundColor: "var(--bg-active)",
-                    borderRadius: 10,
-                    overflow: "hidden",
-                    margin: "0 8px 8px",
-                  }}
-                >
+                <div style={LIST_CARD_STYLE}>
                   {textureAssets.map((asset, i) => {
                     const usedBy = lines.filter((l) => l.texture === asset.name).length;
                     return (
@@ -263,9 +266,9 @@ export function TexturePanel() {
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          gap: 10,
-                          padding: "8px 12px",
-                          borderBottom: i < textureAssets.length - 1 ? "1px solid rgba(42, 42, 53, 0.55)" : "none",
+                          gap: "var(--space-10)",
+                          padding: "var(--space-8) var(--space-12)",
+                          borderBottom: i < textureAssets.length - 1 ? "var(--rule) solid var(--separator)" : "none",
                         }}
                       >
                         <TextureThumb textureName={asset.name} />
@@ -273,7 +276,7 @@ export function TexturePanel() {
                           <div
                             style={{
                               color: "var(--text-primary)",
-                              fontSize: 10,
+                              fontSize: "var(--fs-control)",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
@@ -281,30 +284,31 @@ export function TexturePanel() {
                           >
                             {asset.name}
                           </div>
-                          <div style={{ color: "var(--text-muted)", fontSize: 9 }}>
+                          <div style={DETAIL_STYLE}>
                             {(asset.size / 1024).toFixed(0)} KB &middot; used by {usedBy} line
                             {usedBy !== 1 ? "s" : ""}
                           </div>
                         </div>
-                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", flexShrink: 0 }}>
                           {/* Assign to selected line button */}
                           {selectedLineIndex !== null && !lines[selectedLineIndex]?.texture && (
-                            <ActionButton
-                              variant="primary"
+                            <Button
+                              size="sm"
+                              icon={Link}
                               onClick={() => handleAssignTexture(selectedLineIndex, asset.name)}
                               title="Assign to selected line"
                             >
                               Assign
-                            </ActionButton>
+                            </Button>
                           )}
                           {usedBy === 0 && (
-                            <ActionButton
-                              variant="danger"
+                            <IconButton
+                              icon={Trash2}
+                              label="Delete unused asset"
+                              size="md"
+                              danger
                               onClick={() => removeLineTexture(asset.name)}
-                              title="Remove unused asset"
-                            >
-                              Delete
-                            </ActionButton>
+                            />
                           )}
                         </div>
                       </div>

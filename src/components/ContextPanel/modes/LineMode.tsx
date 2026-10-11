@@ -1,22 +1,32 @@
 // ============================================================
 // LineMode — Context panel content for single-line selection mode
 //
-// Recent change: Fixed X Snap reactivity bug in Events tab (was using
-// getState() during render). Added "Open Popout Curve Editor" button
-// to Events tab for direct curve editor access from ContextPanel.
+// Tabs: events (grouped event lists, X grid, curve editor), props,
+// controls, presets, note gen and hotkeys. Fixed X Snap reactivity
+// bug in Events tab (was using getState() during render). The
+// "Open popout curve editor" button opens the curve editor for the
+// current line directly from the ContextPanel.
 // ============================================================
 
-import React, { useState, useCallback } from "react";
+import type React from "react";
+import { useState, useCallback, useId } from "react";
+import { ArrowRight, ChevronRight, Copy, Minus, Plus, Spline, SquareDashed, Star, Trash2 } from "lucide-react";
 import { useEditorStore } from "../../../stores/editorStore";
 import { useSelectedLineIndex, setEventSelectionByIndex } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
 import { useFavoritesStore } from "../../../stores/favoritesStore";
 import { BUILTIN_PRESETS } from "../../../presets/builtinPresets";
 import { applyPresetAtPlayhead } from "../../../utils/applyPreset";
-import type { LineEventKind, LineEvent } from "../../../types/chart";
+import type { Line, LineEventKind, LineEvent, NoteKind } from "../../../types/chart";
 import { EVENT_KIND_META, EXTENDED_EVENT_KINDS } from "../../../constants/eventConfig";
-import { getEasingLabel, getEventValueSummary, formatBeat } from "../../../utils/eventHelpers";
+import { getEasingLabel, getEventValueRange, getEventValueSummary, formatBeat } from "../../../utils/eventHelpers";
 import { NumericInput } from "../../common/FormFields";
+import { Icon } from "../../common/Icon";
+import { IconButton } from "../../common/IconButton";
+import { NoteGlyph } from "../../common/NoteGlyph";
+import { ToolGroup } from "../../common/ToolGroup";
+import { SegmentedControl } from "../../common/SegmentedControl";
+import { Card, EmptyState, Pill, INPUT_STYLE, SELECT_STYLE } from "../../common/UIKit";
 import { validateExpression } from "../../../utils/notePatternGenerator";
 import { XGridSection } from "../shared/XGridSection";
 
@@ -25,7 +35,7 @@ import { ControlsTab } from "./LineModeControlsTab";
 import { NoteGenTab } from "./LineModeNoteGenTab";
 
 // ---- Shared sub-components (extracted to shared/) ----
-import { HotkeyButton } from "../shared/HotkeyButton";
+import { HotkeyList, type HotkeySection } from "../shared/HotkeyList";
 import { SectionHeader } from "../shared/SectionHeader";
 import { ActionButton } from "../shared/ActionButton";
 import { ContextBadge } from "../shared/ContextBadge";
@@ -76,106 +86,107 @@ export function LineMode({ activeTab }: LineModeProps) {
 // Compact inline config for the pattern tool ghost notes
 
 const PATTERN_SHAPES = ["linear", "sine", "cosine", "zigzag", "staircase", "arc", "random", "custom"];
-const PATTERN_KINDS = [
-  { value: "tap", color: "#48b5ff" },
-  { value: "drag", color: "#ffd24a" },
-  { value: "flick", color: "#ff4a6a" },
-  { value: "hold", color: "#4aff7a" },
+const PATTERN_KINDS: Array<{ value: NoteKind; label: string }> = [
+  { value: "tap", label: "Tap" },
+  { value: "drag", label: "Drag" },
+  { value: "flick", label: "Flick" },
+  { value: "hold", label: "Hold" },
 ];
+
+/** "zigzag" → "Zigzag" (sentence case for stored lowercase ids). */
+const sentenceCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function PatternConfigBanner() {
   const config = useEditorStore((s) => s.patternConfig);
   const setConfig = useEditorStore((s) => s.setPatternConfig);
+  const expressionError = config.shape === "custom" ? validateExpression(config.expression ?? "") : null;
+  const expressionErrorId = useId();
 
   return (
     <div style={{
-      margin: "0 0 6px 0", padding: "6px 8px",
-      background: "rgba(192, 132, 252, 0.06)",
-      border: "1px solid rgba(192, 132, 252, 0.2)",
-      borderRadius: 6,
+      margin: "0 0 var(--space-6) 0", padding: "var(--space-8) var(--space-10)",
+      background: "var(--bg-active)",
+      borderRadius: "var(--radius-lg)",
+      display: "flex", flexDirection: "column", gap: "var(--space-6)",
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: "#c084fc" }}>{"\u2B1A"} PATTERN</span>
-        <span style={{ fontSize: 9, color: "var(--text-muted)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+        <Icon icon={SquareDashed} size={12} style={{ color: "var(--accent-primary)" }} />
+        <span style={{ fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--text-primary)" }}>Pattern</span>
+        <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>
           {config.noteCount} notes · {config.shape}
         </span>
       </div>
 
       {/* Shape pills */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginBottom: 4 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
         {PATTERN_SHAPES.map((s) => (
-          <button key={s} onClick={() => setConfig({ shape: s })} style={{
-            fontSize: 8, padding: "2px 5px", borderRadius: 3,
-            border: "none", cursor: "pointer", fontFamily: "inherit",
-            background: config.shape === s ? "#c084fc" : "var(--bg-active)",
-            color: config.shape === s ? "#000" : "var(--text-muted)",
-            fontWeight: config.shape === s ? 700 : 400,
-          }}>
-            {s}
-          </button>
+          <Pill key={s} active={config.shape === s} onClick={() => setConfig({ shape: s })}>
+            {sentenceCase(s)}
+          </Pill>
         ))}
       </div>
 
       {/* Count + Kind row */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-        <div style={{ flex: 1 }}>
-          <span style={{ fontSize: 8, color: "var(--text-muted)" }}>Count</span>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>Count</span>
           <input type="number" value={config.noteCount} min={1} step={1}
             onChange={(e) => setConfig({ noteCount: Math.max(1, parseInt(e.target.value) || 1) })}
-            style={{
-              width: "100%", fontSize: 9, padding: "2px 4px", borderRadius: 3,
-              border: "1px solid var(--border-color)", background: "var(--bg-tertiary)",
-              color: "var(--text-primary)", fontFamily: "inherit",
-            }}
+            style={{ ...INPUT_STYLE, width: "100%", minWidth: 0, fontFamily: "var(--font-mono)" }}
           />
-        </div>
-        {PATTERN_KINDS.map((k) => (
-          <button key={k.value} onClick={() => setConfig({ noteKind: k.value })} style={{
-            fontSize: 8, padding: "2px 5px", borderRadius: 3, marginTop: 10,
-            border: "none", cursor: "pointer", fontFamily: "inherit",
-            background: config.noteKind === k.value ? k.color : "var(--bg-active)",
-            color: config.noteKind === k.value ? "#000" : "var(--text-muted)",
-            fontWeight: config.noteKind === k.value ? 600 : 400,
-          }}>
-            {k.value}
-          </button>
-        ))}
+        </label>
+        <ToolGroup label="Pattern note type">
+          {PATTERN_KINDS.map((k) => (
+            <IconButton
+              key={k.value}
+              label={k.label}
+              size="md"
+              active={config.noteKind === k.value}
+              onClick={() => setConfig({ noteKind: k.value })}
+            >
+              <NoteGlyph kind={k.value} size={14} />
+            </IconButton>
+          ))}
+        </ToolGroup>
       </div>
 
       {/* Expression input — shown when "custom" shape is selected */}
       {config.shape === "custom" && (
-        <div style={{ marginBottom: 2 }}>
+        <>
           <input
             type="text"
+            aria-label="Pattern expression"
+            aria-invalid={expressionError ? true : undefined}
+            aria-describedby={expressionError ? expressionErrorId : undefined}
             value={config.expression ?? ""}
             onChange={(e) => setConfig({ expression: e.target.value })}
             placeholder="300*sin(2*pi*t)"
             spellCheck={false}
             style={{
-              width: "100%", fontSize: 8, padding: "3px 6px", borderRadius: 3,
-              border: `1px solid ${validateExpression(config.expression ?? "") ? "#ff4a6a" : "#4ade80"}`,
-              background: "var(--bg-tertiary)", color: "var(--text-primary)",
-              fontFamily: "'JetBrains Mono', monospace", outline: "none",
+              ...INPUT_STYLE,
+              width: "100%",
+              fontFamily: "var(--font-mono)",
+              border: `var(--rule) solid ${expressionError ? "var(--error)" : "var(--success)"}`,
             }}
           />
-        </div>
+          {expressionError && (
+            <div id={expressionErrorId} role="alert" style={{ fontSize: "var(--fs-caption)", color: "var(--error)" }}>
+              {expressionError}
+            </div>
+          )}
+        </>
       )}
 
       {/* Above/Below */}
-      <div style={{ display: "flex", gap: 2 }}>
-        <button onClick={() => setConfig({ above: true })} style={{
-          flex: 1, fontSize: 8, padding: "2px 0", borderRadius: 3,
-          border: "none", cursor: "pointer", fontFamily: "inherit",
-          background: config.above ? "#4ade80" : "var(--bg-active)",
-          color: config.above ? "#000" : "var(--text-muted)",
-        }}>Above</button>
-        <button onClick={() => setConfig({ above: false })} style={{
-          flex: 1, fontSize: 8, padding: "2px 0", borderRadius: 3,
-          border: "none", cursor: "pointer", fontFamily: "inherit",
-          background: !config.above ? "#ef4444" : "var(--bg-active)",
-          color: !config.above ? "#fff" : "var(--text-muted)",
-        }}>Below</button>
-      </div>
+      <SegmentedControl
+        label="Pattern side"
+        tone="accent"
+        size="sm"
+        block
+        options={[{ value: "above", label: "Above" }, { value: "below", label: "Below" }]}
+        value={config.above ? "above" : "below"}
+        onChange={(v) => setConfig({ above: v === "above" })}
+      />
     </div>
   );
 }
@@ -220,11 +231,11 @@ function EventsTab() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
       <ContextBadge
-        icon={<span style={{ fontSize: 12 }}>{"\u2500"}</span>}
+        icon={Minus}
         label={line.name}
-        detail={`${noteCount} notes, ${line.events.length} events`}
+        detail={`${noteCount} notes · ${line.events.length} events`}
         variant="line"
       />
 
@@ -245,8 +256,8 @@ function EventsTab() {
       })}
 
       {/* Extended events — same clickable pattern as core events */}
-      <div style={{ marginTop: 6, opacity: 0.6 }}>
-        <SectionHeader label="EXTENDED EVENTS" count={extendedEventCount} />
+      <div style={{ marginTop: "var(--space-6)", display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+        <SectionHeader label="Extended events" count={extendedEventCount} />
         {EXTENDED_EVENT_KINDS.map((kind) => {
           const config = EVENT_KIND_META[kind];
           const entries = eventsByKind[kind] ?? [];
@@ -263,21 +274,21 @@ function EventsTab() {
           );
         })}
         {extendedEventCount === 0 && (
-          <div style={{ fontSize: 10, color: "var(--text-muted)", padding: "4px 8px" }}>
+          <div style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", padding: "var(--space-4) var(--space-8)" }}>
             No extended events. Add scale, color, text, incline, or GIF events from the timeline.
           </div>
         )}
       </div>
 
-      {/* X Grid — shared toggle, presets, and status indicator */}
-      <SectionHeader label="X GRID" />
+      {/* X grid — shared toggle, presets, and status indicator */}
+      <SectionHeader label="X grid" />
       <XGridSection />
 
-      {/* Curve Editor — open the popout curve editor for this line's events */}
-      <SectionHeader label="CURVE EDITOR" />
+      {/* Curve editor — open the popout curve editor for this line's events */}
+      <SectionHeader label="Curve editor" />
       <ActionButton
-        icon={"\u223F"}
-        label="Open Popout Curve Editor"
+        icon={Spline}
+        label="Open popout curve editor"
         onClick={() => {
           // Toggle the popout curve editor. It reads selectedLineIndex from editorStore
           // and renders event curves for the current line in a separate window.
@@ -308,30 +319,45 @@ function EventGroup({ color, label, entries, onAdd }: {
   }, []);
 
   return (
-    <div style={{ borderRadius: 5, border: "1px solid var(--border-color)", overflow: "hidden" }}>
+    <div style={{ borderRadius: "var(--radius-xl)", background: "var(--bg-active)", overflow: "hidden" }}>
       {/* Group header — click to expand/collapse */}
       <div
+        className="ui-hover"
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
+        onKeyDown={(e) => {
+          if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            setExpanded(!expanded);
+          }
+        }}
         style={{
-          display: "flex", alignItems: "center", gap: 6, padding: "5px 8px",
-          cursor: "pointer", background: "var(--bg-primary)",
-          borderBottom: expanded ? "1px solid var(--border-color)" : "none",
+          display: "flex", alignItems: "center", gap: "var(--space-6)", padding: "var(--space-4) var(--space-6) var(--space-4) var(--space-10)",
+          cursor: "pointer",
+          borderBottom: expanded && entries.length > 0 ? "var(--rule) solid var(--separator)" : "none",
         }}
       >
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
-        <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-primary)", flex: 1 }}>{label}</span>
-        <span style={{ fontSize: 9, color: "var(--text-muted)", padding: "0 5px", borderRadius: 8, background: "var(--bg-tertiary)" }}>
+        <span style={{ fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--text-primary)", flex: 1 }}>{label}</span>
+        <span style={{
+          fontSize: "var(--fs-badge)", fontWeight: 600, lineHeight: "12px", color: "var(--text-secondary)",
+          padding: "1px var(--space-6)", borderRadius: "var(--radius-full)", background: "var(--bg-tertiary)",
+        }}>
           {entries.length}
         </span>
-        <button
+        <IconButton
+          icon={Plus}
+          label={`Add ${label} event`}
+          size="sm"
           onClick={(e) => { e.stopPropagation(); onAdd(); }}
-          style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 12, padding: "0 2px", lineHeight: 1 }}
-        >
-          +
-        </button>
-        <span style={{ fontSize: 8, color: "var(--text-muted)", transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
-          {"\u25B6"}
-        </span>
+        />
+        <Icon
+          icon={ChevronRight}
+          size={12}
+          style={{ color: "var(--text-secondary)", transform: expanded ? "rotate(90deg)" : "none", transition: "transform var(--dur-fast)" }}
+        />
       </div>
 
       {/* Event list — each row clickable to enter Event edit mode */}
@@ -340,20 +366,14 @@ function EventGroup({ color, label, entries, onAdd }: {
           {entries.map(({ event: ev, realIndex }, i) => (
             <div
               key={realIndex}
+              className="ui-hover"
               onClick={() => handleEventClick(realIndex)}
               style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "4px 8px 4px 14px",
-                fontSize: 10, color: "var(--text-secondary)",
+                display: "flex", alignItems: "center", gap: "var(--space-6)",
+                padding: "var(--space-4) var(--space-8) var(--space-4) var(--space-14)",
+                fontSize: "var(--fs-caption)", color: "var(--text-secondary)",
                 cursor: "pointer",
-                transition: "background 0.1s",
-                borderBottom: i < entries.length - 1 ? "1px solid rgba(42,42,53,0.5)" : "none",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = "var(--bg-active)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background = "transparent";
+                borderBottom: i < entries.length - 1 ? "var(--rule) solid var(--separator)" : "none",
               }}
             >
               {/* Colored dot matching the event kind */}
@@ -363,24 +383,34 @@ function EventGroup({ color, label, entries, onAdd }: {
               }} />
               {/* Beat range */}
               <span style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                color: "var(--text-muted)", minWidth: 52, fontSize: 10,
+                fontFamily: "var(--font-mono)",
+                color: "var(--text-secondary)", minWidth: 52,
               }}>
-                {formatBeat(ev.start_beat)}{"\u2013"}{formatBeat(ev.end_beat)}
+                {formatBeat(ev.start_beat)}–{formatBeat(ev.end_beat)}
               </span>
               {/* Value summary */}
               <span style={{
                 flex: 1, overflow: "hidden", textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                fontFamily: "'JetBrains Mono', monospace",
-              }}>
-                {getEventValueSummary(ev)}
+                fontFamily: "var(--font-mono)",
+                color: "var(--text-primary)",
+              }} aria-label={getEventValueSummary(ev)}>
+                {(() => {
+                  const range = getEventValueRange(ev);
+                  return range ? (
+                    <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+                      {range[0]}
+                      <Icon icon={ArrowRight} size={12} style={{ color: "var(--text-secondary)" }} />
+                      {range[1]}
+                    </span>
+                  ) : getEventValueSummary(ev);
+                })()}
               </span>
               {/* Easing chip */}
               <span style={{
-                fontSize: 8, padding: "1px 4px", borderRadius: 3,
-                background: "var(--bg-tertiary)", color: "var(--text-muted)",
-                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: "var(--fs-caption)", padding: "0 var(--space-4)", borderRadius: "var(--radius-xs)",
+                background: "var(--bg-tertiary)", color: "var(--text-secondary)",
+                fontFamily: "var(--font-mono)",
               }}>
                 {getEasingLabel(ev)}
               </span>
@@ -393,6 +423,26 @@ function EventGroup({ color, label, entries, onAdd }: {
 }
 
 // ---- Properties sub-tab ----
+
+const FIELD_INPUT: React.CSSProperties = { ...INPUT_STYLE, width: "100%" };
+const FIELD_NUMBER: React.CSSProperties = { ...FIELD_INPUT, fontFamily: "var(--font-mono)" };
+
+const FIELD_LABEL: React.CSSProperties = {
+  fontSize: "var(--fs-caption)", fontWeight: 500, color: "var(--text-secondary)", marginBottom: "var(--space-2)",
+};
+
+const FIELD_ROW: React.CSSProperties = {
+  display: "flex", flexDirection: "column", gap: "var(--space-2)",
+};
+
+const CHECK_ROW: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: "var(--space-6)", padding: "var(--space-2) 0",
+  fontSize: "var(--fs-caption)", color: "var(--text-secondary)", cursor: "pointer",
+};
+
+const FIELD_GROUP: React.CSSProperties = {
+  display: "flex", flexDirection: "column", gap: "var(--space-8)", padding: "0 var(--space-4)",
+};
 
 function PropertiesTab() {
   const selectedLineIndex = useSelectedLineIndex();
@@ -412,7 +462,7 @@ function PropertiesTab() {
 
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value || undefined;
-    editLine(selectedLineIndex, { _category: val as any });
+    editLine(selectedLineIndex, { _category: val as Line["_category"] });
   };
 
   const handleZOrderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -425,60 +475,41 @@ function PropertiesTab() {
     selectLine(null);
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "4px 6px", fontSize: 11, fontFamily: "inherit",
-    background: "var(--bg-primary)", border: "1px solid var(--border-color)",
-    borderRadius: 4, color: "var(--text-primary)", outline: "none",
-  };
-
-  const selectStyle: React.CSSProperties = {
-    ...inputStyle, appearance: "none" as const,
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: 9, fontWeight: 600, color: "var(--text-muted)", marginBottom: 2,
-    textTransform: "uppercase" as const, letterSpacing: "0.5px",
-  };
-
-  const fieldRowStyle: React.CSSProperties = {
-    display: "flex", flexDirection: "column", gap: 2,
-  };
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
       {/* Identity section */}
-      <SectionHeader label="IDENTITY" />
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 4px" }}>
-        <div style={fieldRowStyle}>
-          <label style={labelStyle}>Name</label>
-          <input style={inputStyle} value={line.name} onChange={handleNameChange} />
-        </div>
-        <div style={fieldRowStyle}>
-          <label style={labelStyle}>Category</label>
-          <select style={selectStyle} value={line._category ?? ""} onChange={handleCategoryChange}>
+      <SectionHeader label="Identity" />
+      <div style={FIELD_GROUP}>
+        <label style={FIELD_ROW}>
+          <span style={FIELD_LABEL}>Name</span>
+          <input style={FIELD_INPUT} value={line.name} onChange={handleNameChange} />
+        </label>
+        <label style={FIELD_ROW}>
+          <span style={FIELD_LABEL}>Category</span>
+          <select style={{ ...SELECT_STYLE, width: "100%" }} value={line._category ?? ""} onChange={handleCategoryChange}>
             {CATEGORY_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
-        </div>
-        <div style={fieldRowStyle}>
-          <label style={labelStyle}>Z-Order</label>
+        </label>
+        <label style={FIELD_ROW}>
+          <span style={FIELD_LABEL}>Z-order</span>
           <input
-            style={inputStyle}
+            style={FIELD_NUMBER}
             type="number"
             value={line.z_order ?? 0}
             onChange={handleZOrderChange}
           />
-        </div>
+        </label>
       </div>
 
       {/* Hierarchy section */}
-      <SectionHeader label="HIERARCHY" />
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 4px" }}>
-        <div style={fieldRowStyle}>
-          <label style={labelStyle}>Parent</label>
+      <SectionHeader label="Hierarchy" />
+      <div style={FIELD_GROUP}>
+        <label style={FIELD_ROW}>
+          <span style={FIELD_LABEL}>Parent</span>
           <input
-            style={inputStyle}
+            style={FIELD_NUMBER}
             type="number"
             placeholder="Line index (-1 = none)"
             value={line.father_index ?? -1}
@@ -487,11 +518,11 @@ function PropertiesTab() {
               if (!isNaN(val)) editLine(selectedLineIndex, { father_index: val });
             }}
           />
-        </div>
-        <div style={fieldRowStyle}>
-          <label style={labelStyle}>Group</label>
+        </label>
+        <label style={FIELD_ROW}>
+          <span style={FIELD_LABEL}>Group</span>
           <input
-            style={inputStyle}
+            style={FIELD_NUMBER}
             type="number"
             placeholder="Group index"
             value={line.group ?? 0}
@@ -500,45 +531,54 @@ function PropertiesTab() {
               if (!isNaN(val)) editLine(selectedLineIndex, { group: val });
             }}
           />
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
+        </label>
+        <label style={CHECK_ROW}>
           <input
             type="checkbox"
             checked={line.rotate_with_father !== false}
             onChange={(e) => editLine(selectedLineIndex, { rotate_with_father: e.target.checked })}
             style={{ accentColor: "var(--accent-primary)" }}
           />
-          <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>Inherit parent rotation</span>
-        </div>
+          Inherit parent rotation
+        </label>
       </div>
 
       {/* Texture section */}
-      <SectionHeader label="TEXTURE" />
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 4px" }}>
+      <SectionHeader label="Texture" />
+      <div style={FIELD_GROUP}>
         {line.texture ? (
-          <div style={{ fontSize: 10, color: "var(--text-secondary)", padding: "4px 6px", background: "var(--bg-primary)", borderRadius: 4, border: "1px solid var(--border-color)" }}>
+          <div style={{
+            fontSize: "var(--fs-caption)", color: "var(--text-primary)", padding: "var(--space-4) var(--space-8)",
+            background: "var(--bg-active)", borderRadius: "var(--radius-md)",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
             {line.texture}
           </div>
         ) : (
-          <div style={{ fontSize: 10, color: "var(--text-muted)", padding: "6px", textAlign: "center", border: "1px dashed var(--border-color)", borderRadius: 4 }}>
+          <div style={{
+            fontSize: "var(--fs-caption)", color: "var(--text-secondary)", padding: "var(--space-6)", textAlign: "center",
+            background: "var(--bg-active)", borderRadius: "var(--radius-md)",
+          }}>
             No texture assigned
           </div>
         )}
-        <div style={fieldRowStyle}>
-          <label style={labelStyle}>Anchor</label>
+        <div style={FIELD_ROW}>
+          <span style={FIELD_LABEL}>Anchor</span>
           {/* Anchor X/Y — can be 0 or negative for offset pivots */}
-          <div style={{ display: "flex", gap: 4 }}>
+          <div style={{ display: "flex", gap: "var(--space-4)" }}>
             <NumericInput
-              style={{ ...inputStyle, flex: 1 }}
+              style={{ ...FIELD_NUMBER, flex: 1 }}
               step="0.1"
               placeholder="X (0.5)"
+              title="Anchor X"
               value={line.anchor?.[0] ?? 0.5}
               onChange={(val) => editLine(selectedLineIndex, { anchor: [val, line.anchor?.[1] ?? 0.5] })}
             />
             <NumericInput
-              style={{ ...inputStyle, flex: 1 }}
+              style={{ ...FIELD_NUMBER, flex: 1 }}
               step="0.1"
               placeholder="Y (0.5)"
+              title="Anchor Y"
               value={line.anchor?.[1] ?? 0.5}
               onChange={(val) => editLine(selectedLineIndex, { anchor: [line.anchor?.[0] ?? 0.5, val] })}
             />
@@ -547,13 +587,13 @@ function PropertiesTab() {
       </div>
 
       {/* Advanced section */}
-      <SectionHeader label="ADVANCED" />
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 4px" }}>
-        <div style={fieldRowStyle}>
-          {/* BPM Factor — must be > 0, but allow intermediate typing (e.g. "0.5") */}
-          <label style={labelStyle}>BPM Factor</label>
+      <SectionHeader label="Advanced" />
+      <div style={FIELD_GROUP}>
+        <label style={FIELD_ROW}>
+          {/* BPM factor — must be > 0, but allow intermediate typing (e.g. "0.5") */}
+          <span style={FIELD_LABEL}>BPM factor</span>
           <NumericInput
-            style={inputStyle}
+            style={FIELD_NUMBER}
             step="0.1"
             value={line.bpm_factor ?? 1}
             onChange={(val) => {
@@ -561,32 +601,32 @@ function PropertiesTab() {
               if (val > 0) editLine(selectedLineIndex, { bpm_factor: val });
             }}
           />
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
+        </label>
+        <label style={CHECK_ROW}>
           <input
             type="checkbox"
             checked={line.is_cover !== false}
             onChange={(e) => editLine(selectedLineIndex, { is_cover: e.target.checked })}
             style={{ accentColor: "var(--accent-primary)" }}
           />
-          <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>Is cover (occlude passed notes)</span>
-        </div>
-        <div style={fieldRowStyle}>
-          <label style={labelStyle}>Attach UI</label>
+          Is cover (occlude passed notes)
+        </label>
+        <label style={FIELD_ROW}>
+          <span style={FIELD_LABEL}>Attach UI</span>
           <input
-            style={inputStyle}
+            style={FIELD_INPUT}
             placeholder="e.g. combo, score, bar"
             value={line.attach_ui ?? ""}
             onChange={(e) => editLine(selectedLineIndex, { attach_ui: e.target.value || undefined })}
           />
-        </div>
+        </label>
       </div>
 
       {/* Danger section */}
-      <SectionHeader label="DANGER ZONE" />
-      <div style={{ display: "flex", flexDirection: "column", gap: 1, padding: "0 4px" }}>
-        <ActionButton icon={"\u2398"} label="Duplicate line" onClick={() => duplicateLine(selectedLineIndex)} />
-        <ActionButton icon={"\u2716"} label="Delete line" danger onClick={handleDelete} />
+      <SectionHeader label="Danger zone" />
+      <div style={{ display: "flex", flexDirection: "column", gap: 1, padding: "0 var(--space-4)" }}>
+        <ActionButton icon={Copy} label="Duplicate line" onClick={() => duplicateLine(selectedLineIndex)} />
+        <ActionButton icon={Trash2} label="Delete line" danger onClick={handleDelete} />
       </div>
     </div>
   );
@@ -626,68 +666,68 @@ function PresetsTab() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
       {/* Search */}
       <input
-        placeholder="Search presets..."
+        placeholder="Search presets…"
+        aria-label="Search presets"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        style={{
-          width: "100%", padding: "5px 8px", fontSize: 11, fontFamily: "inherit",
-          background: "var(--bg-primary)", border: "1px solid var(--border-color)",
-          borderRadius: 5, color: "var(--text-primary)", outline: "none",
-        }}
+        style={{ ...INPUT_STYLE, width: "100%", height: "var(--control-lg)" }}
       />
 
-      {/* Preset list */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {sortedPresets.map((preset) => {
-          const isFav = favoritePresetIds.includes(preset.id);
-          return (
-            <div
-              key={preset.id}
-              onClick={() => handleApply(preset.id)}
-              style={{
-                display: "flex", flexDirection: "column", gap: 2,
-                padding: "6px 8px", borderRadius: 5, cursor: "pointer",
-                background: "var(--bg-primary)", border: "1px solid var(--border-color)",
-                transition: "border-color 0.12s",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = "var(--accent-primary)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = "var(--border-color)";
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)", flex: 1 }}>
-                  {preset.name}
-                </span>
-                <span
-                  onClick={(e) => { e.stopPropagation(); toggleFavoritePreset(preset.id); }}
-                  style={{ fontSize: 12, cursor: "pointer", opacity: isFav ? 1 : 0.3 }}
-                >
-                  {isFav ? "\u2605" : "\u2606"}
-                </span>
+      {/* Preset list — click a row to apply at the playhead */}
+      {sortedPresets.length > 0 && (
+        <Card>
+          {sortedPresets.map((preset, i) => {
+            const isFav = favoritePresetIds.includes(preset.id);
+            return (
+              <div
+                key={preset.id}
+                className="ui-hover"
+                onClick={() => handleApply(preset.id)}
+                style={{
+                  display: "flex", flexDirection: "column", gap: "var(--space-2)",
+                  padding: "var(--space-6) var(--space-6) var(--space-6) var(--space-10)", cursor: "pointer",
+                  borderBottom: i < sortedPresets.length - 1 ? "var(--rule) solid var(--separator)" : "none",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)" }}>
+                  <span style={{ fontSize: "var(--fs-control)", fontWeight: 600, color: "var(--text-primary)", flex: 1 }}>
+                    {preset.name}
+                  </span>
+                  <IconButton
+                    label={isFav ? "Remove from favorites" : "Add to favorites"}
+                    size="sm"
+                    active={isFav}
+                    className="ui-icon-btn--quiet"
+                    onClick={(e) => { e.stopPropagation(); toggleFavoritePreset(preset.id); }}
+                  >
+                    <Icon icon={Star} size={12} fill={isFav ? "currentColor" : "none"} />
+                  </IconButton>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+                  {preset.category && (
+                    <span style={{
+                      fontSize: "var(--fs-badge)", fontWeight: 600, lineHeight: "12px", padding: "1px var(--space-6)",
+                      borderRadius: "var(--radius-full)", background: "var(--bg-tertiary)", color: "var(--text-secondary)",
+                      flexShrink: 0,
+                    }}>
+                      {sentenceCase(preset.category)}
+                    </span>
+                  )}
+                  <span style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>
+                    {preset.description}
+                  </span>
+                </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "var(--bg-tertiary)", color: "var(--text-muted)", textTransform: "uppercase" }}>
-                  {preset.category}
-                </span>
-                <span style={{ fontSize: 9, color: "var(--text-muted)" }}>
-                  {preset.description}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </Card>
+      )}
 
       {filteredPresets.length === 0 && (
-        <div style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", padding: 12 }}>
-          No presets match your search.
-        </div>
+        <EmptyState>No presets match your search.</EmptyState>
       )}
     </div>
   );
@@ -695,57 +735,39 @@ function PresetsTab() {
 
 // ---- Hotkeys sub-tab ----
 
-const LINE_HOTKEY_SECTIONS = [
+// Only keys that are actually bound (useHotkeys / useClipboard); registry
+// actions show their current binding from Settings > Hotkeys.
+const LINE_HOTKEY_SECTIONS: HotkeySection[] = [
   {
-    title: "LINE EDITING",
+    title: "Lines",
     keys: [
-      { icon: "N", label: "New line", hotkey: "Ctrl+N" },
-      { icon: "D", label: "Duplicate", hotkey: "Ctrl+D" },
-      { icon: "\u232B", label: "Delete line", hotkey: "Ctrl+Del" },
-      { icon: "R", label: "Rename", hotkey: "F2" },
-      { icon: "\u2191", label: "Move up", hotkey: "Alt+\u2191" },
-      { icon: "\u2193", label: "Move down", hotkey: "Alt+\u2193" },
+      { label: "Delete line (nothing else selected)", hotkey: { action: "delete" } },
+      { label: "Toggle line drawer", hotkey: "L" },
+      { label: "Search lines", hotkey: "Ctrl+L" },
+      { label: "Create group", hotkey: "Ctrl+Shift+G" },
+      { label: "Paste to selected lines", hotkey: { action: "cross_line_paste" } },
     ],
   },
   {
-    title: "EVENT EDITING",
+    title: "Events",
     keys: [
-      { icon: "I", label: "Insert event", hotkey: "I" },
-      { icon: "S", label: "Split at beat", hotkey: "S" },
-      { icon: "M", label: "Merge events", hotkey: "M" },
-      { icon: "F", label: "Fill gaps", hotkey: "F" },
-      { icon: "P", label: "Apply preset", hotkey: "P" },
-      { icon: "L", label: "Lock value", hotkey: "L" },
+      { label: "Split selected at playhead", hotkey: { action: "split_event" } },
+      { label: "Toggle keyframe bar", hotkey: "K" },
+      { label: "Toggle curve editor", hotkey: "Shift+K" },
     ],
   },
   {
-    title: "NOTE PLACEMENT",
+    title: "Note placement",
     keys: [
-      { icon: "1", label: "Tap", hotkey: "1" },
-      { icon: "2", label: "Drag", hotkey: "2" },
-      { icon: "3", label: "Flick", hotkey: "3" },
-      { icon: "4", label: "Hold", hotkey: "4" },
-      { icon: "T", label: "Toggle above", hotkey: "T" },
-      { icon: "B", label: "Toggle below", hotkey: "B" },
+      { label: "Tap", hotkey: { action: "place_tap" } },
+      { label: "Drag", hotkey: { action: "place_drag" } },
+      { label: "Flick", hotkey: { action: "place_flick" } },
+      { label: "Hold", hotkey: { action: "place_hold" } },
+      { label: "Select all notes", hotkey: { action: "select_all" } },
     ],
   },
 ];
 
-// ---- Hotkeys sub-tab ----
-
 function LineHotkeys() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {LINE_HOTKEY_SECTIONS.map((section) => (
-        <React.Fragment key={section.title}>
-          <SectionHeader label={section.title} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 3 }}>
-            {section.keys.map((k) => (
-              <HotkeyButton key={k.label} icon={k.icon} label={k.label} hotkey={k.hotkey} />
-            ))}
-          </div>
-        </React.Fragment>
-      ))}
-    </div>
-  );
+  return <HotkeyList sections={LINE_HOTKEY_SECTIONS} />;
 }

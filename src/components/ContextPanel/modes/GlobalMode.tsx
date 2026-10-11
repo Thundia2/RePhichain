@@ -1,14 +1,23 @@
 // ============================================================
 // GlobalMode — Context panel content for global (no selection) mode
 //
-// Recent change: Added 6 missing feature sections — DISPLAY (spectrogram
-// toggle + opacity slider, note side filter), RECORD CHANNELS (X/Y/Rot
-// checkboxes), TIMELINE ZOOM (preset buttons + slider), LINE SORT &
-// FILTER (sort mode pills + category filter chips). Fixed X Snap
+// Sections: tools / playback / edit / file tool groups, quick actions,
+// section markers, select by range, X grid, beat grid, display
+// (spectrogram, onsets, note side filter), record channels, timeline
+// zoom, line sort & filter, and inline panels. Fixed X Snap
 // reactivity bug.
 // ============================================================
 
-import React, { useState } from "react";
+import type React from "react";
+import { useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  MousePointer2, Eraser, Play, Square, Rewind, SkipBack, SkipForward, Circle,
+  Scissors, Copy, ClipboardPaste, Undo2, Redo2, SquareDashedMousePointer,
+  FolderOpen, Save, Upload, FileInput, Settings, CircleHelp,
+  Music, Folder, Image, CircleCheck, Star, CircleDashed,
+  Plus, Rows3, MicVocal, Spline, BookmarkPlus, ChevronLeft, LocateFixed,
+} from "lucide-react";
 import { useEditorStore } from "../../../stores/editorStore";
 import { getSelectedLineIndex, setNoteSelectionByIndex, useSelectedLineIndex } from "../../../stores/selection";
 import { useChartStore } from "../../../stores/chartStore";
@@ -25,7 +34,8 @@ import { useSettingsStore } from "../../../stores/settingsStore";
 import { useToastStore } from "../../../stores/toastStore";
 import { selectByRange } from "../../../utils/batchNoteOps";
 import { getPlayheadBeat } from "../../../utils/playhead";
-import type { EditorTool } from "../../../types/editor";
+import type { EditorTool, LineSortMode, NoteSideFilter } from "../../../types/editor";
+import type { NoteKind } from "../../../types/chart";
 
 // Panel components rendered inline when a panel button is clicked
 import { ChartSettings } from "../../ChartSettings/ChartSettings";
@@ -35,44 +45,79 @@ import { TexturePanel } from "../../TexturePanel/TexturePanel";
 import { ValidationPanel } from "../../Validation/ValidationPanel";
 import { PresetPanel } from "../../PresetPanel/PresetPanel";
 
+// ---- Design system primitives ----
+import { Icon } from "../../common/Icon";
+import { Tooltip } from "../../common/Tooltip";
+import { IconButton } from "../../common/IconButton";
+import { NoteGlyph } from "../../common/NoteGlyph";
+import { ToolGroup } from "../../common/ToolGroup";
+import { Button } from "../../common/Button";
+import { SegmentedControl } from "../../common/SegmentedControl";
+import { Badge, Pill, Toggle, INPUT_STYLE } from "../../common/UIKit";
+
 // ---- Shared sub-components (extracted to shared/) ----
 import { HotkeyButton } from "../shared/HotkeyButton";
+import { HotkeyList, type HotkeySection } from "../shared/HotkeyList";
+import type { ShortcutRef } from "../../../hooks/useHotkeyLabel";
 import { SectionHeader } from "../shared/SectionHeader";
 import { ActionButton } from "../shared/ActionButton";
 import { ContextBadge } from "../shared/ContextBadge";
 import { XGridSection } from "../shared/XGridSection";
 
-// ---- Tool grid data ----
+// ---- Shared styles ----
 
-const TOOL_BUTTONS: Array<{ icon: string; label: string; hotkey: string; tool: EditorTool }> = [
-  { icon: "V", label: "Select", hotkey: "V", tool: "select" },
-  { icon: "E", label: "Eraser", hotkey: "E", tool: "eraser" },
-  { icon: "1", label: "Tap", hotkey: "1", tool: "place_tap" },
-  { icon: "2", label: "Drag", hotkey: "2", tool: "place_drag" },
-  { icon: "3", label: "Flick", hotkey: "3", tool: "place_flick" },
-  { icon: "4", label: "Hold", hotkey: "4", tool: "place_hold" },
+/** Caption label in front of a control row. */
+const CAPTION: React.CSSProperties = {
+  fontSize: "var(--fs-caption)",
+  color: "var(--text-secondary)",
+};
+
+/** Mono numeric readout after a slider. */
+const READOUT: React.CSSProperties = {
+  fontSize: "var(--fs-caption)",
+  fontFamily: "var(--font-mono)",
+  color: "var(--text-secondary)",
+  minWidth: 32,
+  textAlign: "right",
+};
+
+const SLIDER: React.CSSProperties = { flex: 1, minWidth: 0, accentColor: "var(--accent-primary)" };
+
+const ROW: React.CSSProperties = { display: "flex", alignItems: "center", gap: "var(--space-6)" };
+
+// ---- Tool group data ----
+
+// Selection tools use a Lucide icon; note tools show their NoteGlyph.
+// Hotkeys are registry actions, so they show the binding from Settings > Hotkeys.
+const TOOL_BUTTONS: Array<{ label: string; hotkey: ShortcutRef; tool: EditorTool; icon?: LucideIcon; note?: NoteKind }> = [
+  { icon: MousePointer2, label: "Select", hotkey: { action: "select_tool" }, tool: "select" },
+  { icon: Eraser, label: "Eraser", hotkey: { action: "eraser_tool" }, tool: "eraser" },
+  { note: "tap", label: "Tap", hotkey: { action: "place_tap" }, tool: "place_tap" },
+  { note: "drag", label: "Drag", hotkey: { action: "place_drag" }, tool: "place_drag" },
+  { note: "flick", label: "Flick", hotkey: { action: "place_flick" }, tool: "place_flick" },
+  { note: "hold", label: "Hold", hotkey: { action: "place_hold" }, tool: "place_hold" },
 ];
 
-// Button arrays with action callbacks and corrected hotkey labels
-// Data errors fixed: Record="Alt+R" (not "R"), Redo="Ctrl+Y" (registered below),
-// Prev/Next use bookmark nav (not loop [ / ]), Export has no hotkey (Ctrl+E was fictitious)
+// Button arrays with action callbacks. Every hotkey shown is really bound:
+// `{ action }` entries follow Settings > Hotkeys, strings are fixed bindings,
+// "" means no shortcut.
 
-interface ActionButtonDef { icon: string; label: string; hotkey: string; action: () => void }
+interface ActionButtonDef { icon: LucideIcon; label: string; hotkey: ShortcutRef; action: () => void }
 
 const PLAYBACK_BUTTONS: ActionButtonDef[] = [
-  { icon: "\u25B6", label: "Play", hotkey: "Space", action: () => useAudioStore.getState().togglePlayPause() },
-  { icon: "\u23F9", label: "Stop", hotkey: "", action: () => audioEngine.stop() },
-  { icon: "\u23EA", label: "Rewind", hotkey: "", action: () => useAudioStore.getState().seek(0) },
-  { icon: "\u23EE", label: "Prev", hotkey: "C+S+Scr\u2193", action: () => seekToPrevBookmark() },
-  { icon: "\u23ED", label: "Next", hotkey: "C+S+Scr\u2191", action: () => seekToNextBookmark() },
-  { icon: "\u23FA", label: "Record", hotkey: "Alt+R", action: () => useEditorStore.getState().toggleRecordMode() },
+  { icon: Play, label: "Play", hotkey: { action: "toggle_playback" }, action: () => useAudioStore.getState().togglePlayPause() },
+  { icon: Square, label: "Stop", hotkey: "", action: () => audioEngine.stop() },
+  { icon: Rewind, label: "Rewind to start", hotkey: "", action: () => useAudioStore.getState().seek(0) },
+  { icon: SkipBack, label: "Previous marker", hotkey: { action: "prev_marker" }, action: () => seekToPrevBookmark() },
+  { icon: SkipForward, label: "Next marker", hotkey: { action: "next_marker" }, action: () => seekToNextBookmark() },
+  { icon: Circle, label: "Record", hotkey: "Alt+R", action: () => useEditorStore.getState().toggleRecordMode() },
 ];
 
 const EDIT_BUTTONS: ActionButtonDef[] = [
-  { icon: "\u2702", label: "Cut", hotkey: "Ctrl+X", action: () => performCut() },
-  { icon: "\u2398", label: "Copy", hotkey: "Ctrl+C", action: () => performCopy() },
-  { icon: "\u2399", label: "Paste", hotkey: "Ctrl+V", action: () => performPaste() },
-  { icon: "\u21B6", label: "Undo", hotkey: "Ctrl+Z", action: () => {
+  { icon: Scissors, label: "Cut", hotkey: "Ctrl+X", action: () => performCut() },
+  { icon: Copy, label: "Copy", hotkey: "Ctrl+C", action: () => performCopy() },
+  { icon: ClipboardPaste, label: "Paste", hotkey: "Ctrl+V", action: () => performPaste() },
+  { icon: Undo2, label: "Undo", hotkey: { action: "undo" }, action: () => {
     // Interleaved undo: compare sequence numbers to decide which store to undo
     const cs = useChartStore.getState();
     const bs = useBookmarkStore.getState();
@@ -80,14 +125,14 @@ const EDIT_BUTTONS: ActionButtonDef[] = [
     const bmTopSeq = bs._pastSeqs.length > 0 ? bs._pastSeqs[bs._pastSeqs.length - 1] : 0;
     if (bmTopSeq > chartTopSeq && bs.canUndo()) { bs.undo(); } else { cs.undo(); }
   }},
-  { icon: "\u21B7", label: "Redo", hotkey: "Ctrl+Y", action: () => {
+  { icon: Redo2, label: "Redo", hotkey: { action: "redo" }, action: () => {
     const cs = useChartStore.getState();
     const bs = useBookmarkStore.getState();
     const chartRedoSeq = cs._futureSeqs.length > 0 ? cs._futureSeqs[cs._futureSeqs.length - 1] : 0;
     const bmRedoSeq = bs._futureSeqs.length > 0 ? bs._futureSeqs[bs._futureSeqs.length - 1] : 0;
     if (bmRedoSeq > chartRedoSeq && bs.canRedo()) { bs.redo(); } else { cs.redo(); }
   }},
-  { icon: "A", label: "Sel All", hotkey: "Ctrl+A", action: () => {
+  { icon: SquareDashedMousePointer, label: "Select all notes", hotkey: { action: "select_all" }, action: () => {
     const lineIdx = getSelectedLineIndex();
     if (lineIdx === null) return;
     const notes = useChartStore.getState().chart.lines[lineIdx]?.notes;
@@ -96,8 +141,8 @@ const EDIT_BUTTONS: ActionButtonDef[] = [
 ];
 
 const FILE_BUTTONS: ActionButtonDef[] = [
-  { icon: "\uD83D\uDCC2", label: "Open", hotkey: "Ctrl+O", action: () => triggerImportChart() },
-  { icon: "\uD83D\uDCBE", label: "Save", hotkey: "Ctrl+S", action: async () => {
+  { icon: FolderOpen, label: "Open", hotkey: "Ctrl+O", action: () => triggerImportChart() },
+  { icon: Save, label: "Save", hotkey: { action: "save" }, action: async () => {
     const cs = useChartStore.getState();
     if (!cs.projectPath) return;
     const token = cs._dirtySeq; // F2: capture before the async write (see markCleanIf)
@@ -108,10 +153,10 @@ const FILE_BUTTONS: ActionButtonDef[] = [
       console.error("Save failed:", e);
     }
   }},
-  { icon: "\uD83D\uDCE4", label: "Export", hotkey: "\u2014", action: () => useDialogStore.getState().openDialog("selective-export") },
-  { icon: "\uD83D\uDCC4", label: "Import", hotkey: "Ctrl+O", action: () => triggerImportChart() },
-  { icon: "\u2699", label: "Settings", hotkey: "", action: () => useDialogStore.getState().openDialog("settings") },
-  { icon: "?", label: "Help", hotkey: "F1", action: () => {
+  { icon: Upload, label: "Export…", hotkey: "", action: () => useDialogStore.getState().openDialog("selective-export") },
+  { icon: FileInput, label: "Import", hotkey: "Ctrl+O", action: () => triggerImportChart() },
+  { icon: Settings, label: "Settings…", hotkey: "", action: () => useDialogStore.getState().openDialog("settings") },
+  { icon: CircleHelp, label: "Help", hotkey: "", action: () => {
     // Switch to hotkeys tab within the context panel
     useContextPanelStore.getState().setActiveTab("global", "hotkeys");
   }},
@@ -120,25 +165,52 @@ const FILE_BUTTONS: ActionButtonDef[] = [
 // ---- Panel list data ----
 
 // Panel items — panelId maps to INLINE_PANELS keys for inline rendering
-const PANEL_ITEMS = [
-  { icon: "\u2699", label: "Chart settings", panelId: "chart-settings" },
-  { icon: "\uD83C\uDFB5", label: "BPM list", panelId: "bpm-list" },
-  { icon: "\uD83D\uDCC1", label: "Groups", panelId: "groups" },
-  { icon: "\uD83D\uDDBC", label: "Textures", panelId: "textures" },
-  { icon: "\u2713", label: "Validation", panelId: "validation" },
-  { icon: "\u2B50", label: "Presets", panelId: "presets" },
+const PANEL_ITEMS: Array<{ icon: LucideIcon; label: string; panelId: string }> = [
+  { icon: Settings, label: "Chart settings", panelId: "chart-settings" },
+  { icon: Music, label: "BPM list", panelId: "bpm-list" },
+  { icon: Folder, label: "Groups", panelId: "groups" },
+  { icon: Image, label: "Textures", panelId: "textures" },
+  { icon: CircleCheck, label: "Validation", panelId: "validation" },
+  { icon: Star, label: "Presets", panelId: "presets" },
 ];
 
 // ---- Inline panel registry ----
 // Maps panel IDs to their React component for inline rendering in the context panel
 const INLINE_PANELS: Record<string, { label: string; component: React.ComponentType }> = {
-  "chart-settings": { label: "Chart Settings", component: ChartSettings },
-  "bpm-list": { label: "BPM List", component: BpmListPanel },
+  "chart-settings": { label: "Chart settings", component: ChartSettings },
+  "bpm-list": { label: "BPM list", component: BpmListPanel },
   "groups": { label: "Groups", component: GroupManager },
   "textures": { label: "Textures", component: TexturePanel },
   "validation": { label: "Validation", component: ValidationPanel },
   "presets": { label: "Presets", component: PresetPanel },
 };
+
+const SIDE_OPTIONS: Array<{ value: NoteSideFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "above", label: "Above" },
+  { value: "below", label: "Below" },
+];
+
+const ZOOM_PRESETS = [0.5, 1, 2, 4] as const;
+
+const SORT_OPTIONS: Array<{ value: LineSortMode; label: string; title: string }> = [
+  { value: "chart_order", label: "Chart", title: "Chart order" },
+  { value: "first_appearance", label: "Appear", title: "First appearance" },
+  { value: "active_first", label: "Active", title: "Active first" },
+];
+
+const LINE_CATEGORIES = [
+  { value: "gameplay", label: "Gameplay" },
+  { value: "visual", label: "Visual" },
+  { value: "text", label: "Text" },
+  { value: "helper", label: "Helper" },
+] as const;
+
+const RECORD_CHANNELS = [
+  { value: "x", label: "X", color: "var(--event-x)" },
+  { value: "y", label: "Y", color: "var(--event-y)" },
+  { value: "rotation", label: "Rotation", color: "var(--event-rotation)" },
+] as const;
 
 // ---- Main component ----
 
@@ -157,7 +229,7 @@ export interface GlobalModeProps {
 }
 
 export function GlobalMode({ activeTab, ...actionProps }: GlobalModeProps) {
-  if (activeTab === "hotkeys") return <GlobalHotkeys />;
+  if (activeTab === "hotkeys") return <HotkeyList sections={GLOBAL_HOTKEY_SECTIONS} />;
   // Default: "actions" tab
   return <GlobalActions {...actionProps} />;
 }
@@ -203,7 +275,7 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
   const lineCount = lines.length;
   const noteCount = lines.reduce((acc, line) => acc + line.notes.length, 0);
 
-  // If an inline panel is active, render it with a "← Back" header
+  // If an inline panel is active, render it with a "Back to actions" header
   if (inlinePanel && INLINE_PANELS[inlinePanel]) {
     const panelDef = INLINE_PANELS[inlinePanel];
     const PanelComponent = panelDef.component;
@@ -211,41 +283,39 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         {/* Back button header */}
         <button
+          type="button"
           onClick={() => setInlinePanel(null)}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "6px 8px", marginBottom: 6,
-            background: "none", border: "none", borderRadius: 5,
-            color: "var(--accent-primary)", cursor: "pointer",
-            fontSize: 11, fontFamily: "inherit", textAlign: "left",
-          }}
+          className="ui-btn ui-btn--ghost ui-btn--row"
+          style={{ marginBottom: "var(--space-6)" }}
         >
-          <span style={{ fontSize: 12 }}>{"\u2190"}</span>
+          <Icon icon={ChevronLeft} />
           <span>Back to actions</span>
-          <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-muted)" }}>{panelDef.label}</span>
+          <span style={{ marginLeft: "auto", fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>{panelDef.label}</span>
         </button>
         {/* Inline panel content — rendered in a scrollable container */}
-        <div style={{ flex: 1, overflow: "auto", borderTop: "1px solid var(--border-color)", paddingTop: 4 }}>
+        <div style={{ flex: 1, overflow: "auto", borderTop: "var(--rule) solid var(--border-color)", paddingTop: "var(--space-4)" }}>
           <PanelComponent />
         </div>
       </div>
     );
   }
 
+  const zoomPreset = ZOOM_PRESETS.find((z) => Math.abs(timelineZoom - z) < 0.05) ?? null;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-10)" }}>
       {/* Context badge */}
       <ContextBadge
-        icon={<span style={{ fontSize: 12 }}>{"\u25CE"}</span>}
+        icon={CircleDashed}
         label="No selection"
-        detail={`${lineCount} lines, ${noteCount} notes`}
+        detail={`${lineCount} lines · ${noteCount} notes`}
         variant="global"
       />
 
-      {/* Tools section */}
-      <SectionHeader label="TOOLS" />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 3 }}>
-        {TOOL_BUTTONS.map((btn) => (
+      {/* Tools section — note tools show their own glyph */}
+      <SectionHeader label="Tools" />
+      <ToolGroup label="Tools">
+        {TOOL_BUTTONS.map((btn) => btn.icon ? (
           <HotkeyButton
             key={btn.tool}
             icon={btn.icon}
@@ -254,12 +324,22 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
             active={activeTool === btn.tool}
             onClick={() => setTool(btn.tool)}
           />
+        ) : (
+          <IconButton
+            key={btn.tool}
+            label={btn.label}
+            shortcut={btn.hotkey}
+            active={activeTool === btn.tool}
+            onClick={() => setTool(btn.tool)}
+          >
+            <NoteGlyph kind={btn.note!} />
+          </IconButton>
         ))}
-      </div>
+      </ToolGroup>
 
-      {/* Playback section — all buttons now have onClick handlers */}
-      <SectionHeader label="PLAYBACK" />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 3 }}>
+      {/* Playback section */}
+      <SectionHeader label="Playback" />
+      <ToolGroup label="Playback">
         {PLAYBACK_BUTTONS.map((btn) => (
           <HotkeyButton
             key={btn.label}
@@ -269,11 +349,11 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
             onClick={btn.action}
           />
         ))}
-      </div>
+      </ToolGroup>
 
-      {/* Edit section — all buttons now have onClick handlers */}
-      <SectionHeader label="EDIT" />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 3 }}>
+      {/* Edit section */}
+      <SectionHeader label="Edit" />
+      <ToolGroup label="Edit">
         {EDIT_BUTTONS.map((btn) => (
           <HotkeyButton
             key={btn.label}
@@ -283,11 +363,11 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
             onClick={btn.action}
           />
         ))}
-      </div>
+      </ToolGroup>
 
-      {/* File section — all buttons now have onClick handlers */}
-      <SectionHeader label="FILE" />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 3 }}>
+      {/* File section */}
+      <SectionHeader label="File" />
+      <ToolGroup label="File">
         {FILE_BUTTONS.map((btn) => (
           <HotkeyButton
             key={btn.label}
@@ -297,359 +377,317 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
             onClick={btn.action}
           />
         ))}
-      </div>
+      </ToolGroup>
 
       {/* Quick actions — wired to open their respective dialogs */}
-      <SectionHeader label="QUICK ACTIONS" />
+      <SectionHeader label="Quick actions" />
       <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <ActionButton icon="+" label="Add new line" onClick={() => addLine()} />
-        <ActionButton icon={"\u2630"} label="Batch create lines..." onClick={props.onShowBatchLine} />
-        <ActionButton icon={"\u266A"} label="Lyrics sync..." onClick={props.onShowLyricsSync} />
-        <ActionButton icon={"\u223F"} label="Parametric trajectory..." onClick={props.onShowParametric} />
+        <ActionButton icon={Plus} label="Add new line" onClick={() => addLine()} />
+        <ActionButton icon={Rows3} label="Batch create lines…" onClick={props.onShowBatchLine} />
+        <ActionButton icon={MicVocal} label="Lyrics sync…" onClick={props.onShowLyricsSync} />
+        <ActionButton icon={Spline} label="Parametric trajectory…" onClick={props.onShowParametric} />
       </div>
 
       {/* Section markers — add, navigate prev/next */}
-      <SectionHeader label="SECTION MARKERS" count={bookmarkCount} />
+      <SectionHeader label="Section markers" count={bookmarkCount} />
       <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <ActionButton icon="+" label={`Add Marker (Ctrl+B)`} onClick={() => addMarkerAtCurrentBeat()} />
-        <ActionButton icon={"\u23EE"} label={`Previous (Ctrl+Shift+Scroll\u2193)`} onClick={() => seekToPrevBookmark()} />
-        <ActionButton icon={"\u23ED"} label={`Next (Ctrl+Shift+Scroll\u2191)`} onClick={() => seekToNextBookmark()} />
+        <ActionButton icon={BookmarkPlus} label="Add marker" shortcut={{ action: "add_section_marker" }} onClick={() => addMarkerAtCurrentBeat()} />
+        <ActionButton icon={SkipBack} label="Previous marker" shortcut={{ action: "prev_marker" }} onClick={() => seekToPrevBookmark()} />
+        <ActionButton icon={SkipForward} label="Next marker" shortcut={{ action: "next_marker" }} onClick={() => seekToNextBookmark()} />
       </div>
 
-      {/* ---- SELECT BY RANGE — beat/X range note selection ---- */}
-      <SectionHeader label="SELECT BY RANGE" />
+      {/* ---- Select by range — beat/X range note selection ---- */}
+      <SectionHeader label="Select by range" />
       <SelectByRangeSection />
 
-      {/* X Grid — shared toggle, presets, and status indicator */}
-      <SectionHeader label="X GRID" />
+      {/* X grid — shared toggle, presets, and status indicator */}
+      <SectionHeader label="X grid" />
       <XGridSection />
 
-      {/* ---- BEAT GRID — perpendicular beat grid overlay ---- */}
-      <SectionHeader label="BEAT GRID" />
-      <div style={{ display: "flex", gap: 4, marginBottom: 8, alignItems: "center" }}>
-        <button onClick={() => {
-          const ss = useSettingsStore.getState();
-          ss.updateSettings({ showBeatGrid: !ss.showBeatGrid });
-        }} style={{
-          flex: 1, fontSize: 9, padding: "4px 0", borderRadius: 3,
-          border: "none", cursor: "pointer", fontFamily: "inherit",
-          background: showBeatGrid ? "#6c8aff18" : "var(--bg-active)",
-          color: showBeatGrid ? "#6c8aff" : "var(--text-muted)",
-          fontWeight: showBeatGrid ? 700 : 400,
-        }}>
-          {showBeatGrid ? "Grid ON" : "Grid OFF"}
-        </button>
+      {/* ---- Beat grid — perpendicular beat grid overlay ---- */}
+      <SectionHeader label="Beat grid" />
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", marginBottom: "var(--space-8)" }}>
+        <div style={ROW}>
+          <span style={{ ...CAPTION, flex: 1 }}>Show beat grid</span>
+          <Toggle
+            checked={showBeatGrid}
+            label="Show beat grid"
+            onChange={() => {
+              const ss = useSettingsStore.getState();
+              ss.updateSettings({ showBeatGrid: !ss.showBeatGrid });
+            }}
+          />
+        </div>
         {showBeatGrid && (
-          <>
-            <span style={{ fontSize: 8, color: "var(--text-muted)" }}>Ahead:</span>
-            {([2, 4, 8] as const).map((n) => (
-              <button key={n} onClick={() => {
-                useSettingsStore.getState().updateSettings({ beatGridBeatsAhead: n });
-              }} style={{
-                width: 28, fontSize: 9, padding: "4px 0", borderRadius: 3,
-                border: "none", cursor: "pointer", fontFamily: "inherit",
-                background: beatGridBeatsAhead === n ? "#6c8aff" : "var(--bg-active)",
-                color: beatGridBeatsAhead === n ? "#fff" : "var(--text-muted)",
-              }}>
-                {n}
-              </button>
-            ))}
-          </>
+          <div style={ROW}>
+            <span style={{ ...CAPTION, flex: 1 }}>Beats ahead</span>
+            <SegmentedControl
+              label="Beats ahead"
+              tone="accent"
+              size="sm"
+              options={([2, 4, 8] as const).map((n) => ({ value: n, label: String(n) }))}
+              value={beatGridBeatsAhead}
+              onChange={(n) => useSettingsStore.getState().updateSettings({ beatGridBeatsAhead: n })}
+            />
+          </div>
         )}
       </div>
 
-      {/* ---- DISPLAY — spectrogram and note side filter ---- */}
-      <SectionHeader label="DISPLAY" />
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+      {/* ---- Display — spectrogram and note side filter ---- */}
+      <SectionHeader label="Display" />
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", marginBottom: "var(--space-8)" }}>
         {/* Spectrogram toggle + opacity */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <button
-            onClick={() => useEditorStore.getState().setShowSpectrogram(!showSpectrogram)}
-            style={{
-              fontSize: 9, padding: "4px 8px", borderRadius: 3,
-              border: "none", cursor: "pointer", fontFamily: "inherit",
-              background: showSpectrogram ? "#22d3ee18" : "var(--bg-active)",
-              color: showSpectrogram ? "#22d3ee" : "var(--text-muted)",
-              fontWeight: showSpectrogram ? 700 : 400,
-            }}
-          >
-            {showSpectrogram ? "Spectrogram ON" : "Spectrogram OFF"}
-          </button>
-          {showSpectrogram && (
+        <div style={ROW}>
+          <span style={{ ...CAPTION, minWidth: 72 }}>Spectrogram</span>
+          {showSpectrogram ? (
             <input
               type="range" min="0" max="1" step="0.05"
+              aria-label="Spectrogram opacity"
               value={spectrogramOpacity}
               onChange={(e) => useEditorStore.getState().setSpectrogramOpacity(parseFloat(e.target.value))}
-              style={{ flex: 1, height: 4, accentColor: "#22d3ee" }}
+              style={SLIDER}
             />
-          )}
+          ) : <span style={{ flex: 1 }} />}
+          <Toggle
+            checked={showSpectrogram}
+            label="Show spectrogram"
+            onChange={() => useEditorStore.getState().setShowSpectrogram(!showSpectrogram)}
+          />
         </div>
-        {/* ---- Onset Detection toggle + density / filter sliders ----
+        {/* ---- Onset detection toggle + density / filter sliders ----
              Phase A rewrite: the single sensitivity slider is replaced by four
              sliders that directly control the peak-picker. Target density is
              the main knob; the other three are advanced tuning.
         */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <button
-            onClick={() => {
-              useSettingsStore.getState().updateSettings({
-                onsetDetectionEnabled: !onsetEnabled,
-              });
-            }}
-            style={{
-              fontSize: 9, padding: "4px 8px", borderRadius: 3,
-              border: "none", cursor: "pointer", fontFamily: "inherit",
-              background: onsetEnabled ? "#ffa83218" : "var(--bg-active)",
-              color: onsetEnabled ? "#ffa832" : "var(--text-muted)",
-              fontWeight: onsetEnabled ? 700 : 400,
-            }}
-          >
-            {onsetAnalyzing ? "Analyzing\u2026" : onsetEnabled ? "Onsets ON" : "Onsets OFF"}
-          </button>
-          {onsetEnabled && (
-            <input
-              type="range" min="0.5" max="8" step="0.1"
-              value={effectiveOnsetDensity}
-              onChange={(e) => {
-                // Phase B: persist the density per-chart via the chartStore
-                // (undo-able, serialized to chart.json). The global setting
-                // stays as the fallback for charts that haven't overridden it.
-                useChartStore.getState().setOnsetTargetDensity(parseFloat(e.target.value));
-              }}
-              style={{ flex: 1, height: 4, accentColor: "#ffa832" }}
-              title={
+        <div style={ROW}>
+          <span style={{ ...CAPTION, minWidth: 72 }}>
+            {onsetAnalyzing ? "Analyzing…" : "Onsets"}
+          </span>
+          {onsetEnabled ? (
+            <Tooltip
+              content={
                 `Target onset density: ${effectiveOnsetDensity.toFixed(1)}/sec. ` +
                 (chartOnsetTargetDensity !== undefined
                   ? "Saved to this chart."
                   : `Using global default (${onsetTargetDensity.toFixed(1)}/sec).`)
               }
-            />
-          )}
+            >
+              <input
+                type="range" min="0.5" max="8" step="0.1"
+                aria-label="Target onset density"
+                value={effectiveOnsetDensity}
+                onChange={(e) => {
+                  // Phase B: persist the density per-chart via the chartStore
+                  // (undo-able, serialized to chart.json). The global setting
+                  // stays as the fallback for charts that haven't overridden it.
+                  useChartStore.getState().setOnsetTargetDensity(parseFloat(e.target.value));
+                }}
+                style={SLIDER}
+              />
+            </Tooltip>
+          ) : <span style={{ flex: 1 }} />}
           {onsetEnabled && (
-            <span style={{ fontSize: 8, color: "var(--text-muted)", minWidth: 32 }}>
+            <span style={READOUT}>
               {effectiveOnsetDensity.toFixed(1)}/s
             </span>
           )}
+          <Toggle
+            checked={onsetEnabled}
+            label="Onset detection"
+            onChange={() => {
+              useSettingsStore.getState().updateSettings({
+                onsetDetectionEnabled: !onsetEnabled,
+              });
+            }}
+          />
         </div>
         {onsetEnabled && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 8, color: "var(--text-muted)", minWidth: 40 }}>Min str</span>
-            <input
-              type="range" min="0" max="1" step="0.01"
-              value={onsetMinDisplayStrength}
-              onChange={(e) => useSettingsStore.getState().updateSettings({
-                onsetMinDisplayStrength: parseFloat(e.target.value),
-              })}
-              style={{ flex: 1, height: 4, accentColor: "#ffa832" }}
-              title="Visual filter: hide markers with salience below this. Updates instantly, no re-analysis."
-            />
-            <span style={{ fontSize: 8, color: "var(--text-muted)", minWidth: 28 }}>
+          <div style={ROW}>
+            <span style={{ ...CAPTION, minWidth: 72 }}>Min strength</span>
+            <Tooltip content="Visual filter: hide markers with salience below this. Updates instantly, no re-analysis.">
+              <input
+                type="range" min="0" max="1" step="0.01"
+                aria-label="Minimum onset strength"
+                value={onsetMinDisplayStrength}
+                onChange={(e) => useSettingsStore.getState().updateSettings({
+                  onsetMinDisplayStrength: parseFloat(e.target.value),
+                })}
+                style={SLIDER}
+              />
+            </Tooltip>
+            <span style={READOUT}>
               {onsetMinDisplayStrength.toFixed(2)}
             </span>
           </div>
         )}
         {onsetEnabled && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 8, color: "var(--text-muted)", minWidth: 40 }}>Abs floor</span>
-            <input
-              type="range" min="0" max="1" step="0.01"
-              value={onsetAbsFloor}
-              onChange={(e) => useSettingsStore.getState().updateSettings({
-                onsetAbsFloor: parseFloat(e.target.value),
-              })}
-              style={{ flex: 1, height: 4, accentColor: "#ffa832" }}
-              title="Absolute threshold floor. A peak must exceed this (and the rolling median + delta)."
-            />
-            <span style={{ fontSize: 8, color: "var(--text-muted)", minWidth: 28 }}>
+          <div style={ROW}>
+            <span style={{ ...CAPTION, minWidth: 72 }}>Abs floor</span>
+            <Tooltip content="Absolute threshold floor. A peak must exceed this (and the rolling median + delta).">
+              <input
+                type="range" min="0" max="1" step="0.01"
+                aria-label="Absolute threshold floor"
+                value={onsetAbsFloor}
+                onChange={(e) => useSettingsStore.getState().updateSettings({
+                  onsetAbsFloor: parseFloat(e.target.value),
+                })}
+                style={SLIDER}
+              />
+            </Tooltip>
+            <span style={READOUT}>
               {onsetAbsFloor.toFixed(2)}
             </span>
           </div>
         )}
         {onsetEnabled && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 8, color: "var(--text-muted)", minWidth: 40 }}>Adapt \u0394</span>
-            <input
-              type="range" min="0" max="0.2" step="0.005"
-              value={onsetAdaptiveDelta}
-              onChange={(e) => useSettingsStore.getState().updateSettings({
-                onsetAdaptiveDelta: parseFloat(e.target.value),
-              })}
-              style={{ flex: 1, height: 4, accentColor: "#ffa832" }}
-              title="Delta added to the 1-second rolling median to form the adaptive threshold."
-            />
-            <span style={{ fontSize: 8, color: "var(--text-muted)", minWidth: 28 }}>
+          <div style={ROW}>
+            <span style={{ ...CAPTION, minWidth: 72 }}>Adaptive Δ</span>
+            <Tooltip content="Delta added to the 1-second rolling median to form the adaptive threshold.">
+              <input
+                type="range" min="0" max="0.2" step="0.005"
+                aria-label="Adaptive threshold delta"
+                value={onsetAdaptiveDelta}
+                onChange={(e) => useSettingsStore.getState().updateSettings({
+                  onsetAdaptiveDelta: parseFloat(e.target.value),
+                })}
+                style={SLIDER}
+              />
+            </Tooltip>
+            <span style={READOUT}>
               {onsetAdaptiveDelta.toFixed(3)}
             </span>
           </div>
         )}
         {onsetEnabled && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 8, color: "var(--text-muted)", minWidth: 40 }}>Opacity</span>
+          <div style={ROW}>
+            <span style={{ ...CAPTION, minWidth: 72 }}>Opacity</span>
             <input
               type="range" min="0" max="1" step="0.05"
+              aria-label="Onset marker opacity"
               value={onsetOpacity}
               onChange={(e) => useSettingsStore.getState().updateSettings({
                 onsetOpacity: parseFloat(e.target.value),
               })}
-              style={{ flex: 1, height: 4, accentColor: "#ffa832" }}
+              style={SLIDER}
             />
-            <span style={{ fontSize: 8, color: "var(--text-muted)", minWidth: 28 }}>
+            <span style={READOUT}>
               {Math.round(onsetOpacity * 100)}%
             </span>
           </div>
         )}
         {onsetEnabled && (
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, color: "var(--text-muted)", cursor: "pointer" }}>
+          <label style={{ ...ROW, ...CAPTION, cursor: "pointer" }}>
             <input
               type="checkbox"
               checked={onsetSnapToGrid}
               onChange={(e) => useSettingsStore.getState().updateSettings({
                 onsetSnapToGrid: e.target.checked,
               })}
-              style={{ accentColor: "#ffa832" }}
+              style={{ accentColor: "var(--accent-primary)" }}
             />
             Snap to beat grid
           </label>
         )}
 
         {/* Note side filter — All / Above / Below */}
-        <div style={{ display: "flex", gap: 3 }}>
-          <span style={{ fontSize: 8, color: "var(--text-muted)", alignSelf: "center", marginRight: 2 }}>Notes:</span>
-          {(["all", "above", "below"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => useEditorStore.getState().setNoteSideFilter(f)}
-              style={{
-                flex: 1, fontSize: 9, padding: "3px 0", borderRadius: 3,
-                border: "none", cursor: "pointer", fontFamily: "inherit",
-                background: noteSideFilter === f ? "var(--accent-primary)" : "var(--bg-active)",
-                color: noteSideFilter === f ? "#fff" : "var(--text-muted)",
-                fontWeight: noteSideFilter === f ? 600 : 400,
-                textTransform: "capitalize",
-              }}
-            >
-              {f}
-            </button>
-          ))}
+        <div style={ROW}>
+          <span style={{ ...CAPTION, minWidth: 72 }}>Notes</span>
+          <SegmentedControl
+            label="Note side filter"
+            tone="accent"
+            size="sm"
+            block
+            style={{ flex: 1 }}
+            options={SIDE_OPTIONS}
+            value={noteSideFilter}
+            onChange={(f) => useEditorStore.getState().setNoteSideFilter(f)}
+          />
         </div>
       </div>
 
-      {/* ---- RECORD CHANNELS — shown when record mode is available ---- */}
-      <SectionHeader label="RECORD CHANNELS" />
-      <div style={{ display: "flex", gap: 6, marginBottom: 8, padding: "0 4px" }}>
-        {(["x", "y", "rotation"] as const).map((ch) => {
-          const active = recordModeChannels[ch];
-          const colors: Record<string, string> = { x: "#ff6b6b", y: "#51cf66", rotation: "#ffd43b" };
+      {/* ---- Record channels — shown when record mode is available ---- */}
+      <SectionHeader label="Record channels" />
+      <div style={{ ...ROW, gap: "var(--space-12)", marginBottom: "var(--space-8)", padding: "0 var(--space-4)" }}>
+        {RECORD_CHANNELS.map((ch) => {
+          const active = recordModeChannels[ch.value];
           return (
-            <label key={ch} style={{
-              display: "flex", alignItems: "center", gap: 4, cursor: "pointer",
-              fontSize: 9, color: active ? colors[ch] : "var(--text-muted)",
-              fontWeight: active ? 600 : 400,
+            <label key={ch.value} style={{
+              display: "flex", alignItems: "center", gap: "var(--space-4)", cursor: "pointer",
+              fontSize: "var(--fs-caption)",
+              color: active ? "var(--text-primary)" : "var(--text-secondary)",
             }}>
               <input
                 type="checkbox"
                 checked={active}
-                onChange={(e) => useEditorStore.getState().setRecordModeChannels({ [ch]: e.target.checked })}
-                style={{ accentColor: colors[ch], width: 12, height: 12 }}
+                onChange={(e) => useEditorStore.getState().setRecordModeChannels({ [ch.value]: e.target.checked })}
+                style={{ accentColor: ch.color, width: 12, height: 12 }}
               />
-              {ch === "rotation" ? "Rot" : ch.toUpperCase()}
+              {ch.label}
             </label>
           );
         })}
         {recordMode && (
-          <span style={{ fontSize: 8, color: "#f87171", marginLeft: "auto", fontWeight: 600 }}>REC</span>
+          <span style={{ marginLeft: "auto" }}>
+            <Badge color="var(--error)">Recording</Badge>
+          </span>
         )}
       </div>
 
-      {/* ---- TIMELINE — zoom control ---- */}
-      <SectionHeader label="TIMELINE ZOOM" />
-      <div style={{ display: "flex", gap: 3, alignItems: "center", marginBottom: 8 }}>
-        {([0.5, 1, 2, 4] as const).map((z) => (
-          <button
-            key={z}
-            onClick={() => useEditorStore.getState().setTimelineZoom(z)}
-            style={{
-              flex: 1, fontSize: 9, padding: "3px 0", borderRadius: 3,
-              border: "none", cursor: "pointer", fontFamily: "inherit",
-              background: Math.abs(timelineZoom - z) < 0.05 ? "var(--accent-primary)" : "var(--bg-active)",
-              color: Math.abs(timelineZoom - z) < 0.05 ? "#fff" : "var(--text-muted)",
-              fontWeight: Math.abs(timelineZoom - z) < 0.05 ? 600 : 400,
-            }}
-          >
-            {z}x
-          </button>
-        ))}
+      {/* ---- Timeline zoom ---- */}
+      <SectionHeader label="Timeline zoom" />
+      <div style={{ ...ROW, marginBottom: "var(--space-8)" }}>
+        <SegmentedControl
+          label="Timeline zoom presets"
+          tone="accent"
+          size="sm"
+          options={ZOOM_PRESETS.map((z) => ({ value: z, label: `${z}×` }))}
+          value={zoomPreset}
+          onChange={(z) => useEditorStore.getState().setTimelineZoom(z)}
+        />
         <input
           type="range" min="0.1" max="10" step="0.1"
+          aria-label="Timeline zoom"
           value={timelineZoom}
           onChange={(e) => useEditorStore.getState().setTimelineZoom(parseFloat(e.target.value))}
-          style={{ flex: 2, height: 4, accentColor: "var(--accent-primary)" }}
+          style={SLIDER}
         />
       </div>
 
-      {/* ---- LINE SORT & FILTER ---- */}
-      <SectionHeader label="LINE SORT & FILTER" />
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
-        {/* Sort mode pills */}
-        <div style={{ display: "flex", gap: 3 }}>
-          {([
-            { value: "chart_order", label: "Chart" },
-            { value: "first_appearance", label: "Appear" },
-            { value: "active_first", label: "Active" },
-          ] as const).map((m) => (
-            <button
-              key={m.value}
-              onClick={() => useEditorStore.getState().setLineSortMode(m.value)}
-              style={{
-                flex: 1, fontSize: 9, padding: "3px 0", borderRadius: 3,
-                border: "none", cursor: "pointer", fontFamily: "inherit",
-                background: lineSortMode === m.value ? "var(--accent-primary)" : "var(--bg-active)",
-                color: lineSortMode === m.value ? "#fff" : "var(--text-muted)",
-                fontWeight: lineSortMode === m.value ? 600 : 400,
-              }}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+      {/* ---- Line sort & filter ---- */}
+      <SectionHeader label="Line sort & filter" />
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", marginBottom: "var(--space-8)" }}>
+        {/* Sort mode */}
+        <SegmentedControl
+          label="Line sort mode"
+          tone="accent"
+          size="sm"
+          block
+          options={SORT_OPTIONS}
+          value={lineSortMode}
+          onChange={(m) => useEditorStore.getState().setLineSortMode(m)}
+        />
         {/* Category filter chips */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-          <button
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4)" }}>
+          <Pill
+            active={lineStripCategoryFilter === null}
             onClick={() => useEditorStore.getState().setLineStripCategoryFilter(null)}
-            style={{
-              fontSize: 8, padding: "2px 6px", borderRadius: 3,
-              border: "none", cursor: "pointer", fontFamily: "inherit",
-              background: lineStripCategoryFilter === null ? "var(--accent-primary)" : "var(--bg-active)",
-              color: lineStripCategoryFilter === null ? "#fff" : "var(--text-muted)",
-            }}
           >
             All
-          </button>
-          {(["gameplay", "visual", "text", "helper"] as const).map((cat) => {
-            const active = lineStripCategoryFilter?.includes(cat) ?? false;
-            const catColors: Record<string, string> = { gameplay: "#48b5ff", visual: "#c084fc", text: "#99e9f2", helper: "#868e96" };
-            return (
-              <button
-                key={cat}
-                onClick={() => useEditorStore.getState().toggleLineStripCategory(cat)}
-                style={{
-                  fontSize: 8, padding: "2px 6px", borderRadius: 3,
-                  border: "none", cursor: "pointer", fontFamily: "inherit",
-                  background: active ? catColors[cat] + "25" : "var(--bg-active)",
-                  color: active ? catColors[cat] : "var(--text-muted)",
-                  fontWeight: active ? 600 : 400,
-                  textTransform: "capitalize",
-                }}
-              >
-                {cat}
-              </button>
-            );
-          })}
+          </Pill>
+          {LINE_CATEGORIES.map((cat) => (
+            <Pill
+              key={cat.value}
+              active={lineStripCategoryFilter?.includes(cat.value) ?? false}
+              onClick={() => useEditorStore.getState().toggleLineStripCategory(cat.value)}
+            >
+              {cat.label}
+            </Pill>
+          ))}
         </div>
       </div>
 
       {/* Panels — clicking shows the panel content inline in this context panel */}
-      <SectionHeader label="PANELS" />
+      <SectionHeader label="Panels" />
       <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
         {PANEL_ITEMS.map((item) => (
           <ActionButton
@@ -666,41 +704,48 @@ function GlobalActions(props: Omit<GlobalModeProps, "activeTab">) {
 
 // ---- Hotkeys tab ----
 
-const GLOBAL_HOTKEY_SECTIONS = [
+const GLOBAL_HOTKEY_SECTIONS: HotkeySection[] = [
   {
-    title: "GENERAL",
+    title: "Tools",
     keys: [
-      { icon: "V", label: "Select tool", hotkey: "V" },
-      { icon: "E", label: "Eraser tool", hotkey: "E" },
-      { icon: "1", label: "Place Tap", hotkey: "1" },
-      { icon: "2", label: "Place Drag", hotkey: "2" },
-      { icon: "3", label: "Place Flick", hotkey: "3" },
-      { icon: "4", label: "Place Hold", hotkey: "4" },
+      { label: "Select tool", hotkey: { action: "select_tool" } },
+      { label: "Eraser tool", hotkey: { action: "eraser_tool" } },
+      { label: "Place tap", hotkey: { action: "place_tap" } },
+      { label: "Place drag", hotkey: { action: "place_drag" } },
+      { label: "Place flick", hotkey: { action: "place_flick" } },
+      { label: "Place hold", hotkey: { action: "place_hold" } },
+      { label: "Toggle beat sync", hotkey: "T" },
     ],
   },
   {
-    title: "NAVIGATION",
+    title: "Navigation",
     keys: [
-      { icon: "\u25B6", label: "Play/Pause", hotkey: "Space" },
-      { icon: "G", label: "Go to beat", hotkey: "Ctrl+G" },
-      { icon: "+", label: "Zoom in", hotkey: "Ctrl+=" },
-      { icon: "-", label: "Zoom out", hotkey: "Ctrl+-" },
-      { icon: "F", label: "Fit view", hotkey: "Ctrl+0" },
-      { icon: "H", label: "Home", hotkey: "Home" },
+      { label: "Play / pause", hotkey: { action: "toggle_playback" } },
+      { label: "Go to beat", hotkey: { action: "go_to_beat" } },
+      { label: "Previous marker", hotkey: { action: "prev_marker" } },
+      { label: "Next marker", hotkey: { action: "next_marker" } },
+      { label: "Fit all lines in view", hotkey: "Shift+F" },
+      { label: "Command palette", hotkey: "Ctrl+K" },
     ],
   },
   {
-    title: "EDITING",
+    title: "Editing",
     keys: [
-      { icon: "Z", label: "Undo", hotkey: "Ctrl+Z" },
-      { icon: "Y", label: "Redo", hotkey: "Ctrl+Y" },
-      { icon: "S", label: "Save", hotkey: "Ctrl+S" },
-      { icon: "A", label: "Select all", hotkey: "Ctrl+A" },
-      { icon: "D", label: "Duplicate", hotkey: "Ctrl+D" },
-      { icon: "\u232B", label: "Delete", hotkey: "Del" },
+      { label: "Undo", hotkey: { action: "undo" } },
+      { label: "Redo", hotkey: { action: "redo" } },
+      { label: "Save", hotkey: { action: "save" } },
+      { label: "Select all notes", hotkey: { action: "select_all" } },
+      { label: "Delete", hotkey: { action: "delete" } },
     ],
   },
 ];
+
+const RANGE_INPUT: React.CSSProperties = {
+  ...INPUT_STYLE,
+  flex: 1,
+  minWidth: 0,
+  fontFamily: "var(--font-mono)",
+};
 
 /**
  * SelectByRangeSection — UI for selecting notes by beat range,
@@ -745,120 +790,70 @@ function SelectByRangeSection() {
   const noLine = selectedLineIndex === null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8, opacity: noLine ? 0.4 : 1 }}>
+    <div style={{
+      display: "flex", flexDirection: "column", gap: "var(--space-4)", marginBottom: "var(--space-8)",
+      opacity: noLine ? "var(--opacity-disabled)" : 1,
+    }}>
       {/* Beat range row */}
-      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-        <span style={{ fontSize: 8, color: "var(--text-muted)", width: 30 }}>Beat</span>
+      <div style={{ ...ROW, gap: "var(--space-4)" }}>
+        <span style={{ ...CAPTION, width: 30 }}>Beat</span>
         <input
           type="number" step="0.25" placeholder="Start"
+          aria-label="Start beat"
           value={startBeat}
           onChange={(e) => setStartBeat(e.target.value)}
-          style={{
-            flex: 1, fontSize: 10, padding: "3px 6px", borderRadius: 3,
-            border: "1px solid var(--border-color)", background: "var(--bg-active)",
-            color: "var(--text-primary)", fontFamily: "inherit",
-          }}
+          style={RANGE_INPUT}
         />
-        <span style={{ fontSize: 9, color: "var(--text-muted)" }}>{"\u2192"}</span>
+        <span style={CAPTION}>to</span>
         <input
           type="number" step="0.25" placeholder="End"
+          aria-label="End beat"
           value={endBeat}
           onChange={(e) => setEndBeat(e.target.value)}
-          style={{
-            flex: 1, fontSize: 10, padding: "3px 6px", borderRadius: 3,
-            border: "1px solid var(--border-color)", background: "var(--bg-active)",
-            color: "var(--text-primary)", fontFamily: "inherit",
-          }}
+          style={RANGE_INPUT}
         />
-        <button
-          onClick={handleFromPlayhead}
-          title="Set start from playhead"
-          style={{
-            fontSize: 10, padding: "3px 6px", borderRadius: 3,
-            border: "none", cursor: "pointer", fontFamily: "inherit",
-            background: "var(--bg-active)", color: "var(--text-muted)",
-          }}
-        >
-          {"\u25F7"}
-        </button>
+        <IconButton icon={LocateFixed} label="Set start from playhead" size="md" onClick={handleFromPlayhead} />
       </div>
 
       {/* X range row (optional) */}
-      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-        <span style={{ fontSize: 8, color: "var(--text-muted)", width: 30 }}>X</span>
+      <div style={{ ...ROW, gap: "var(--space-4)" }}>
+        <span style={{ ...CAPTION, width: 30 }}>X</span>
         <input
           type="number" step="1" placeholder="Min (opt)"
+          aria-label="Minimum X"
           value={xMin}
           onChange={(e) => setXMin(e.target.value)}
-          style={{
-            flex: 1, fontSize: 10, padding: "3px 6px", borderRadius: 3,
-            border: "1px solid var(--border-color)", background: "var(--bg-active)",
-            color: "var(--text-primary)", fontFamily: "inherit",
-          }}
+          style={RANGE_INPUT}
         />
-        <span style={{ fontSize: 9, color: "var(--text-muted)" }}>{"\u2192"}</span>
+        <span style={CAPTION}>to</span>
         <input
           type="number" step="1" placeholder="Max (opt)"
+          aria-label="Maximum X"
           value={xMax}
           onChange={(e) => setXMax(e.target.value)}
-          style={{
-            flex: 1, fontSize: 10, padding: "3px 6px", borderRadius: 3,
-            border: "1px solid var(--border-color)", background: "var(--bg-active)",
-            color: "var(--text-primary)", fontFamily: "inherit",
-          }}
+          style={RANGE_INPUT}
         />
+        {/* Spacer keeps the inputs aligned with the beat row above */}
+        <span style={{ width: "var(--control-md)", flexShrink: 0 }} />
       </div>
 
       {/* Side filter + select button */}
-      <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
-        <span style={{ fontSize: 8, color: "var(--text-muted)", width: 30 }}>Side</span>
-        {(["all", "above", "below"] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setSideFilter(f)}
-            style={{
-              flex: 1, fontSize: 9, padding: "3px 0", borderRadius: 3,
-              border: "none", cursor: "pointer", fontFamily: "inherit",
-              background: sideFilter === f ? "var(--accent-primary)" : "var(--bg-active)",
-              color: sideFilter === f ? "#fff" : "var(--text-muted)",
-              fontWeight: sideFilter === f ? 600 : 400,
-              textTransform: "capitalize",
-            }}
-          >
-            {f}
-          </button>
-        ))}
-        <button
-          onClick={handleSelect}
-          disabled={noLine}
-          style={{
-            fontSize: 9, padding: "4px 10px", borderRadius: 4,
-            border: "none", cursor: noLine ? "default" : "pointer",
-            fontFamily: "inherit", fontWeight: 600,
-            background: noLine ? "var(--bg-active)" : "var(--accent-primary)",
-            color: noLine ? "var(--text-muted)" : "#fff",
-          }}
-        >
+      <div style={{ ...ROW, gap: "var(--space-4)" }}>
+        <span style={{ ...CAPTION, width: 30 }}>Side</span>
+        <SegmentedControl
+          label="Side filter"
+          tone="accent"
+          size="sm"
+          block
+          style={{ flex: 1 }}
+          options={SIDE_OPTIONS}
+          value={sideFilter}
+          onChange={setSideFilter}
+        />
+        <Button variant="primary" size="sm" onClick={handleSelect} disabled={noLine}>
           Select
-        </button>
+        </Button>
       </div>
-    </div>
-  );
-}
-
-function GlobalHotkeys() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {GLOBAL_HOTKEY_SECTIONS.map((section) => (
-        <React.Fragment key={section.title}>
-          <SectionHeader label={section.title} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 3 }}>
-            {section.keys.map((k) => (
-              <HotkeyButton key={k.label} icon={k.icon} label={k.label} hotkey={k.hotkey} />
-            ))}
-          </div>
-        </React.Fragment>
-      ))}
     </div>
   );
 }

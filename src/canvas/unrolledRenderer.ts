@@ -38,6 +38,7 @@ import {
   BELOW_NOTE_COLORS,
 } from "../constants/canvasConstants";
 import { EVENT_COLORS } from "../constants/eventColors";
+import { chromeTheme, monoFont, sansFont, withAlpha } from "./chromeTheme";
 
 // ============================================================
 // Renderer-specific sizing (only the unrolled view uses these)
@@ -233,7 +234,7 @@ export class UnrolledRenderer {
 
     // ---- Clear with dark background ----
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-    ctx.fillStyle = "#0e1629";
+    ctx.fillStyle = chromeTheme().bgPrimary;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
     // ---- Visible beat range ----
@@ -385,7 +386,7 @@ export class UnrolledRenderer {
       const pnY = UnrolledRenderer.beatToY(pnBeat, scrollBeat, zoom, canvasHeight);
       const pnX = UnrolledRenderer.noteXToPixel(pn.x, noteAreaLeft, noteAreaWidth);
       const colorMap = pn.above ? ABOVE_NOTE_COLORS : BELOW_NOTE_COLORS;
-      const color = colorMap[pn.kind] ?? "#fff";
+      const color = colorMap[pn.kind] ?? chromeTheme().textPrimary;
 
       // Bug audit #14: wrap setLineDash in try/finally so an exception
       // in strokeRect can't leak the dash pattern into subsequent
@@ -413,9 +414,9 @@ export class UnrolledRenderer {
       const rw = Math.abs(r.x2 - r.x1);
       const rh = Math.abs(r.y2 - r.y1);
 
-      ctx.fillStyle = "rgba(50, 205, 50, 0.10)";
+      ctx.fillStyle = withAlpha(SELECTED_COLOR, 0.10);
       ctx.fillRect(rx, ry, rw, rh);
-      ctx.strokeStyle = "rgba(50, 205, 50, 0.5)";
+      ctx.strokeStyle = withAlpha(SELECTED_COLOR, 0.5);
       ctx.lineWidth = 1;
       ctx.strokeRect(rx, ry, rw, rh);
     }
@@ -444,15 +445,15 @@ export class UnrolledRenderer {
     // ---- Separator lines ----
     // Inner: between beat numbers and the (possibly empty) event column.
     // Outer: between the gutter and the note area.
-    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.strokeStyle = chromeTheme().borderColor;
     ctx.lineWidth = 1;
     if (eventVisibility !== "none") {
-      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.strokeStyle = chromeTheme().separator;
       ctx.beginPath();
       ctx.moveTo(BEAT_GUTTER_WIDTH, 0);
       ctx.lineTo(BEAT_GUTTER_WIDTH, canvasHeight);
       ctx.stroke();
-      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.strokeStyle = chromeTheme().borderColor;
     }
     ctx.beginPath();
     ctx.moveTo(gutterWidth, 0);
@@ -526,8 +527,8 @@ export class UnrolledRenderer {
       const isWholeBeat = i % safeDensity === 0;
 
       ctx.strokeStyle = isWholeBeat
-        ? "rgba(255, 255, 255, 0.22)"
-        : "rgba(255, 255, 255, 0.06)";
+        ? chromeTheme().beatLinePrimary
+        : chromeTheme().beatLineSecondary;
       ctx.lineWidth = isWholeBeat ? 1 : 0.5;
 
       ctx.beginPath();
@@ -538,8 +539,8 @@ export class UnrolledRenderer {
       // Beat number label — pinned to the original beat-number column,
       // never the extended event column.
       if (isWholeBeat) {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
-        ctx.font = "10px monospace";
+        ctx.fillStyle = chromeTheme().textSecondary;
+        ctx.font = monoFont(10);
         ctx.textAlign = "right";
         ctx.textBaseline = "middle";
         // i / safeDensity is a whole integer when isWholeBeat — safe to render directly.
@@ -568,13 +569,13 @@ export class UnrolledRenderer {
 
       if (i === 0 || i === verticalLines - 1) {
         // Edge lines — slightly brighter than interior
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+        ctx.strokeStyle = withAlpha(chromeTheme().textPrimary, 0.14);
       } else if (isOdd && i === centerIdx) {
         // Center line — only when N is odd (real snap point at X=0)
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
+        ctx.strokeStyle = chromeTheme().beatLinePrimary;
       } else {
         // Regular interior grid line
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
+        ctx.strokeStyle = chromeTheme().beatLineSecondary;
       }
 
       ctx.beginPath();
@@ -591,18 +592,18 @@ export class UnrolledRenderer {
     _canvasHeight: number,
   ) {
     ctx.save();
-    ctx.font = "bold 9px monospace";
+    ctx.font = sansFont(11, 600);
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.globalAlpha = 0.15;
+    ctx.globalAlpha = 0.3;
 
     // "ABOVE" on the left half, "BELOW" on the right half
     // (this is a visual hint — actual above/below is controlled by Shift key)
     const mid = noteAreaLeft + noteAreaWidth / 2;
     ctx.fillStyle = ABOVE_NOTE_COLORS.tap;
-    ctx.fillText("ABOVE", noteAreaLeft + (mid - noteAreaLeft) / 2, 4);
+    ctx.fillText("Above", noteAreaLeft + (mid - noteAreaLeft) / 2, 4);
     ctx.fillStyle = BELOW_NOTE_COLORS.tap;
-    ctx.fillText("BELOW", mid + (noteAreaLeft + noteAreaWidth - mid) / 2, 4);
+    ctx.fillText("Below", mid + (noteAreaLeft + noteAreaWidth - mid) / 2, 4);
 
     ctx.restore();
   }
@@ -618,15 +619,15 @@ export class UnrolledRenderer {
     if (y < 0 || y > canvasHeight) return;
 
     // Thick white bar representing the judgment line
-    ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.fillStyle = withAlpha(chromeTheme().textPrimary, 0.3);
     ctx.fillRect(gutterWidth, y - 1.5, canvasWidth - gutterWidth, 3);
 
     // Label
-    ctx.font = "bold 9px monospace";
+    ctx.font = sansFont(10, 600);
     ctx.textAlign = "left";
     ctx.textBaseline = "bottom";
-    ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
-    ctx.fillText("JUDGMENT LINE", gutterWidth + 4, y - 4);
+    ctx.fillStyle = chromeTheme().textSecondary;
+    ctx.fillText("Judgment line", gutterWidth + 4, y - 4);
   }
 
   /**
@@ -667,7 +668,7 @@ export class UnrolledRenderer {
       const alpha = marker.strength * opacity;
       if (alpha < 0.02) continue;
 
-      ctx.strokeStyle = `rgba(255, 170, 50, ${alpha})`;
+      ctx.strokeStyle = withAlpha(chromeTheme().onsetColor, alpha);
       ctx.lineWidth = Math.max(1, marker.strength * 2.5);
 
       ctx.beginPath();
@@ -679,7 +680,7 @@ export class UnrolledRenderer {
       // Triangle is anchored just inside the note area, not the
       // beat-number column, so it doesn't collide with event diamonds.
       if (marker.strength > 0.3) {
-        ctx.fillStyle = `rgba(255, 170, 50, ${alpha * 0.8})`;
+        ctx.fillStyle = withAlpha(chromeTheme().onsetColor, alpha * 0.8);
         ctx.beginPath();
         ctx.moveTo(gutterWidth - 4, y - 2);
         ctx.lineTo(gutterWidth, y);
@@ -714,7 +715,7 @@ export class UnrolledRenderer {
       // Cull off-screen events.
       if (endB < minBeat - 0.5 || startB > maxBeat + 0.5) continue;
 
-      const color = EVENT_COLORS[evt.kind] ?? "#888";
+      const color = EVENT_COLORS[evt.kind] ?? chromeTheme().textSecondary;
       const yStart = UnrolledRenderer.beatToY(startB, scrollBeat, zoom, canvasHeight);
       const yEnd   = UnrolledRenderer.beatToY(endB,   scrollBeat, zoom, canvasHeight);
 
@@ -799,7 +800,7 @@ export class UnrolledRenderer {
         // rather than overflowing into the note area.
         if (cx > BEAT_GUTTER_WIDTH + EVENT_GUTTER_EXTRA - 1) return;
 
-        const color = EVENT_COLORS[evt.kind] ?? "#888";
+        const color = EVENT_COLORS[evt.kind] ?? chromeTheme().textSecondary;
         const isSel = selectedSet.has(idx);
 
         // Diamond
@@ -813,7 +814,7 @@ export class UnrolledRenderer {
         ctx.fill();
 
         if (isSel) {
-          ctx.strokeStyle = "#ffffff";
+          ctx.strokeStyle = chromeTheme().textPrimary;
           ctx.lineWidth = 1.5;
           ctx.stroke();
         }
@@ -824,7 +825,7 @@ export class UnrolledRenderer {
         if (slot === idxList.length - 1) {
           const letter = EVENT_KIND_LETTER[evt.kind] ?? "?";
           ctx.fillStyle = color + "cc"; // ~80%
-          ctx.font = "bold 8px monospace";
+          ctx.font = monoFont(10, 600);
           ctx.textAlign = "left";
           ctx.textBaseline = "middle";
           const tagX = cx + EVENT_DIAMOND_HALF + 2;
@@ -850,7 +851,7 @@ export class UnrolledRenderer {
 
     // Choose color based on above/below state
     const colorMap = note.above ? ABOVE_NOTE_COLORS : BELOW_NOTE_COLORS;
-    const color = colorMap[note.kind] ?? "#fff";
+    const color = colorMap[note.kind] ?? chromeTheme().textPrimary;
 
     // Compose alpha against the wrapper's current globalAlpha so the
     // ghost-mode dim (0.3 set in withVisibility) actually applies.

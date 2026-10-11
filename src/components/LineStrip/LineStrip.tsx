@@ -6,14 +6,14 @@
 // even without opacity. Lines idle for >N seconds (setting) are
 // demoted to inactive. Added wheel-scroll support on the chip bar.
 //
-// 30px tall bar above the canvas with clickable chips for each line.
-// Lines are sorted by activity and color-coded:
-//   - Active (opacity > 0 OR notes approaching): solid green
-//   - Coming soon (within 8 beats): faded green
-//   - Just passed (within 8 beats): yellow
-//   - Long ago passed: faded yellow
-//   - Recurring: blue tint
-//   - Inactive (no notes for >N seconds): default gray
+// 30px tall bar above the canvas with a segmented strip of chips,
+// one per line: a 6px dot in the line's category colour, the name,
+// and the note count as a mono caption. The selected chip is
+// accent-selected. Lines are sorted by activity:
+//   - Active (opacity > 0 OR notes approaching): primary text
+//   - Coming soon (within 8 beats) / just passed (within 8 beats)
+//   - Long ago passed / inactive (no notes for >N seconds): dimmed
+// The tier (and "recurring") is spelled out in each chip's tooltip.
 // ============================================================
 
 import { useMemo, useRef, useEffect, useCallback } from "react";
@@ -34,8 +34,12 @@ import { getPlayheadBeat } from "../../utils/playhead";
 import { beatToFloat } from "../../utils/beat";
 import type { LineEvent, LineEventValue, EventLayer, Note } from "../../types/chart";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { LINE_CATEGORY_COLORS } from "../LineList/lineCategories";
+import { LINE_CATEGORY_COLORS, LINE_CATEGORY_LABELS } from "../LineList/lineCategories";
 import { autoCategorize } from "../LineList/lineCategories";
+import { Plus, Search } from "lucide-react";
+import { IconButton } from "../common/IconButton";
+import { Tooltip } from "../common/Tooltip";
+import { INPUT_STYLE } from "../common/UIKit";
 
 type LineActivity = "active" | "coming-soon" | "just-passed" | "long-passed" | "inactive";
 
@@ -230,46 +234,40 @@ function classifyLine(
   return { activity: "inactive", isRecurring, sortKey: 5 };
 }
 
-/** Style for each activity type */
+/** Readable name for each activity tier (chip tooltip). */
+const ACTIVITY_LABEL: Record<LineActivity, string> = {
+  active: "Active",
+  "coming-soon": "Coming soon",
+  "just-passed": "Just passed",
+  "long-passed": "Passed",
+  inactive: "Inactive",
+};
+
+/**
+ * Chip text emphasis per activity tier. Chips are transparent segments;
+ * the selected chip is accent-selected. Activity is shown by emphasis
+ * (active = primary text, weight 500; long-passed / inactive = dimmed),
+ * the sort order, and the tooltip — not by coloured tiles.
+ */
 function getChipStyle(
   activity: LineActivity,
-  isRecurring: boolean,
   isSelected: boolean,
-): { background: string; color: string; borderLeft: string } {
+  isMultiSelected: boolean,
+): React.CSSProperties {
   if (isSelected) {
-    return {
-      background: "var(--accent-primary)",
-      color: "#fff",
-      borderLeft: "2px solid var(--accent-primary)",
-    };
+    return { background: "var(--accent-selected)", color: "var(--accent-primary)", fontWeight: 500 };
   }
-
-  if (isRecurring) {
-    switch (activity) {
-      case "active":
-        return { background: "#22c55e30", color: "#4ade80", borderLeft: "2px solid #22c55e" };
-      case "coming-soon":
-        return { background: "#3b82f620", color: "#60a5fa", borderLeft: "2px solid #3b82f680" };
-      case "just-passed":
-        return { background: "#eab30820", color: "#fbbf24", borderLeft: "2px solid #eab30880" };
-      case "long-passed":
-        return { background: "#eab30810", color: "#fbbf2460", borderLeft: "2px solid #eab30840" };
-      default:
-        return { background: "var(--bg-active)", color: "#555", borderLeft: "2px solid transparent" };
-    }
+  if (isMultiSelected) {
+    return { background: "var(--accent-tint)", color: "var(--accent-primary)" };
   }
-
   switch (activity) {
     case "active":
-      return { background: "#22c55e28", color: "#4ade80", borderLeft: "2px solid #22c55e" };
+      return { color: "var(--text-primary)", fontWeight: 500 };
     case "coming-soon":
-      return { background: "#22c55e14", color: "#4ade8080", borderLeft: "2px solid #22c55e60" };
     case "just-passed":
-      return { background: "#eab30820", color: "#fbbf24", borderLeft: "2px solid #eab308" };
-    case "long-passed":
-      return { background: "#eab30810", color: "#fbbf2450", borderLeft: "2px solid #eab30840" };
+      return {};
     default:
-      return { background: "var(--bg-active)", color: "#555", borderLeft: "2px solid transparent" };
+      return { opacity: 0.6 };
   }
 }
 
@@ -382,10 +380,10 @@ export function LineStrip() {
         height: 30,
         display: "flex",
         alignItems: "center",
-        gap: 3,
-        padding: "0 8px",
+        gap: "var(--space-2)",
+        padding: "0 var(--space-8)",
         background: "var(--bg-tertiary)",
-        borderBottom: "1px solid var(--border-color)",
+        borderBottom: "var(--rule) solid var(--border-color)",
         overflowX: "auto",
         overflowY: "hidden",
         flexShrink: 0,
@@ -395,20 +393,15 @@ export function LineStrip() {
       className="linestrip-scroll"
     >
       {/* Search toggle button */}
-      <button
+      <IconButton
+        icon={Search}
+        label="Search lines"
+        shortcut="Ctrl+L"
+        size="md"
+        active={searchOpen}
         onClick={toggleLineStripSearch}
-        style={{
-          width: 24, height: 22, borderRadius: 3, border: "none",
-          background: searchOpen ? "var(--accent-primary)" : "transparent",
-          color: searchOpen ? "#fff" : "var(--text-muted)",
-          cursor: "pointer", fontSize: 12, flexShrink: 0, padding: 0,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontFamily: "inherit",
-        }}
-        title="Search lines (Ctrl+L)"
-      >
-        S
-      </button>
+        tooltipPosition="bottom"
+      />
 
       {/* Search input (visible when open) */}
       {searchOpen && (
@@ -418,123 +411,117 @@ export function LineStrip() {
           value={searchQuery}
           onChange={(e) => setLineStripSearch(e.target.value)}
           onKeyDown={handleSearchKeyDown}
-          placeholder="Search..."
+          placeholder="Search lines…"
+          aria-label="Search lines"
           style={{
-            width: 100, height: 22, borderRadius: 3, fontSize: 10,
-            border: "1px solid var(--border-color)",
-            background: "var(--bg-primary)", color: "var(--text-primary)",
-            padding: "0 6px", flexShrink: 0, outline: "none",
-            fontFamily: "inherit",
+            ...INPUT_STYLE,
+            width: 120,
+            flexShrink: 0,
           }}
         />
       )}
 
-      {/* Category filter dots */}
+      {/* Category filter dots (category colours are line data colours) */}
       {(["gameplay", "visual", "text", "helper"] as const).map((cat) => (
-        <button
+        <IconButton
           key={cat}
+          label={`Filter: ${LINE_CATEGORY_LABELS[cat] ?? cat}`}
+          size="sm"
+          active={categoryFilter?.includes(cat) ?? false}
           onClick={() => toggleLineStripCategory(cat)}
-          style={{
-            width: 10, height: 10, borderRadius: "50%", border: "none",
-            background: LINE_CATEGORY_COLORS[cat],
-            opacity: !categoryFilter || categoryFilter.includes(cat) ? 1 : 0.25,
-            cursor: "pointer", flexShrink: 0, padding: 0,
-            outline: categoryFilter?.includes(cat) ? `2px solid ${LINE_CATEGORY_COLORS[cat]}` : "none",
-            outlineOffset: 1,
-          }}
-          title={`Filter: ${cat}`}
-        />
+          tooltipPosition="bottom"
+        >
+          <span
+            style={{
+              width: 8, height: 8, borderRadius: "var(--radius-full)",
+              background: LINE_CATEGORY_COLORS[cat],
+              opacity: !categoryFilter || categoryFilter.includes(cat) ? 1 : 0.25,
+            }}
+          />
+        </IconButton>
       ))}
 
       {/* Separator */}
-      <div style={{ width: 1, height: 16, background: "var(--border-color)", flexShrink: 0 }} />
+      <div style={{ width: "var(--rule)", height: 16, margin: "0 var(--space-4)", background: "var(--border-color)", flexShrink: 0 }} />
 
       {filteredLines.map(({ index, line, activity, isRecurring, category }) => {
         const isSelected = selectedLineIndex === index;
         const isMultiSelected = multiSelectedLineIndices.includes(index);
-        const style = getChipStyle(activity, isRecurring, isSelected);
+        const chipStyle = getChipStyle(activity, isSelected, isMultiSelected);
         const lineGroups = groups.filter((g) => g.type === "line" && g.lines.some((l: { lineIndex: number }) => l.lineIndex === index));
 
         return (
-          <button
-            key={index}
-            data-line-index={index}
-            onClick={(e) => {
-              if (e.ctrlKey || e.metaKey) {
-                toggleMultiSelectedLineByIndex(index);
-              } else {
-                selectLineByIndex(isSelected ? null : index);
-              }
-            }}
-            onDoubleClick={() => {
-              selectLineByIndex(index);
-              // Imperative read in a click handler → raw playhead beat (clamped to ≥0).
-              const currentBeat = getPlayheadBeat({ clampNonNegative: true });
-              openUnrolledLineEditor(index, line.name || `Line ${index + 1}`, currentBeat);
-            }}
-            style={{
-              padding: "3px 8px",
-              borderRadius: 4,
-              border: "none",
-              outline: isMultiSelected ? "2px solid #f59e0b" : "none",
-              outlineOffset: -1,
-              cursor: "pointer",
-              fontSize: 10,
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-              background: style.background,
-              color: style.color,
-              borderLeft: style.borderLeft,
-              fontWeight: isSelected ? 600 : activity === "active" ? 500 : 400,
-              transition: "all 0.15s",
-              fontFamily: "inherit",
-              display: "flex",
-              alignItems: "center",
-              gap: 3,
-            }}
-            title={`${line.name || `Line ${index}`} — ${activity}${isRecurring ? " (recurring)" : ""}${lineGroups.length > 0 ? ` [${lineGroups.map((g) => g.name).join(", ")}]` : ""}`}
-          >
-            {category && LINE_CATEGORY_COLORS[category] && (
-              <span style={{
-                width: 6, height: 6, borderRadius: "50%",
-                background: LINE_CATEGORY_COLORS[category], flexShrink: 0,
-              }} />
-            )}
-            {lineGroups.map((g) => (
+          <Tooltip key={index} position="bottom" content={`${line.name || `Line ${index}`} — ${ACTIVITY_LABEL[activity]}${isRecurring ? " (recurring)" : ""}${isMultiSelected ? ", multi-selected" : ""}${lineGroups.length > 0 ? ` [${lineGroups.map((g) => g.name).join(", ")}]` : ""}`}>
+            <button
+              type="button"
+              className="ui-segmented__opt"
+              data-line-index={index}
+              aria-pressed={isSelected}
+              onClick={(e) => {
+                if (e.ctrlKey || e.metaKey) {
+                  toggleMultiSelectedLineByIndex(index);
+                } else {
+                  selectLineByIndex(isSelected ? null : index);
+                }
+              }}
+              onDoubleClick={() => {
+                selectLineByIndex(index);
+                // Imperative read in a click handler → raw playhead beat (clamped to ≥0).
+                const currentBeat = getPlayheadBeat({ clampNonNegative: true });
+                openUnrolledLineEditor(index, line.name || `Line ${index + 1}`, currentBeat);
+              }}
+              style={{
+                height: "var(--control-md)",
+                minHeight: "var(--control-md)",
+                padding: "0 var(--space-8)",
+                borderRadius: "var(--radius-md)",
+                gap: "var(--space-4)",
+                flexShrink: 0,
+                overflow: "visible",
+                ...chipStyle,
+              }}
+            >
+              {category && LINE_CATEGORY_COLORS[category] && (
+                <span style={{
+                  width: 6, height: 6, borderRadius: "var(--radius-full)",
+                  background: LINE_CATEGORY_COLORS[category], flexShrink: 0,
+                }} />
+              )}
+              {lineGroups.map((g) => (
+                <span
+                  key={g.id}
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "var(--radius-full)",
+                    background: g.color,
+                    flexShrink: 0,
+                  }}
+                />
+              ))}
+              {line.name || `Untitled`}
               <span
-                key={g.id}
                 style={{
-                  width: 5,
-                  height: 5,
-                  borderRadius: "50%",
-                  background: g.color,
-                  flexShrink: 0,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--fs-caption)",
+                  fontWeight: 400,
+                  color: isSelected || isMultiSelected ? "inherit" : "var(--text-secondary)",
+                  opacity: isSelected || isMultiSelected ? 0.75 : 1,
                 }}
-              />
-            ))}
-            {line.name || `Untitled`}
-            <span style={{ marginLeft: 2, opacity: 0.5, fontSize: 9 }}>
-              {line.notes.length}
-            </span>
-          </button>
+              >
+                {line.notes.length}
+              </span>
+            </button>
+          </Tooltip>
         );
       })}
-      <button
+      <IconButton
+        icon={Plus}
+        label="Add new line"
+        size="md"
         onClick={() => addLine()}
-        style={{
-          padding: "3px 8px",
-          borderRadius: 4,
-          border: "1px dashed #444",
-          background: "transparent",
-          color: "#555",
-          cursor: "pointer",
-          fontSize: 11,
-          fontFamily: "inherit",
-          flexShrink: 0,
-        }}
-      >
-        +
-      </button>
+        tooltipPosition="bottom"
+      />
       <style>{`.linestrip-scroll::-webkit-scrollbar { display: none; }`}</style>
     </div>
   );

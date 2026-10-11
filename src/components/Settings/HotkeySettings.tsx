@@ -3,10 +3,20 @@
 //
 // Shows all available hotkeys grouped by category. Users can
 // click on a binding to enter capture mode and press a new key
-// combination. Conflicts are highlighted in red.
+// combination. Conflicts are shown in the error colour with a
+// warning icon. Rendered as the Settings modal's "Hotkeys"
+// section; `onCapturingChange` lets the modal keep Escape for
+// cancelling a capture instead of closing.
 // ============================================================
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { RotateCcw, TriangleAlert } from "lucide-react";
+import { Button } from "../common/Button";
+import { Icon } from "../common/Icon";
+import { Tooltip } from "../common/Tooltip";
+import { Kbd } from "../common/Kbd";
+import { showConfirm } from "../common/ConfirmDialog";
+import { Card, SectionHeader } from "../common/UIKit";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
   DEFAULT_HOTKEYS,
@@ -77,13 +87,29 @@ function findConflictFor(
   return null;
 }
 
-export function HotkeySettings() {
+export function HotkeySettings({
+  onCapturingChange,
+}: {
+  /** Called when capture mode starts or ends. */
+  onCapturingChange?: (capturing: boolean) => void;
+} = {}) {
   const overrides = useSettingsStore((s) => s.hotkeyOverrides);
   const setHotkeyOverride = useSettingsStore((s) => s.setHotkeyOverride);
   const resetHotkey = useSettingsStore((s) => s.resetHotkey);
   const resetAllHotkeys = useSettingsStore((s) => s.resetAllHotkeys);
 
-  const [capturingAction, setCapturingAction] = useState<string | null>(null);
+  const [capturingAction, setCapturingActionState] = useState<string | null>(null);
+  const setCapturingAction = useCallback(
+    (action: string | null) => {
+      setCapturingActionState(action);
+      onCapturingChange?.(action !== null);
+    },
+    [onCapturingChange],
+  );
+  // Leaving the section mid-capture (other category, modal closed) ends the capture.
+  const onCapturingChangeRef = useRef(onCapturingChange);
+  useEffect(() => { onCapturingChangeRef.current = onCapturingChange; });
+  useEffect(() => () => onCapturingChangeRef.current?.(false), []);
 
   const handleCapture = useCallback(
     (e: KeyboardEvent) => {
@@ -102,7 +128,7 @@ export function HotkeySettings() {
       setHotkeyOverride(capturingAction, keyStr);
       setCapturingAction(null);
     },
-    [capturingAction, setHotkeyOverride],
+    [capturingAction, setHotkeyOverride, setCapturingAction],
   );
 
   useEffect(() => {
@@ -113,7 +139,10 @@ export function HotkeySettings() {
   }, [capturingAction, handleCapture]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div>
+      <p style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", margin: "var(--space-12) 0 0" }}>
+        Click a shortcut, then press the new key combination. <Kbd>Esc</Kbd> cancels.
+      </p>
       {HOTKEY_CATEGORIES.map((category) => {
         const actions = Object.entries(DEFAULT_HOTKEYS).filter(
           ([, def]) => def.category === category,
@@ -122,17 +151,9 @@ export function HotkeySettings() {
 
         return (
           <div key={category}>
-            <h4
-              className="text-xs font-semibold uppercase tracking-wider mb-2 pb-1"
-              style={{
-                color: "var(--text-muted)",
-                borderBottom: "1px solid var(--border-color)",
-              }}
-            >
-              {category}
-            </h4>
-            <div className="flex flex-col gap-1">
-              {actions.map(([action, def]) => {
+            <SectionHeader>{category}</SectionHeader>
+            <Card>
+              {actions.map(([action, def], i) => {
                 const currentKey = overrides[action] ?? def.key;
                 const isOverridden = !!overrides[action];
                 const isCapturing = capturingAction === action;
@@ -144,47 +165,40 @@ export function HotkeySettings() {
                 const conflictLabel = conflictAction
                   ? DEFAULT_HOTKEYS[conflictAction]?.label ?? conflictAction
                   : null;
+                const display = formatHotkeyDisplay(currentKey);
 
                 return (
                   <div
                     key={action}
-                    className="flex items-center gap-2 py-1 px-1 rounded"
+                    className="flex items-center"
                     style={{
-                      backgroundColor: isCapturing
-                        ? "var(--bg-active)"
-                        : "transparent",
+                      gap: "var(--space-8)",
+                      padding: "var(--space-6) var(--space-8) var(--space-6) var(--space-12)",
+                      borderBottom: i === actions.length - 1 ? "none" : "var(--rule) solid var(--separator)",
                     }}
                   >
                     {/* Action label */}
                     <span
-                      className="flex-1 text-xs"
-                      style={{ color: "var(--text-primary)" }}
+                      className="flex-1"
+                      style={{ fontSize: "var(--fs-control)", color: "var(--text-primary)", minWidth: 0 }}
                     >
                       {def.label}
                     </span>
 
+                    {/* Reset button (only visible if overridden) */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      style={{ visibility: isOverridden ? "visible" : "hidden" }}
+                      onClick={() => resetHotkey(action)}
+                      aria-label={`Reset ${def.label} to ${formatHotkeyDisplay(def.key)}`}
+                    >
+                      Reset
+                    </Button>
+
                     {/* Key binding button */}
-                    <button
-                      className="px-2 py-0.5 rounded text-xs font-mono min-w-[100px] text-center transition-colors"
-                      style={{
-                        backgroundColor: isCapturing
-                          ? "var(--accent-primary)"
-                          : "var(--bg-active)",
-                        color: isCapturing
-                          ? "#fff"
-                          : conflictLabel
-                            ? "#ff4060"
-                            : isOverridden
-                              ? "var(--accent-primary)"
-                              : "var(--text-primary)",
-                        border: conflictLabel
-                          ? "1px solid #ff4060"
-                          : "1px solid var(--border-color)",
-                      }}
-                      onClick={() =>
-                        setCapturingAction(isCapturing ? null : action)
-                      }
-                      title={
+                    <Tooltip
+                      content={
                         conflictLabel
                           ? `Conflict: same binding as "${conflictLabel}"`
                           : isCapturing
@@ -192,50 +206,63 @@ export function HotkeySettings() {
                             : "Click to rebind"
                       }
                     >
-                      {isCapturing
-                        ? "Press a key..."
-                        : formatHotkeyDisplay(currentKey)}
-                    </button>
-
-                    {/* Reset button (only visible if overridden) */}
-                    <button
-                      className="px-1.5 py-0.5 rounded text-xs transition-colors hover:bg-white/10"
-                      style={{
-                        color: "var(--text-muted)",
-                        visibility: isOverridden ? "visible" : "hidden",
-                      }}
-                      onClick={() => resetHotkey(action)}
-                      title="Reset to default"
-                    >
-                      Reset
-                    </button>
+                      <button
+                        type="button"
+                        className="ui-btn ui-btn--sm"
+                        aria-pressed={isCapturing}
+                        aria-label={`${def.label}: ${isCapturing ? "press a key combination" : display}`}
+                        style={{
+                          minWidth: 100,
+                          justifyContent: "center",
+                          fontFamily: "var(--font-mono)",
+                          backgroundColor: isCapturing
+                            ? "var(--accent-primary)"
+                            : conflictLabel
+                              ? "color-mix(in srgb, var(--error) 14%, transparent)"
+                              : "var(--bg-tertiary)",
+                          color: isCapturing
+                            ? "var(--on-accent)"
+                            : conflictLabel
+                              ? "var(--error)"
+                              : isOverridden
+                                ? "var(--accent-primary)"
+                                : "var(--text-primary)",
+                        }}
+                        onClick={() =>
+                          setCapturingAction(isCapturing ? null : action)
+                        }
+                      >
+                        {conflictLabel && !isCapturing && (
+                          <Icon icon={TriangleAlert} size={12} aria-hidden="true" />
+                        )}
+                        {isCapturing ? "Press a key…" : display}
+                      </button>
+                    </Tooltip>
                   </div>
                 );
               })}
-            </div>
+            </Card>
           </div>
         );
       })}
 
       {/* Reset all button */}
-      <div
-        className="pt-3 mt-2"
-        style={{ borderTop: "1px solid var(--border-color)" }}
+      <Button
+        variant="danger"
+        icon={RotateCcw}
+        onClick={async () => {
+          if (
+            await showConfirm(
+              "Every shortcut goes back to its default binding. This can't be undone.",
+              { title: "Reset all hotkeys?", confirmLabel: "Reset hotkeys", danger: true },
+            )
+          ) {
+            resetAllHotkeys();
+          }
+        }}
       >
-        <button
-          className="px-3 py-1.5 rounded text-xs transition-colors hover:opacity-80"
-          style={{ color: "#ff4060", border: "1px solid #ff4060" }}
-          onClick={() => {
-            if (
-              confirm("Reset all hotkeys to their default bindings?")
-            ) {
-              resetAllHotkeys();
-            }
-          }}
-        >
-          Reset All Hotkeys
-        </button>
-      </div>
+        Reset all hotkeys…
+      </Button>
     </div>
   );
 }
