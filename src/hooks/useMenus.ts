@@ -25,6 +25,7 @@ import {
 } from "../stores/selection";
 import { useGroupStore } from "../stores/groupStore";
 import { useBookmarkStore } from "../stores/bookmarkStore";
+import { useDialogStore } from "../stores/dialogStore";
 import { useToastStore } from "../stores/toastStore";
 import { showConfirm } from "../components/common/ConfirmDialog";
 import { beatToFloat, floatToBeat } from "../types/chart";
@@ -366,6 +367,7 @@ export function useMenus(
         { label: "Presets", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("presets") },
         { label: "Game preview", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("game-preview") },
         { label: "Hotkey reference", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("hotkey-reference") },
+        { label: "Welcome tour", action: () => useDialogStore.getState().openDialog("onboarding") },
         { label: "DevTools", shortcut: hk("toggle_devtools"), action: () => useEditorStore.getState().toggleDevTools() },
         { separator: true, label: "" },
         { label: "Apply default layout", action: onResetLayout },

@@ -149,6 +149,8 @@ export interface SettingsState {
 
   // ---- Onboarding ----
   hasSeenOnboarding: boolean;
+  /** True once loadSettings has finished (not persisted). Gates first-run UI. */
+  settingsLoaded: boolean;
 
   // ---- Hotkeys ----
   hotkeyOverrides: Record<string, string>;
@@ -177,7 +179,7 @@ export interface SettingsState {
 }
 
 // The subset of state that gets persisted (exclude all action methods)
-type SettingsData = Omit<SettingsState, "updateSettings" | "loadSettings" | "saveSettings" | "recordEasingUse" | "toggleFavoriteEasing" | "setHotkeyOverride" | "resetHotkey" | "resetAllHotkeys" | "addCustomPreset" | "removeCustomPreset">;
+type SettingsData = Omit<SettingsState, "settingsLoaded" | "updateSettings" | "loadSettings" | "saveSettings" | "recordEasingUse" | "toggleFavoriteEasing" | "setHotkeyOverride" | "resetHotkey" | "resetAllHotkeys" | "addCustomPreset" | "removeCustomPreset">;
 
 const STORAGE_KEY = "phichain-settings";
 
@@ -361,6 +363,7 @@ const DEFAULTS: SettingsData = {
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ...DEFAULTS,
+  settingsLoaded: false,
 
   updateSettings: (changes) => {
     set(changes);
@@ -444,6 +447,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       }
     } catch {
       // Ignore parse errors, keep defaults
+    } finally {
+      set({ settingsLoaded: true });
     }
   },
 

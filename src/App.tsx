@@ -81,6 +81,8 @@ import { ToastContainer } from "./components/common/Toast";
 import { ConfirmDialog } from "./components/common/ConfirmDialog";
 import { PromptDialog } from "./components/common/PromptDialog";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
+import { OnboardingOverlay } from "./components/Onboarding/OnboardingOverlay";
+import { useSettingsStore } from "./stores/settingsStore";
 
 // ============================================================
 // CONFIGURABLE: Default panel layout
@@ -235,6 +237,9 @@ export default function App() {
   const showRecordReview = useDialogStore((s) => s.openDialogs.has("record-review"));
   const showSettings = useDialogStore((s) => s.openDialogs.has("settings"));
   const showCommandPalette = useDialogStore((s) => s.openDialogs.has("command-palette"));
+  const showOnboarding = useDialogStore((s) => s.openDialogs.has("onboarding"));
+  const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding);
+  const settingsLoaded = useSettingsStore((s) => s.settingsLoaded);
   const [expandedPanelId, setExpandedPanelId] = useState<PanelId | null>(null);
   const savedLayoutRef = useRef<MosaicNode<PanelId> | null>(null);
   const prevTabIdRef = useRef<string | null>(null);
@@ -318,6 +323,20 @@ export default function App() {
     // above so satellite saves resolved to the OUTGOING chart.
     if (newTab && isChartSessionTabId(newTab.id)) setActiveChartSessionTabId(newTab.id);
   }, [activeTabId, tabs, isLoaded]);
+
+  // First run: open the welcome tour the first time an editor shows a loaded
+  // chart. Closing it records hasSeenOnboarding, so it opens only once. Waits
+  // for the saved settings so a returning user never sees it flash up.
+  const inEditor =
+    activeTab?.type === "unified_editor" || activeTab?.type === "unrolled_editor" || activeTab?.type === "chart";
+  useEffect(() => {
+    if (settingsLoaded && isLoaded && inEditor && !hasSeenOnboarding) openDialog("onboarding");
+  }, [settingsLoaded, isLoaded, inEditor, hasSeenOnboarding, openDialog]);
+
+  const closeOnboarding = useCallback(() => {
+    closeDialog("onboarding");
+    useSettingsStore.getState().updateSettings({ hasSeenOnboarding: true });
+  }, [closeDialog]);
 
   // When chart is closed, unload audio, close chart tabs, and clean up sessions.
   // This prevents stale audio/illustration from leaking into a new chart.
@@ -601,6 +620,7 @@ export default function App() {
         onShowOnsetCalibration={() => openDialog("onset-calibration")}
       />
       <FavoritesWizard />
+      <OnboardingOverlay open={showOnboarding} onClose={closeOnboarding} />
       <DevToolsPanel />
       <ToastContainer />
       <ConfirmDialog />

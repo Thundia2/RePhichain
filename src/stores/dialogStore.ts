@@ -25,7 +25,9 @@ export type DialogId =
   // Phase C of onset plan (2026-04-20): calibration dialog with 4 region
   // previews + live slider updates. Opened from the Edit menu, the command
   // palette, or via the Ctrl+Shift+O shortcut.
-  | "onset-calibration";
+  | "onset-calibration"
+  // First-run welcome tour; auto-opens once (App.tsx), View → Welcome tour reopens it.
+  | "onboarding";
 
 interface DialogStore {
   /** Set of currently open dialog IDs */
