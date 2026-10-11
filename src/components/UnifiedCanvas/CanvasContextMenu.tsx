@@ -6,11 +6,13 @@
 // transitions. Styled with the ui-popover / ui-menu-item classes.
 // ============================================================
 
+import { useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Blend, Move, MoveHorizontal, MoveVertical, RotateCw, Spline } from "lucide-react";
 import { createQuickConstant, createQuickTransition } from "../../utils/quickEventCreate";
 import { showPrompt } from "../common/PromptDialog";
 import { Icon } from "../common/Icon";
+import { useMenuKeyboard } from "../../hooks/useMenuKeyboard";
 
 interface CanvasContextMenuProps {
   x: number;
@@ -46,6 +48,8 @@ export function CanvasContextMenu({
   onClose,
 }: CanvasContextMenuProps) {
   const beatLabel = beat.toFixed(2);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useMenuKeyboard(true, onClose, menuRef, { focusFirst: true });
 
   const menuWidth = 240;
   const menuHeight = 220;
@@ -113,6 +117,7 @@ export function CanvasContextMenu({
       />
       {/* Menu */}
       <div
+        ref={menuRef}
         role="menu"
         aria-label="Canvas actions"
         className="ui-popover"

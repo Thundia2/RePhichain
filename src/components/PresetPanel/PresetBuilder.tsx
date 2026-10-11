@@ -247,7 +247,7 @@ function KeyframeEditor({
           Beat
         </span>
         <NumericInput
-          className="flex-1"
+          className="flex-1 w-0 min-w-0"
           style={NUM_INPUT_STYLE}
           commitMode="blur"
           step="0.25"
@@ -269,7 +269,7 @@ function KeyframeEditor({
           </span>
         ) : (
           <NumericInput
-            className="flex-1"
+            className="flex-1 w-0 min-w-0"
             style={NUM_INPUT_STYLE}
             commitMode="blur"
             step="0.1"
@@ -299,7 +299,7 @@ function KeyframeEditor({
           Easing
         </span>
         <select
-          className="flex-1"
+          className="flex-1 w-0 min-w-0"
           style={{ ...SELECT_STYLE, minWidth: 0 }}
           value={typeof keyframe.easing === "string" ? keyframe.easing : "linear"}
           onChange={(e) => onUpdate({ easing: e.target.value as EasingType })}
@@ -524,7 +524,7 @@ export function PresetBuilder({ onClose }: { onClose: () => void }) {
             Name
           </span>
           <input
-            className="flex-1"
+            className="flex-1 w-0 min-w-0"
             style={{ ...INPUT_STYLE, minWidth: 0 }}
             type="text"
             value={name}
@@ -536,7 +536,7 @@ export function PresetBuilder({ onClose }: { onClose: () => void }) {
             Description
           </span>
           <input
-            className="flex-1"
+            className="flex-1 w-0 min-w-0"
             style={{ ...INPUT_STYLE, minWidth: 0 }}
             type="text"
             value={description}
@@ -549,7 +549,7 @@ export function PresetBuilder({ onClose }: { onClose: () => void }) {
             Duration
           </span>
           <NumericInput
-            className="flex-1"
+            className="flex-1 w-0 min-w-0"
             style={NUM_INPUT_STYLE}
             commitMode="blur"
             integer

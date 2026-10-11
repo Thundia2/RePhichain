@@ -21,6 +21,7 @@ import { safeParseNumber } from "../common/FormFields";
 import { Plus, X } from "lucide-react";
 import { Button } from "../common/Button";
 import { IconButton } from "../common/IconButton";
+import { Kbd } from "../common/Kbd";
 import { Toggle } from "../common/UIKit";
 
 // ---- Extracted sub-components ----
@@ -160,9 +161,8 @@ export function GroupManager() {
 
   return (
     <div className="h-full overflow-y-auto" style={{ padding: "var(--space-10)", fontSize: "var(--fs-body)" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-8)", marginBottom: "var(--space-8)" }}>
-        <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "var(--fs-headline)" }}>Groups</span>
+      {/* Create actions. No title: every host (drawer, context panel) already says "Groups". */}
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "var(--space-8)", marginBottom: "var(--space-8)" }}>
         <div style={{ display: "flex", gap: "var(--space-4)" }}>
           <Button
             variant={showCreate === "line" ? "primary" : "secondary"}
@@ -220,7 +220,7 @@ export function GroupManager() {
       {/* Group list */}
       {groups.length === 0 && !showCreate && (
         <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-control)", padding: "var(--space-12) 0", textAlign: "center" }}>
-          No groups yet. Create one or press Ctrl+Shift+G.
+          No groups yet. Create one or press <Kbd>Ctrl+Shift+G</Kbd>
         </div>
       )}
 

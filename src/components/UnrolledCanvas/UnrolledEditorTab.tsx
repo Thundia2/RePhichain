@@ -25,6 +25,7 @@ import { UnrolledViewBar } from "./UnrolledViewBar";
 import { UnifiedInspector } from "../UnifiedCanvas/UnifiedInspector";
 import { TransportBar } from "../TransportBar/TransportBar";
 import { KeyframeBar } from "../KeyframeBar/KeyframeBar";
+import { useKeyframeDockHeight } from "../KeyframeBar/useKeyframeDockHeight";
 import { LineStrip } from "../LineStrip/LineStrip";
 import { StatusBar } from "../StatusBar/StatusBar";
 import { useEditorStore } from "../../stores/editorStore";
@@ -52,6 +53,7 @@ export function UnrolledEditorTab({ lineIndex }: UnrolledEditorTabProps = {}) {
   const keyframeBarOpen = useEditorStore((s) => s.keyframeBarOpen);
   const keyframeBarHeight = useEditorStore((s) => s.keyframeBarHeight);
   const setKeyframeBarHeight = useEditorStore((s) => s.setKeyframeBarHeight);
+  const keyframeDockHeight = useKeyframeDockHeight();
   const showMiniPreview = useEditorStore((s) => s.showMiniPreview);
 
   // ---- Per-line mode state ----
@@ -228,7 +230,7 @@ export function UnrolledEditorTab({ lineIndex }: UnrolledEditorTabProps = {}) {
           )}
           <div
             style={{
-              height: keyframeBarOpen ? keyframeBarHeight : 0,
+              height: keyframeDockHeight,
               overflow: "hidden",
               transition: "height var(--dur-base) var(--ease-out)",
               flexShrink: 0,

@@ -41,6 +41,7 @@ export function Card({
 }) {
   return (
     <div
+      className="ui-filled"
       style={{
         backgroundColor: "var(--bg-active)",
         borderRadius: "var(--radius-xl)",

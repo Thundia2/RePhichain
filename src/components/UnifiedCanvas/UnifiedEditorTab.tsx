@@ -15,6 +15,7 @@ import { UnifiedCanvas } from "./UnifiedCanvas";
 import { UnifiedInspector } from "./UnifiedInspector";
 import { TransportBar } from "../TransportBar/TransportBar";
 import { KeyframeBar } from "../KeyframeBar/KeyframeBar";
+import { useKeyframeDockHeight } from "../KeyframeBar/useKeyframeDockHeight";
 import { LineStrip } from "../LineStrip/LineStrip";
 import { LineDrawer } from "../LineDrawer/LineDrawer";
 import { StatusBar } from "../StatusBar/StatusBar";
@@ -32,6 +33,7 @@ export function UnifiedEditorTab() {
   const keyframeBarOpen = useEditorStore((s) => s.keyframeBarOpen);
   const keyframeBarHeight = useEditorStore((s) => s.keyframeBarHeight);
   const setKeyframeBarHeight = useEditorStore((s) => s.setKeyframeBarHeight);
+  const keyframeDockHeight = useKeyframeDockHeight();
 
   // ---- Resize handle for the bottom panel drawer ----
   const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
@@ -160,7 +162,7 @@ export function UnifiedEditorTab() {
           )}
           <div
             style={{
-              height: keyframeBarOpen ? keyframeBarHeight : 0,
+              height: keyframeDockHeight,
               overflow: "hidden",
               transition: "height var(--dur-base) var(--ease-out)",
               flexShrink: 0,

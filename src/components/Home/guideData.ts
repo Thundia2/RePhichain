@@ -83,7 +83,7 @@ export const HOTKEYS: { cat: string; keys: { key: ShortcutRef; action: string }[
   ]},
   { cat: "Groups", keys: [
     { key: { action: "pattern_tool" }, action: "Toggle pattern tool" }, { key: "Ctrl+Shift+G", action: "Create group" },
-    { key: { action: "enter_group_edit" }, action: "Enter group edit" }, { key: "Escape", action: "Exit group edit" },
+    { key: { action: "enter_group_edit" }, action: "Enter group edit" }, { key: "Esc", action: "Exit group edit" },
   ]},
   { cat: "Modes", keys: [
     { key: "Shift+I", action: "Toggle mark/improv mode" }, { key: "Alt+R", action: "Toggle record mode" },

@@ -57,7 +57,7 @@ export function Field({
         {label}
       </span>
       <input
-        className="flex-1 px-1 py-0.5 text-xs"
+        className="flex-1 w-0 min-w-0 px-1 py-0.5 text-xs"
         style={type === "number" ? NUMERIC_STYLE : INPUT_STYLE}
         type={type}
         step={step}
@@ -285,7 +285,7 @@ export function SelectField({
         {label}
       </span>
       <select
-        className="flex-1 px-1 py-0.5 text-xs"
+        className="flex-1 w-0 min-w-0 px-1 py-0.5 text-xs"
         style={SELECT_STYLE}
         value={value}
         onChange={(e) => onChange(e.target.value)}

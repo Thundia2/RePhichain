@@ -22,6 +22,7 @@ import { IconButton } from "../common/IconButton";
 import { Icon } from "../common/Icon";
 import { Tooltip } from "../common/Tooltip";
 import { showPrompt } from "../common/PromptDialog";
+import { useMenuKeyboard } from "../../hooks/useMenuKeyboard";
 
 // ---- Context menu state ----
 interface ContextMenu {
@@ -84,25 +85,9 @@ export function LineDrawer() {
     }
   }, [renamingIndex]);
 
-  // Close context menu on click outside or Escape
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClose = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setContextMenu(null);
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setContextMenu(null);
-    };
-    const doc = contextMenu.doc;
-    doc.addEventListener("mousedown", handleClose);
-    doc.addEventListener("keydown", handleKey);
-    return () => {
-      doc.removeEventListener("mousedown", handleClose);
-      doc.removeEventListener("keydown", handleKey);
-    };
-  }, [contextMenu]);
+  // Context menu: outside press / Escape close it, arrows move between items
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  useMenuKeyboard(contextMenu !== null, closeContextMenu, menuRef, { focusFirst: true, closeOnOutsidePress: true });
 
   const commitRename = useCallback(() => {
     if (renamingIndex !== null) {

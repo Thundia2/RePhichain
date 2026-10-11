@@ -635,6 +635,7 @@ function EasingChip({ easing, isActive, isFavorite, onApply, onToggleFavorite }:
         label={isFavorite ? `Remove ${name} from favorites` : `Add ${name} to favorites`}
         size="sm"
         active={isFavorite}
+        className="ui-icon-btn--quiet"
         onClick={onToggleFavorite}
         style={{ marginRight: "var(--space-2)" }}
       >

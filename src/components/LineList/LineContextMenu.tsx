@@ -5,12 +5,13 @@
 // A ui-popover of ui-menu-items; hover comes from CSS.
 // ============================================================
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { SquarePen, Copy, Trash2, Tag, ChevronRight, ChevronDown, Check } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { useTabStore } from "../../stores/tabStore";
 import { Icon } from "../common/Icon";
+import { useMenuKeyboard } from "../../hooks/useMenuKeyboard";
 import {
   LINE_CATEGORY_COLORS,
   LINE_CATEGORY_LABELS,
@@ -35,6 +36,8 @@ export function LineContextMenu({
   const duplicateLine = useChartStore((s) => s.duplicateLine);
   const openLineEventEditor = useTabStore((s) => s.openLineEventEditor);
   const [showCategorySubmenu, setShowCategorySubmenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useMenuKeyboard(true, onClose, menuRef, { focusFirst: true });
 
   if (!line) return null;
 
@@ -57,6 +60,7 @@ export function LineContextMenu({
       />
       {/* Menu */}
       <div
+        ref={menuRef}
         role="menu"
         aria-label="Line actions"
         className="ui-popover"

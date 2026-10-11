@@ -255,42 +255,22 @@ function LineSection({ lineIndex }: { lineIndex: number }) {
 
   if (!line) return null;
 
-  const fields: [string, string | number][] = [
-    ["Name", line.name || `Line ${lineIndex}`],
-    ["Z order", String(line.z_order ?? 0)],
-    ["Is cover", line.is_cover === false ? "false" : "true"],
-    ["BPM factor", String(line.bpm_factor ?? 1.0)],
-    ["Father", line.father_index != null ? String(line.father_index) : "none"],
-    ["Group", String(line.group ?? 0)],
-  ];
-
+  // Every property is a live control (same semantics as the classic Inspector);
+  // there is no separate read-only copy.
   return (
     <div style={SECTION_STYLE}>
       <SectionHeader color="var(--text-primary)">Line #{lineIndex}</SectionHeader>
-      {fields.map(([k, v]) => (
-        <div key={k} style={{ display: "flex", alignItems: "center", marginBottom: 3 }}>
-          <span style={{ width: 70, color: "var(--text-secondary)", fontSize: "var(--fs-caption)" }}>{k}</span>
-          <div
-            style={{
-              flex: 1,
-              background: "var(--bg-tertiary)",
-              borderRadius: "var(--radius-sm)",
-              padding: "var(--space-2) var(--space-6)",
-              color: "var(--text-primary)",
-              fontSize: "var(--fs-caption)",
-              border: "var(--hairline) solid var(--border-color)",
-            }}
-          >
-            {v}
-          </div>
-        </div>
-      ))}
-      <div style={DIVIDER_STYLE} />
-      <SectionHeader>Editable</SectionHeader>
       <Field label="Name" type="text" value={line.name} onChange={(v) => editLine(lineIndex, { name: v })} />
       <Field label="Z order" value={line.z_order ?? 0} onChange={(v) => editLine(lineIndex, { z_order: parseInt(v) === 0 ? undefined : parseInt(v) })} step="1" />
+      <SelectField
+        label="Is cover"
+        value={line.is_cover === false ? "false" : "true"}
+        options={[{ value: "true", label: "Yes" }, { value: "false", label: "No" }]}
+        onChange={(v) => editLine(lineIndex, { is_cover: v === "false" ? false : undefined })}
+      />
       <Field label="BPM factor" value={line.bpm_factor ?? 1} onChange={(v) => { const val = parseFloat(v); editLine(lineIndex, { bpm_factor: val === 1 ? undefined : val || 1 }); }} step="0.1" />
       <Field label="Father" value={line.father_index ?? -1} onChange={(v) => { const val = parseInt(v); editLine(lineIndex, { father_index: val === -1 ? undefined : val }); }} step="1" />
+      <Field label="Group" value={line.group ?? 0} onChange={(v) => { const val = parseInt(v); editLine(lineIndex, { group: val === 0 ? undefined : val }); }} step="1" />
       <SelectField
         label="Attach UI"
         value={line.attach_ui ?? ""}

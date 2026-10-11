@@ -11,6 +11,7 @@ import { useState, useRef, useEffect } from "react";
 import { useChartStore } from "../../stores/chartStore";
 import type { PanelId } from "../../types/editor";
 import { useMenus } from "../../hooks/useMenus";
+import { focusMenuItem, useMenuKeyboard } from "../../hooks/useMenuKeyboard";
 import type { Menu } from "../../hooks/useMenus";
 import { Command, Hexagon, Settings } from "lucide-react";
 import { Icon } from "../common/Icon";
@@ -136,7 +137,7 @@ export function MenuBar({
       <div className="flex items-center" style={{ gap: "var(--space-6)" }}>
         <button
           type="button"
-          className="flex items-center ui-hover"
+          className="flex items-center ui-hover ui-filled"
           style={{
             gap: "var(--space-6)",
             height: "var(--control-md)",
@@ -152,7 +153,7 @@ export function MenuBar({
         >
           <Icon icon={Command} size={12} />
           <span>Command palette</span>
-          <Kbd style={{ background: "var(--bg-tertiary)" }}>Ctrl+K</Kbd>
+          <Kbd>Ctrl+K</Kbd>
         </button>
         <IconButton
           icon={Settings}
@@ -182,41 +183,7 @@ function MenuDropdown({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Escape closes the open menu and returns focus to its trigger,
-  // wherever focus is (a mouse-opened menu leaves it on the trigger or body).
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-      triggerRef.current?.focus();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [isOpen, onClose]);
-
-  /** Move focus among the enabled items: +1/-1 steps, "first"/"last" jumps. */
-  const focusItem = (to: 1 | -1 | "first" | "last") => {
-    const items = Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? []);
-    if (items.length === 0) return;
-    const i = items.indexOf(document.activeElement as HTMLButtonElement);
-    const next =
-      to === "first" ? 0
-      : to === "last" ? items.length - 1
-      : i === -1 ? (to === 1 ? 0 : items.length - 1)
-      : (i + to + items.length) % items.length;
-    items[next].focus();
-  };
-
-  const onListKeyDown = (e: React.KeyboardEvent) => {
-    const to = ({ ArrowDown: 1, ArrowUp: -1, Home: "first", End: "last" } as const)[e.key as "ArrowDown"];
-    if (to === undefined) return;
-    e.preventDefault();
-    e.stopPropagation(); // keep arrow keys away from the editor's hotkeys
-    focusItem(to);
-  };
+  useMenuKeyboard(isOpen, onClose, listRef, { returnFocusTo: triggerRef });
 
   const onTriggerKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -224,7 +191,7 @@ function MenuDropdown({
     e.stopPropagation();
     if (!isOpen) onToggle();
     const to = e.key === "ArrowDown" ? "first" : "last";
-    requestAnimationFrame(() => focusItem(to));
+    requestAnimationFrame(() => focusMenuItem(listRef.current, to));
   };
 
   return (
@@ -258,7 +225,6 @@ function MenuDropdown({
           ref={listRef}
           role="menu"
           aria-label={menu.label}
-          onKeyDown={onListKeyDown}
           className="absolute top-full left-0 ui-popover"
           style={{
             zIndex: "var(--z-dropdown)",

@@ -14,6 +14,7 @@ import { RotateCcw, TriangleAlert } from "lucide-react";
 import { Button } from "../common/Button";
 import { Icon } from "../common/Icon";
 import { Tooltip } from "../common/Tooltip";
+import { Kbd } from "../common/Kbd";
 import { showConfirm } from "../common/ConfirmDialog";
 import { Card, SectionHeader } from "../common/UIKit";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -140,7 +141,7 @@ export function HotkeySettings({
   return (
     <div>
       <p style={{ fontSize: "var(--fs-caption)", color: "var(--text-secondary)", margin: "var(--space-12) 0 0" }}>
-        Click a shortcut, then press the new key combination. Escape cancels.
+        Click a shortcut, then press the new key combination. <Kbd>Esc</Kbd> cancels.
       </p>
       {HOTKEY_CATEGORIES.map((category) => {
         const actions = Object.entries(DEFAULT_HOTKEYS).filter(

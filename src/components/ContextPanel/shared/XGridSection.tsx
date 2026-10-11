@@ -53,8 +53,8 @@ export function XGridSection() {
     }}>
       {/* Row 1: label + spacing readout + toggle */}
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-8)" }}>
-        <span style={{ fontSize: "var(--fs-control)", color: "var(--text-primary)", fontWeight: 600, flex: 1 }}>
-          X grid
+        <span style={{ fontSize: "var(--fs-control)", color: "var(--text-primary)", flex: 1 }}>
+          Snap to grid
         </span>
         <span style={{
           fontFamily: "var(--font-mono)",

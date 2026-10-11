@@ -17,7 +17,7 @@ import { Dialog } from "../common/Dialog";
 import { Button } from "../common/Button";
 import { SegmentedControl } from "../common/SegmentedControl";
 import { SELECT_STYLE } from "../common/UIKit";
-import { chromeTheme, monoFont, withAlpha } from "../../canvas/chromeTheme";
+import { chromeTheme, withAlpha } from "../../canvas/chromeTheme";
 import { EVENT_COLORS } from "../../constants/eventColors";
 import {
   generateShakeEvents,
@@ -196,14 +196,11 @@ export function ShakeGeneratorDialog({
           }} step="1" />
         </div>
 
-        {/* Easing */}
-        <div>
-          <span style={LABEL_STYLE}>Easing</span>
-          <EasingPicker
-            value={typeof config.easing === "string" ? config.easing : "linear"}
-            onChange={(easing: string) => update({ easing: easing as EasingType })}
-          />
-        </div>
+        {/* Easing (the picker carries its own "Easing" label) */}
+        <EasingPicker
+          value={typeof config.easing === "string" ? config.easing : "linear"}
+          onChange={(easing: string) => update({ easing: easing as EasingType })}
+        />
 
         {/* Decay */}
         <div>
@@ -330,14 +327,6 @@ function ShakeWaveformPreview({ config }: { config: ShakeConfig }) {
       else ctx.lineTo(px, py);
     }
     ctx.stroke();
-
-    // Labels
-    ctx.fillStyle = theme.textSecondary;
-    ctx.font = monoFont(10);
-    ctx.textAlign = "left";
-    ctx.fillText(`±${config.amplitude}${config.kind === "rotation" ? "°" : ""}`, 3, 11);
-    ctx.textAlign = "right";
-    ctx.fillText(`${config.durationBeats} beats`, w - 3, h - 3);
   }, [previewData, config]);
 
   if (previewData.length === 0) return null;
@@ -353,6 +342,11 @@ function ShakeWaveformPreview({ config }: { config: ShakeConfig }) {
           borderRadius: "var(--radius-lg)",
         }}
       />
+      {/* Scale captions sit under the plot so the wave never runs through them */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "var(--space-2)", fontSize: "var(--fs-caption)", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
+        <span>±{config.amplitude}{config.kind === "rotation" ? "°" : ""}</span>
+        <span>{config.durationBeats} beats</span>
+      </div>
     </div>
   );
 }

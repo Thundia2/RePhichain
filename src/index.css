@@ -12,6 +12,12 @@
   --radius-2xl: 14px;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", monospace;
+  /* Utilities are rem-based by default, and the root font is the 12px body
+     size, so text-xs came out at 9px and w-16 at 48px. Pin them to the
+     design system instead: a 4px spacing unit and the 11px control text. */
+  --spacing: 4px;
+  --text-xs: var(--fs-control);
+  --text-xs--line-height: 16px;
 }
 
 /* ============================================================
@@ -340,7 +346,7 @@ input[type="range"] {
 input[type="range"]::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: var(--radius-full);
-  background: var(--bg-active);
+  background: var(--track-bg, var(--bg-active));
 }
 
 input[type="range"]::-webkit-slider-thumb {
@@ -362,7 +368,7 @@ input[type="range"]:hover::-webkit-slider-thumb {
 input[type="range"]::-moz-range-track {
   height: 4px;
   border-radius: var(--radius-full);
-  background: var(--bg-active);
+  background: var(--track-bg, var(--bg-active));
 }
 
 input[type="range"]::-moz-range-progress {
@@ -556,6 +562,16 @@ input[type="color"]::-webkit-color-swatch {
   background-color: var(--accent-selected);
   color: var(--accent-primary);
 }
+/* A per-row toggle (favourite star) shows its state in the icon alone,
+   so a list of them doesn't fill with accent tiles. */
+.ui-icon-btn--quiet.is-active,
+.ui-icon-btn--quiet[aria-pressed="true"] {
+  background-color: transparent;
+}
+.ui-icon-btn--quiet.is-active:hover,
+.ui-icon-btn--quiet[aria-pressed="true"]:hover {
+  background-color: var(--fill-hover);
+}
 .ui-icon-btn--danger:hover:not(:disabled, [aria-disabled="true"]) {
   background-color: var(--danger-hover-bg);
   color: var(--danger-hover-fg);
@@ -642,14 +658,46 @@ input[type="color"]::-webkit-color-swatch {
   cursor: default;
 }
 
+/* Horizontal scroller (useScrollFade): no scrollbar; the side with hidden
+   content fades out so a clipped item reads as "more this way". */
+.ui-scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.ui-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+.ui-scroll-x[data-fade="end"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--space-24)), transparent);
+}
+.ui-scroll-x[data-fade="start"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - var(--space-24)), transparent);
+}
+.ui-scroll-x[data-fade="both"] {
+  mask-image: linear-gradient(to right, transparent, #000 var(--space-24), #000 calc(100% - var(--space-24)), transparent);
+}
+/* The scroller clips outlines; draw focus rings inside the item. */
+.ui-scroll-x :focus-visible {
+  outline-offset: -2px;
+}
+
 /* Keyboard shortcut chip */
+/* On a filled surface (bg-active cards and buttons) the chip and a slider
+   track step back to bg-tertiary so they stay visible; those surfaces set
+   --kbd-bg / --track-bg. */
+.ui-btn,
+.ui-filled {
+  --kbd-bg: var(--bg-tertiary);
+  --track-bg: var(--bg-tertiary);
+}
 .ui-kbd {
   display: inline-flex;
   align-items: center;
   height: 16px;
   padding: 0 var(--space-4);
   border-radius: var(--radius-xs);
-  background: var(--bg-active);
+  background: var(--kbd-bg, var(--bg-active));
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: var(--fs-caption);

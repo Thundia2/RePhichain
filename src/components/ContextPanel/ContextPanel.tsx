@@ -7,6 +7,7 @@
 
 import { useCallback, useMemo, useRef, useEffect } from "react";
 import { useContextPanelMode, getModeTabs, MODE_CONFIG } from "../../hooks/useContextPanelMode";
+import { useScrollFade } from "../../hooks/useScrollFade";
 import { Icon } from "../common/Icon";
 import { Tooltip } from "../common/Tooltip";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -88,8 +89,17 @@ export function ContextPanel(props: ContextPanelProps) {
 
   // Keep the active tab visible when the track scrolls sideways
   const tabTrackRef = useRef<HTMLDivElement>(null);
+  useScrollFade(tabTrackRef);
+  // (clear of the edge fades).
   useEffect(() => {
-    tabTrackRef.current?.querySelector<HTMLElement>("[data-active]")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const track = tabTrackRef.current;
+    const tab = track?.querySelector<HTMLElement>("[data-active]");
+    if (!track || !tab) return;
+    const fade = 24; // --space-24, the width of the edge fade
+    const left = tab.offsetLeft - track.offsetLeft;
+    const right = left + tab.offsetWidth;
+    if (left - fade < track.scrollLeft) track.scrollLeft = Math.max(0, left - fade);
+    else if (right + fade > track.scrollLeft + track.clientWidth) track.scrollLeft = right + fade - track.clientWidth;
   }, [activeTab, mode]);
 
   // Handle tab click
@@ -175,9 +185,11 @@ export function ContextPanel(props: ContextPanelProps) {
         onPinnedItemClick={handlePinnedItemClick}
       />
 
-      {/* Tab bar — segmented control; scrolls sideways when a mode has many tabs */}
+      {/* Tab bar — segmented control; scrolls sideways (with an edge fade)
+          when a mode has more tabs than fit */}
       <div style={{ padding: "var(--space-8) var(--space-8) 0", flexShrink: 0 }}>
-        <div ref={tabTrackRef} className="ui-segmented ui-segmented--block" role="tablist" aria-label={`${MODE_CONFIG[mode].label} panel`} style={{ overflowX: "auto", scrollbarWidth: "none" }}>
+        <div className="ui-segmented ui-segmented--block">
+        <div ref={tabTrackRef} className="ui-scroll-x" role="tablist" aria-label={`${MODE_CONFIG[mode].label} panel`} style={{ display: "flex", gap: "var(--space-2)", flex: 1, minWidth: 0 }}>
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             const button = (
@@ -199,6 +211,7 @@ export function ContextPanel(props: ContextPanelProps) {
             // Icon-only tabs are named by a tooltip.
             return tab.iconOnly ? <Tooltip key={tab.id} content={tab.label} position="bottom">{button}</Tooltip> : button;
           })}
+        </div>
         </div>
       </div>
 

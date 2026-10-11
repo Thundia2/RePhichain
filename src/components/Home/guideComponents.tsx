@@ -14,7 +14,7 @@ import { easingFns } from "./guideData";
 /** Filled content card (bg-active, radius-lg). No frame, no accent edge. */
 export function GCard({ children, style: s }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{
+    <div className="ui-filled" style={{
       background: "var(--bg-active)",
       borderRadius: "var(--radius-lg)", padding: "var(--space-10) var(--space-12)", ...s,
     }}>{children}</div>

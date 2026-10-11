@@ -373,6 +373,7 @@ export function CurveGraph({ isPopout }: CurveGraphProps) {
         height: isPopout ? "100%" : height,
         overflow: "hidden",
         position: "relative",
+        flexShrink: 0,
       }}
     >
       <canvas

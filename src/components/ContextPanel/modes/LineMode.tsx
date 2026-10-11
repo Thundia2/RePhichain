@@ -700,6 +700,7 @@ function PresetsTab() {
                     label={isFav ? "Remove from favorites" : "Add to favorites"}
                     size="sm"
                     active={isFav}
+                    className="ui-icon-btn--quiet"
                     onClick={(e) => { e.stopPropagation(); toggleFavoritePreset(preset.id); }}
                   >
                     <Icon icon={Star} size={12} fill={isFav ? "currentColor" : "none"} />

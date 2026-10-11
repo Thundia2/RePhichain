@@ -20,7 +20,7 @@ import { beatToFloat } from "../../types/chart";
 import type { Line } from "../../types/chart";
 import { Dialog } from "../common/Dialog";
 import { Button } from "../common/Button";
-import { ActionKbd } from "../common/Kbd";
+import { ActionKbd, Kbd } from "../common/Kbd";
 import { INPUT_STYLE } from "../common/UIKit";
 
 interface GoToBeatDialogProps {
@@ -279,7 +279,7 @@ export function GoToBeatDialog({ open, onClose }: GoToBeatDialogProps) {
       footer={
         <>
           <span style={{ marginRight: "auto", fontSize: "var(--fs-caption)", color: "var(--text-secondary)" }}>
-            Enter to confirm &middot; Esc to cancel
+            <Kbd>Enter</Kbd> go · <Kbd>Esc</Kbd> cancel
           </span>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" onClick={handleConfirm} disabled={!parsed}>

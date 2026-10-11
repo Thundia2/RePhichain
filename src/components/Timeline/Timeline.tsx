@@ -38,6 +38,7 @@ import type { NoteKind } from "../../types/chart";
 import type { EditorTool } from "../../types/editor";
 import { TimelineMinimap } from "./TimelineMinimap";
 import { seriesColor } from "../../canvas/chromeTheme";
+import { useMenuKeyboard } from "../../hooks/useMenuKeyboard";
 
 /** Extra beats of padding beyond the last content */
 const SCROLL_PADDING_BEATS = 8;
@@ -66,6 +67,9 @@ export function Timeline() {
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; noteIdx: number } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  useMenuKeyboard(contextMenu !== null, closeContextMenu, contextMenuRef, { focusFirst: true, closeOnOutsidePress: true });
 
   // Store subscriptions for reactive rendering — values read via getState() in callbacks
   const chart = useChartStore((s) => s.chart);
@@ -536,7 +540,9 @@ export function Timeline() {
       {/* Context menu */}
       {contextMenu && (
         <div
+          ref={contextMenuRef}
           role="menu"
+          aria-label="Note actions"
           className="ui-popover"
           style={{
             position: "absolute",

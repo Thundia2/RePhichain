@@ -182,15 +182,25 @@ export function CommandPalette({
     }
   };
 
+  /** Next enabled command from `from` in direction `dir` (wraps; stays put if none). */
+  const stepEnabled = (from: number, dir: 1 | -1) => {
+    const n = flatFiltered.length;
+    for (let k = 1; k <= n; k++) {
+      const i = (((from + dir * k) % n) + n) % n;
+      if (!flatFiltered[i].disabled) return i;
+    }
+    return from;
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        setSelectedIndex((prev) => (prev + 1) % Math.max(1, flatFiltered.length));
+        setSelectedIndex((prev) => stepEnabled(prev, 1));
         break;
       case "ArrowUp":
         e.preventDefault();
-        setSelectedIndex((prev) => (prev - 1 + flatFiltered.length) % Math.max(1, flatFiltered.length));
+        setSelectedIndex((prev) => stepEnabled(prev, -1));
         break;
       case "Enter":
         e.preventDefault();
@@ -315,8 +325,9 @@ export function CommandPalette({
                       opacity: item.disabled ? "var(--opacity-disabled)" : undefined,
                       ...(isSelected ? { backgroundColor: "var(--accent-selected)" } : {}),
                     }}
-                    // Hover moves the keyboard highlight (state, not styling).
-                    onMouseEnter={() => setSelectedIndex(thisIndex)}
+                    // Hover moves the keyboard highlight (state, not styling);
+                    // disabled commands can't be highlighted.
+                    onMouseEnter={() => { if (!item.disabled) setSelectedIndex(thisIndex); }}
                     onClick={() => {
                       if (!item.disabled && item.action) {
                         item.action();

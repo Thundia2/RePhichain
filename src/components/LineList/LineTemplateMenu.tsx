@@ -15,6 +15,7 @@ import type { LucideIcon } from "lucide-react";
 import { useChartStore } from "../../stores/chartStore";
 import { Icon } from "../common/Icon";
 import { IconButton } from "../common/IconButton";
+import { useMenuKeyboard } from "../../hooks/useMenuKeyboard";
 import { Tooltip } from "../common/Tooltip";
 import type { Line, LineEvent, Beat } from "../../types/chart";
 
@@ -108,6 +109,9 @@ export function LineTemplateMenu() {
   const addLine = useChartStore((s) => s.addLine);
   const batchAddLines = useChartStore((s) => s.batchAddLines);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useMenuKeyboard(open, close, menuRef);
 
   useEffect(() => {
     if (!open) return;
@@ -146,6 +150,7 @@ export function LineTemplateMenu() {
 
       {open && (
         <div
+          ref={menuRef}
           role="menu"
           aria-label="Line templates"
           className="ui-popover"

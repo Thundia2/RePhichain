@@ -47,6 +47,7 @@ import { Tooltip } from "../common/Tooltip";
 import { IconButton } from "../common/IconButton";
 import { Button } from "../common/Button";
 import { SegmentedControl } from "../common/SegmentedControl";
+import { useMenuKeyboard } from "../../hooks/useMenuKeyboard";
 
 function CurveEditorResizeHandle() {
   const setCurveEditorHeight = useEditorStore((s) => s.setCurveEditorHeight);
@@ -71,12 +72,18 @@ function CurveEditorResizeHandle() {
   }, [setCurveEditorHeight]);
 
   return (
+    // Same look as the keyframe bar's own resize handle: a hairline that
+    // fills on hover, not a solid 4px bar.
     <div
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Resize curve editor"
+      className="ui-hover"
       onMouseDown={onMouseDown}
       style={{
         height: 4,
-        cursor: "row-resize",
-        backgroundColor: "var(--border-color)",
+        cursor: "ns-resize",
+        borderTop: "var(--rule) solid var(--border-color)",
         flexShrink: 0,
       }}
     />
@@ -167,24 +174,9 @@ export function KeyframeBar() {
     return viewStart + (px / canvasWidth) * viewRange;
   }, [viewStart, viewRange]);
 
-  // ---- Close context menu on outside click or Escape ----
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClose = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setContextMenu(null);
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setContextMenu(null);
-    };
-    document.addEventListener("mousedown", handleClose);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClose);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [contextMenu]);
+  // ---- Context menu: outside press / Escape close it, arrows move between items ----
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  useMenuKeyboard(contextMenu !== null, closeContextMenu, menuRef, { focusFirst: true, closeOnOutsidePress: true });
 
   // ---- Compute display data — SINGLE source of truth for both render & hit-test ----
   // K4: the render loop used to compute the group-mode lane layout (`kinds`,
@@ -1025,6 +1017,7 @@ export function KeyframeBar() {
         <div
           ref={menuRef}
           role="menu"
+          aria-label={contextMenu.bookmarkHit ? "Bookmark actions" : "Event actions"}
           className="ui-popover"
           style={{
             position: "fixed",
