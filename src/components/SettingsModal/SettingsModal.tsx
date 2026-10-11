@@ -2,7 +2,7 @@
 // Settings Modal — Tabbed settings for editor configuration
 //
 // Provides categorized settings (General, Audio, Game preview,
-// Timeline, Editor, AI generation, Resource pack, Notifications)
+// Timeline, Editor, Hotkeys, AI generation, Resource pack, Notifications)
 // rendered in the shared <Dialog> with a sidebar list. Each
 // category renders Card/CardRow rows with toggles, sliders,
 // segmented controls and inputs that read/write to settingsStore.
@@ -23,8 +23,9 @@ import { Button } from "../common/Button";
 import { SegmentedControl as SharedSegmentedControl } from "../common/SegmentedControl";
 import { LatencyCalibration } from "./LatencyCalibration";
 import { AI_SYSTEM_PROMPT } from "../../utils/aiSystemPrompt";
+import { HotkeySettings } from "../Settings/HotkeySettings";
 
-type Category = "general" | "audio" | "game-preview" | "timeline" | "editor" | "ai" | "resource-pack" | "notifications";
+type Category = "general" | "audio" | "game-preview" | "timeline" | "editor" | "hotkeys" | "ai" | "resource-pack" | "notifications";
 
 const CATEGORIES: { id: Category; label: string }[] = [
   { id: "general", label: "General" },
@@ -32,6 +33,7 @@ const CATEGORIES: { id: Category; label: string }[] = [
   { id: "game-preview", label: "Game preview" },
   { id: "timeline", label: "Timeline" },
   { id: "editor", label: "Editor" },
+  { id: "hotkeys", label: "Hotkeys" },
   { id: "ai", label: "AI generation" },
   { id: "resource-pack", label: "Resource pack" },
   { id: "notifications", label: "Notifications" },
@@ -910,6 +912,8 @@ export function SettingsModal({
   onClose: () => void;
 }) {
   const [activeCategory, setActiveCategory] = useState<Category>("general");
+  // While a hotkey is being captured, Escape cancels the capture rather than closing.
+  const [capturingHotkey, setCapturingHotkey] = useState(false);
 
   if (!open) return null;
 
@@ -925,6 +929,8 @@ export function SettingsModal({
         return <TimelineContent />;
       case "editor":
         return <EditorContent />;
+      case "hotkeys":
+        return <HotkeySettings onCapturingChange={setCapturingHotkey} />;
       case "ai":
         return <AiContent />;
       case "resource-pack":
@@ -939,6 +945,7 @@ export function SettingsModal({
       title="Settings"
       icon={SettingsIcon}
       onClose={onClose}
+      escapeToClose={!capturingHotkey}
       width={600}
       height="min(80vh, 640px)"
       bodyStyle={{ display: "flex", padding: 0, overflow: "hidden", borderTop: "var(--rule) solid var(--separator)" }}

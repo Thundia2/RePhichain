@@ -41,68 +41,68 @@ export type HotkeyCategory = (typeof HOTKEY_CATEGORIES)[number];
  */
 export const DEFAULT_HOTKEYS: Record<string, HotkeyDefinition> = {
   // ---- Tools ----
-  select_tool: { key: "v", label: "Select Tool", category: "Tools" },
-  eraser_tool: { key: "x", label: "Eraser Tool", category: "Tools" },
-  place_tap: { key: "q", label: "Place Tap Note", category: "Tools" },
-  place_drag: { key: "w", label: "Place Drag Note", category: "Tools" },
-  place_flick: { key: "e", label: "Place Flick Note", category: "Tools" },
-  place_hold: { key: "r", label: "Place Hold Note", category: "Tools" },
+  select_tool: { key: "v", label: "Select tool", category: "Tools" },
+  eraser_tool: { key: "x", label: "Eraser tool", category: "Tools" },
+  place_tap: { key: "q", label: "Place tap note", category: "Tools" },
+  place_drag: { key: "w", label: "Place drag note", category: "Tools" },
+  place_flick: { key: "e", label: "Place flick note", category: "Tools" },
+  place_hold: { key: "r", label: "Place hold note", category: "Tools" },
   // L7: displaced here when the registry reclaimed their old keys (s -> split_event,
   // ctrl+g -> go_to_beat). New homes chosen by the user. grep step_record/pattern_tool.
-  step_record: { key: "b", label: "Toggle Step Record", category: "Tools" },
-  pattern_tool: { key: "p", label: "Toggle Pattern Tool", category: "Tools" },
+  step_record: { key: "b", label: "Toggle step record", category: "Tools" },
+  pattern_tool: { key: "p", label: "Toggle pattern tool", category: "Tools" },
 
   // ---- Edit ----
   undo: { key: "ctrl+z, meta+z", label: "Undo", category: "Edit" },
   // ctrl+y is a real working redo alias in the code; fold it in so the registry is the
   // true superset (registry-authoritative) and rebinding doesn't silently drop it.
   redo: { key: "ctrl+shift+z, meta+shift+z, ctrl+y", label: "Redo", category: "Edit" },
-  delete: { key: "delete, backspace", label: "Delete Selected", category: "Edit" },
-  select_all: { key: "ctrl+a, meta+a", label: "Select All", category: "Edit" },
+  delete: { key: "delete, backspace", label: "Delete selected", category: "Edit" },
+  select_all: { key: "ctrl+a, meta+a", label: "Select all", category: "Edit" },
 
   // ---- File ----
-  save: { key: "ctrl+s, meta+s", label: "Save Project", category: "File" },
-  new_chart: { key: "ctrl+n, meta+n", label: "New Chart", category: "File" },
+  save: { key: "ctrl+s, meta+s", label: "Save project", category: "File" },
+  new_chart: { key: "ctrl+n, meta+n", label: "New chart", category: "File" },
 
   // ---- Notes ----
-  flip_notes: { key: "f", label: "Flip Notes (Above/Below)", category: "Notes" },
-  mirror_notes: { key: "m", label: "Mirror Notes (X axis)", category: "Notes" },
-  quantize_notes: { key: "ctrl+q, meta+q", label: "Quantize Notes", category: "Notes" },
-  distribute_notes: { key: "ctrl+d, meta+d", label: "Distribute Notes Evenly", category: "Notes" },
-  strum_notes: { key: "ctrl+shift+s, meta+shift+s", label: "Strum Notes", category: "Notes" },
+  flip_notes: { key: "f", label: "Flip notes (above/below)", category: "Notes" },
+  mirror_notes: { key: "m", label: "Mirror notes (X axis)", category: "Notes" },
+  quantize_notes: { key: "ctrl+q, meta+q", label: "Quantize notes", category: "Notes" },
+  distribute_notes: { key: "ctrl+d, meta+d", label: "Distribute notes evenly", category: "Notes" },
+  strum_notes: { key: "ctrl+shift+s, meta+shift+s", label: "Strum notes", category: "Notes" },
 
   // ---- Events ----
-  split_event: { key: "s", label: "Split Event", category: "Events" },
+  split_event: { key: "s", label: "Split event", category: "Events" },
   // (merge_events / swap_easing removed in L7 — no underlying operation existed
   //  anywhere in the codebase; they were registry-only orphans showing dead settings
   //  rows. Re-add with a real handler if those ops are ever implemented.)
 
   // ---- Navigation ----
-  move_up: { key: "up", label: "Move Selection Forward", category: "Navigation" },
-  move_down: { key: "down", label: "Move Selection Backward", category: "Navigation" },
-  move_right: { key: "right", label: "Move Selection Right", category: "Navigation" },
-  move_left: { key: "left", label: "Move Selection Left", category: "Navigation" },
-  go_to_beat: { key: "ctrl+g, meta+g", label: "Go to Beat...", category: "Navigation" },
+  move_up: { key: "up", label: "Move selection forward", category: "Navigation" },
+  move_down: { key: "down", label: "Move selection backward", category: "Navigation" },
+  move_right: { key: "right", label: "Move selection right", category: "Navigation" },
+  move_left: { key: "left", label: "Move selection left", category: "Navigation" },
+  go_to_beat: { key: "ctrl+g, meta+g", label: "Go to beat…", category: "Navigation" },
   // ctrl+up/down, NOT ctrl+[/] : react-hotkeys-hook needs useKey:true to match "[",
   // and that flag's single-key short-circuit then fires on a BARE "[" (loop_start), so
   // ctrl+[ would collide with the loop key. Arrow combos sidestep the quirk entirely.
-  prev_marker: { key: "ctrl+up, meta+up", label: "Previous Marker", category: "Navigation" },
-  next_marker: { key: "ctrl+down, meta+down", label: "Next Marker", category: "Navigation" },
+  prev_marker: { key: "ctrl+up, meta+up", label: "Previous marker", category: "Navigation" },
+  next_marker: { key: "ctrl+down, meta+down", label: "Next marker", category: "Navigation" },
 
   // ---- Playback ----
-  toggle_playback: { key: "space", label: "Play / Pause", category: "Playback" },
-  loop_start: { key: "[", label: "Set Loop Start", category: "Playback" },
-  loop_end: { key: "]", label: "Set Loop End", category: "Playback" },
-  toggle_loop: { key: "\\", label: "Toggle Loop", category: "Playback" },
+  toggle_playback: { key: "space", label: "Play / pause", category: "Playback" },
+  loop_start: { key: "[", label: "Set loop start", category: "Playback" },
+  loop_end: { key: "]", label: "Set loop end", category: "Playback" },
+  toggle_loop: { key: "\\", label: "Toggle loop", category: "Playback" },
 
   // ---- View ----
-  open_unrolled: { key: "ctrl+shift+u, meta+shift+u", label: "Open Unrolled Editor", category: "View" },
-  enter_group_edit: { key: "g", label: "Enter Group Edit / Toggle Mini Preview", category: "View" },
-  toggle_onset_detection: { key: "shift+o", label: "Toggle Onset Detection", category: "View" },
+  open_unrolled: { key: "ctrl+shift+u, meta+shift+u", label: "Open unrolled editor", category: "View" },
+  enter_group_edit: { key: "g", label: "Enter group edit / toggle mini preview", category: "View" },
+  toggle_onset_detection: { key: "shift+o", label: "Toggle onset detection", category: "View" },
   toggle_devtools: { key: "f12", label: "Toggle DevTools", category: "View" },
-  add_section_marker: { key: "ctrl+b, meta+b", label: "Add Section Marker", category: "View" },
-  paste_special: { key: "ctrl+alt+v, meta+alt+v", label: "Paste Special...", category: "Edit" },
-  cross_line_paste: { key: "ctrl+shift+v, meta+shift+v", label: "Paste to Selected Lines", category: "Edit" },
+  add_section_marker: { key: "ctrl+b, meta+b", label: "Add section marker", category: "View" },
+  paste_special: { key: "ctrl+alt+v, meta+alt+v", label: "Paste special…", category: "Edit" },
+  cross_line_paste: { key: "ctrl+shift+v, meta+shift+v", label: "Paste to selected lines", category: "Edit" },
 };
 
 /**

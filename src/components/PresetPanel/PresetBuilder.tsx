@@ -10,6 +10,7 @@
 import { useState, useCallback, useRef } from "react";
 import { Trash2, SlidersHorizontal } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { useToastStore } from "../../stores/toastStore";
 import type { EventPreset, EventTemplate } from "../../types/preset";
 import type { LineEventKind, EasingType } from "../../types/chart";
 import { floatToBeat } from "../../types/chart";
@@ -320,6 +321,7 @@ function buildPreset(
   name: string,
   description: string,
   channels: ChannelState[],
+  totalBeats: number,
 ): EventPreset {
   const template: EventTemplate[] = [];
   const usedKinds = new Set<LineEventKind>();
@@ -357,6 +359,7 @@ function buildPreset(
     description,
     template,
     channels: Array.from(usedKinds),
+    defaultDuration: totalBeats,
     builtin: false,
     tags: ["custom"],
   };
@@ -476,8 +479,11 @@ export function PresetBuilder({ onClose }: { onClose: () => void }) {
   );
 
   const handleSave = () => {
-    const preset = buildPreset(name, description, channelStates);
-    if (preset.template.length === 0) return; // Nothing to save
+    const preset = buildPreset(name.trim(), description.trim(), channelStates, totalBeats);
+    if (preset.template.length === 0) {
+      useToastStore.getState().addToast({ message: "Give a channel at least two keyframes to save the preset", type: "info" });
+      return;
+    }
     addCustomPreset(preset);
     onClose();
   };

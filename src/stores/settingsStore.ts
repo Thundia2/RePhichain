@@ -169,6 +169,7 @@ export interface SettingsState {
   /** Reset all hotkey overrides to defaults. */
   resetAllHotkeys: () => void;
   addCustomPreset: (preset: import("../types/preset").EventPreset) => void;
+  removeCustomPreset: (id: string) => void;
   /** Load settings from localStorage. Runs migration for old format. */
   loadSettings: () => Promise<void>;
   /** Persist current settings to localStorage. */
@@ -176,7 +177,7 @@ export interface SettingsState {
 }
 
 // The subset of state that gets persisted (exclude all action methods)
-type SettingsData = Omit<SettingsState, "updateSettings" | "loadSettings" | "saveSettings" | "recordEasingUse" | "toggleFavoriteEasing" | "setHotkeyOverride" | "resetHotkey" | "resetAllHotkeys" | "addCustomPreset">;
+type SettingsData = Omit<SettingsState, "updateSettings" | "loadSettings" | "saveSettings" | "recordEasingUse" | "toggleFavoriteEasing" | "setHotkeyOverride" | "resetHotkey" | "resetAllHotkeys" | "addCustomPreset" | "removeCustomPreset">;
 
 const STORAGE_KEY = "phichain-settings";
 
@@ -409,6 +410,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   addCustomPreset: (preset) => {
     set((s) => ({
       customPresets: [...s.customPresets, preset],
+    }));
+    get().saveSettings();
+  },
+
+  removeCustomPreset: (id) => {
+    set((s) => ({
+      customPresets: s.customPresets.filter((p) => p.id !== id),
     }));
     get().saveSettings();
   },

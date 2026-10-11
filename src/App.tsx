@@ -46,6 +46,7 @@ import { NewProjectDialog } from "./components/NewProjectDialog/NewProjectDialog
 import { HomeScreen } from "./components/Home/HomeScreen";
 import { SettingsModal } from "./components/SettingsModal/SettingsModal";
 import { CommandPalette } from "./components/CommandPalette/CommandPalette";
+import { DevToolsPanel } from "./components/DevToolsPanel/DevToolsPanel";
 import { LineEventEditor } from "./components/LineEventEditor/LineEventEditor";
 import { UnifiedEditorTab } from "./components/UnifiedCanvas/UnifiedEditorTab";
 import { UnrolledEditorTab } from "./components/UnrolledCanvas/UnrolledEditorTab";
@@ -600,6 +601,7 @@ export default function App() {
         onShowOnsetCalibration={() => openDialog("onset-calibration")}
       />
       <FavoritesWizard />
+      <DevToolsPanel />
       <ToastContainer />
       <ConfirmDialog />
       <PromptDialog />

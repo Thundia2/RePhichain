@@ -360,6 +360,7 @@ export function useMenus(
         { label: "Presets", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("presets") },
         { label: "Game preview", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("game-preview") },
         { label: "Hotkey reference", action: () => (onShowOnDemandPanel ?? onTogglePanel)?.("hotkey-reference") },
+        { label: "DevTools", shortcut: "F12", action: () => useEditorStore.getState().toggleDevTools() },
         { separator: true, label: "" },
         { label: "Apply default layout", action: onResetLayout },
       ],

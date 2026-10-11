@@ -20,6 +20,7 @@ import { BUILTIN_PRESETS } from "../../presets/builtinPresets";
 import { applyPresetAtPlayhead } from "../../utils/applyPreset";
 import { getSelectedLineIndex } from "../../stores/selection";
 import { useFavoritesStore } from "../../stores/favoritesStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import type { PanelId } from "../../types/editor";
 import { Icon } from "../common/Icon";
 import { Kbd } from "../common/Kbd";
@@ -107,8 +108,9 @@ export function CommandPalette({
   onShowOnsetCalibration?: () => void;
 }) {
   const menus = useMenus(onTogglePanel, onResetLayout, onNewChart, onShowParametric, onShowBatchLine, onShowLyricsSync, onShowOnDemandPanel, onShowPasteSpecial, onShowGoToBeat, onShowExportDiff, onShowSelectiveExport, onShowSpinGenerator, onShowShakeGenerator, undefined, onShowOnsetCalibration);
+  const customPresets = useSettingsStore((s) => s.customPresets);
   const presetCommands = useMemo((): CommandItem[] => {
-    return BUILTIN_PRESETS.map((preset) => ({
+    return [...customPresets, ...BUILTIN_PRESETS].map((preset) => ({
       id: `preset:${preset.id}`,
       label: preset.name,
       section: "Event presets",
@@ -120,7 +122,7 @@ export function CommandPalette({
       },
       disabled: getSelectedLineIndex() === null,
     }));
-  }, []);
+  }, [customPresets]);
   const favoritesCommands = useMemo((): CommandItem[] => [
     {
       id: "favorites:configure",

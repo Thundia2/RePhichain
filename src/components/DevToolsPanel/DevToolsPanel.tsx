@@ -74,13 +74,13 @@ function StatsTab() {
     }
 
     return {
-      lines: chart.lines.length,
-      totalNotes,
-      totalEvents,
-      bpmPoints: chart.bpm_list.length,
-      offset: chart.offset,
-      maxBeat: maxBeat.toFixed(2),
-      format: chart.format,
+      Lines: chart.lines.length,
+      Notes: totalNotes,
+      Events: totalEvents,
+      "BPM points": chart.bpm_list.length,
+      Offset: chart.offset,
+      "Last beat": maxBeat.toFixed(2),
+      Format: chart.format,
     };
   }, [chart]);
 
@@ -123,6 +123,7 @@ function EvaluatorTab() {
     // Find event values at this beat for each kind
     const values: Record<string, number | string> = {};
     const kinds = ["x", "y", "rotation", "opacity", "speed"] as const;
+    const kindLabels = { x: "X", y: "Y", rotation: "Rotation", opacity: "Opacity", speed: "Speed" };
 
     for (const kind of kinds) {
       const events = line.events.filter((e) => e.kind === kind);
@@ -132,21 +133,21 @@ function EvaluatorTab() {
         const end = beatToFloat(ev.end_beat);
         if (beatVal >= start && beatVal <= end) {
           if ("constant" in ev.value) {
-            values[kind] = ev.value.constant;
+            values[kindLabels[kind]] = ev.value.constant;
           } else if ("transition" in ev.value) {
             const t = end > start ? (beatVal - start) / (end - start) : 0;
             const { start: s, end: e, easing } = ev.value.transition;
             const easedT = evaluateEasing(easing, t);
-            values[kind] = +(s + (e - s) * easedT).toFixed(3);
+            values[kindLabels[kind]] = +(s + (e - s) * easedT).toFixed(3);
           }
           found = true;
           break;
         }
       }
-      if (!found) values[kind] = "N/A";
+      if (!found) values[kindLabels[kind]] = "No event";
     }
 
-    return { time: time.toFixed(3), bpm: bpm.toFixed(1), ...values };
+    return { "Time (s)": time.toFixed(3), BPM: bpm.toFixed(1), ...values };
   }, [beatInput, chart, selectedLineIndex]);
 
   return (
